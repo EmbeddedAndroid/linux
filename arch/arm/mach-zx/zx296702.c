@@ -59,6 +59,7 @@ static const char *zx296702_dt_compat[] __initconst = {
 };
 
 DT_MACHINE_START(ZX, "ZTE ZX296702 (Device Tree)")
+	.smp		= smp_ops(zx_smp_ops),
 	.dt_compat	= zx296702_dt_compat,
 	.init_machine	= zx296702_init_machine,
 MACHINE_END
