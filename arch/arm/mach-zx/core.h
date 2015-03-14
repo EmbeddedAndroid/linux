@@ -13,5 +13,6 @@
 extern struct smp_operations zx_smp_ops;
 
 void zx_secondary_startup(void);
+void zx_cpu_die(unsigned int cpu);
 
 #endif /* __MACH_ZX_CORE_H */

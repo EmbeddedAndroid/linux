@@ -144,4 +144,7 @@ struct smp_operations zx_smp_ops __initdata = {
 	.smp_prepare_cpus	= zx_smp_prepare_cpus,
 	.smp_secondary_init	= zx_secondary_init,
 	.smp_boot_secondary	= zx_boot_secondary,
+#ifdef CONFIG_HOTPLUG_CPU
+	.cpu_die		= zx_cpu_die,
+#endif
 };
