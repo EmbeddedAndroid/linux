@@ -1168,6 +1168,17 @@ choice
 		  For more details about semihosting, please see
 		  chapter 8 of DUI0203I_rvct_developer_guide.pdf from ARM Ltd.
 
+	config DEBUG_ZTE_ZX
+		bool "Use ZTE ZX UART"
+		depends on ARCH_ZX
+		help
+		  Say Y here if you are enabling ZTE ZX296702 SOC and need
+		  debug uart support.
+
+		  This option is preferred over the platform specific
+		  options; the platform specific options are deprecated
+		  and will be soon removed.
+
 	config DEBUG_LL_UART_8250
 		bool "Kernel low-level debugging via 8250 UART"
 		help
@@ -1314,6 +1325,7 @@ config DEBUG_LL_INCLUDE
 	default "debug/vexpress.S" if DEBUG_VEXPRESS_UART0_DETECT
 	default "debug/vf.S" if DEBUG_VF_UART
 	default "debug/vt8500.S" if DEBUG_VT8500_UART0
+	default "debug/zx.S" if DEBUG_ZTE_ZX
 	default "debug/zynq.S" if DEBUG_ZYNQ_UART0 || DEBUG_ZYNQ_UART1
 	default "debug/bcm63xx.S" if DEBUG_UART_BCM63XX
 	default "debug/digicolor.S" if DEBUG_DIGICOLOR_UA0
