@@ -3,7 +3,8 @@ CFLAGS += -I../../../../samples/kdbus/
 CFLAGS += -I../../../../include/uapi/
 CFLAGS += -std=gnu99
 CFLAGS += -DKBUILD_MODNAME=\"kdbus\" -D_GNU_SOURCE
-LDLIBS = -pthread -lcap -lm
+LDLIBS += -pthread -lcap -lm
+LDLIBS += -L../../../../usr/include/
 
 OBJS= \
 	kdbus-enum.o		\
