@@ -8,7 +8,6 @@ ifeq ($(ARCH),x86_64)
 	ARCH := x86
 endif
 
-
 all:
 ifeq ($(ARCH),x86)
 	gcc breakpoint_test.c -o breakpoint_test
@@ -19,6 +18,12 @@ endif
 TEST_PROGS := breakpoint_test
 
 include ../lib.mk
+
+install:
+ifneq ($(ARCH),x86)
+echo "Not an x86 target, can't install breakpoints selftests"
+override EMIT_TESTS :=  echo "echo \"selftests: breakpoint_test [SKIP]\""
+endif
 
 clean:
 	rm -fr breakpoint_test
