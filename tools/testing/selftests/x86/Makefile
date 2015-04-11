@@ -24,6 +24,10 @@ all_32: check_build32 $(BINARIES_32)
 
 all_64: $(BINARIES_64)
 
+include ../lib.mk
+
+TEST_PROGS := $(BINARIES_32) $(BINARIES_64) run_x86_tests.sh
+
 $(TARGETS_C_BOTHBITS:%=%_32): %_32: %.c
 ifeq ($(ARCH),x86)
 	$(CC) -m32 -o $@ $(CFLAGS) $(EXTRA_CFLAGS) $^ -lrt -ldl
@@ -51,6 +55,12 @@ check_build32:
 	  echo "  yum install glibc-devel.*i686";			\
 	  exit 1;							\
 	fi
+
+install:
+ifneq ($(ARCH),x86)
+echo "Not an x86 target, can't install x86 tests"
+override EMIT_TESTS :=  echo "echo \"selftests: run_x86_tests.sh [SKIP]\""
+endif
 
 run_tests:
 	./run_x86_tests.sh
