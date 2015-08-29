@@ -13,7 +13,6 @@
  * GNU General Public License for more details.
  *
  */
-
 #include <linux/kernel.h>
 #include <linux/slab.h>
 #include <linux/sched.h>
@@ -50,10 +49,13 @@ struct sst_dma {
 	struct dma_chan *ch;
 };
 
-static inline void sst_memcpy32(volatile void __iomem *dest, void *src, u32 bytes)
+static void sst_memcpy32(volatile void __iomem *dest, void *src, u32 bytes)
 {
-	/* __iowrite32_copy use 32bit size values so divide by 4 */
-	__iowrite32_copy((void *)dest, src, bytes/4);
+	u32 i;
+
+	/* copy one 32 bit word at a time as 64 bit access is not supported */
+	for (i = 0; i < bytes; i += 4)
+		memcpy_toio(dest + i, src + i, 4);
 }
 
 static void sst_dma_transfer_complete(void *arg)
@@ -169,7 +171,7 @@ err:
 	return ret;
 }
 
-static struct dw_dma_platform_data dw_pdata = {
+struct dw_dma_platform_data dw_pdata = {
 	.is_private = 1,
 	.chan_allocation_order = CHAN_ALLOCATION_ASCENDING,
 	.chan_priority = CHAN_PRIORITY_ASCENDING,
@@ -221,6 +223,8 @@ int sst_dsp_dma_get_channel(struct sst_dsp *dsp, int chan_id)
 	dma_cap_mask_t mask;
 	int ret;
 
+	/* The Intel MID DMA engine driver needs the slave config set but
+	 * Synopsis DMA engine driver safely ignores the slave config */
 	dma_cap_zero(mask);
 	dma_cap_set(DMA_SLAVE, mask);
 	dma_cap_set(DMA_MEMCPY, mask);
@@ -269,15 +273,14 @@ int sst_dma_new(struct sst_dsp *sst)
 	const char *dma_dev_name;
 	int ret = 0;
 
-	if (sst->pdata->resindex_dma_base == -1)
-		/* DMA is not used, return and squelsh error messages */
-		return 0;
-
 	/* configure the correct platform data for whatever DMA engine
 	* is attached to the ADSP IP. */
 	switch (sst->pdata->dma_engine) {
 	case SST_DMA_TYPE_DW:
 		dma_dev_name = "dw_dmac";
+		break;
+	case SST_DMA_TYPE_MID:
+		dma_dev_name = "Intel MID DMA";
 		break;
 	default:
 		dev_err(sst->dev, "error: invalid DMA engine %d\n",
@@ -496,8 +499,6 @@ struct sst_module *sst_module_new(struct sst_fw *sst_fw,
 	sst_module->sst_fw = sst_fw;
 	sst_module->scratch_size = template->scratch_size;
 	sst_module->persistent_size = template->persistent_size;
-	sst_module->entry = template->entry;
-	sst_module->state = SST_MODULE_STATE_UNLOADED;
 
 	INIT_LIST_HEAD(&sst_module->block_list);
 	INIT_LIST_HEAD(&sst_module->runtime_list);
@@ -610,6 +611,7 @@ static int block_alloc_contiguous(struct sst_dsp *dsp,
 	}
 
 	list_splice(&tmp, &dsp->used_block_list);
+
 	return 0;
 }
 
@@ -707,7 +709,6 @@ static int block_alloc_fixed(struct sst_dsp *dsp, struct sst_block_allocator *ba
 	struct list_head *block_list)
 {
 	struct sst_mem_block *block, *tmp;
-	struct sst_block_allocator ba_tmp = *ba;
 	u32 end = ba->offset + ba->size, block_end;
 	int err;
 
@@ -732,9 +733,9 @@ static int block_alloc_fixed(struct sst_dsp *dsp, struct sst_block_allocator *ba
 		if (ba->offset >= block->offset && ba->offset < block_end) {
 
 			/* align ba to block boundary */
-			ba_tmp.size -= block_end - ba->offset;
-			ba_tmp.offset = block_end;
-			err = block_alloc_contiguous(dsp, &ba_tmp, block_list);
+			ba->size -= block_end - ba->offset;
+			ba->offset = block_end;
+			err = block_alloc_contiguous(dsp, ba, block_list);
 			if (err < 0)
 				return -ENOMEM;
 
@@ -765,17 +766,12 @@ static int block_alloc_fixed(struct sst_dsp *dsp, struct sst_block_allocator *ba
 		/* does block span more than 1 section */
 		if (ba->offset >= block->offset && ba->offset < block_end) {
 
-			/* add block */
-			list_move(&block->list, &dsp->used_block_list);
-			list_add(&block->module_list, block_list);
 			/* align ba to block boundary */
-			ba_tmp.size -= block_end - ba->offset;
-			ba_tmp.offset = block_end;
+			ba->offset = block->offset;
 
-			err = block_alloc_contiguous(dsp, &ba_tmp, block_list);
+			err = block_alloc_contiguous(dsp, ba, block_list);
 			if (err < 0)
 				return -ENOMEM;
-
 			return 0;
 		}
 	}
@@ -791,7 +787,6 @@ int sst_module_alloc_blocks(struct sst_module *module)
 	struct sst_block_allocator ba;
 	int ret;
 
-	memset(&ba, 0, sizeof(ba));
 	ba.size = module->size;
 	ba.type = module->type;
 	ba.offset = module->offset;
@@ -833,7 +828,7 @@ int sst_module_alloc_blocks(struct sst_module *module)
 			module->size);
 
 	mutex_unlock(&dsp->mutex);
-	return ret;
+	return 0;
 
 err:
 	block_list_remove(dsp, &module->block_list);
@@ -865,7 +860,6 @@ int sst_module_runtime_alloc_blocks(struct sst_module_runtime *runtime,
 	if (module->persistent_size == 0)
 		return 0;
 
-	memset(&ba, 0, sizeof(ba));
 	ba.size = module->persistent_size;
 	ba.type = SST_MEM_DRAM;
 
@@ -1128,7 +1122,6 @@ int sst_block_alloc_scratch(struct sst_dsp *dsp)
 	ret = block_list_prepare(dsp, &dsp->scratch_block_list);
 	if (ret < 0) {
 		dev_err(dsp->dev, "error: scratch block prepare failed\n");
-		mutex_unlock(&dsp->mutex);
 		return ret;
 	}
 

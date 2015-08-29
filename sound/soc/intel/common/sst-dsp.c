@@ -410,7 +410,8 @@ void sst_dsp_free(struct sst_dsp *sst)
 	if (sst->ops->free)
 		sst->ops->free(sst);
 
-	sst_dma_free(sst->dma);
+	if (sst->dma)
+		sst_dma_free(sst->dma);
 }
 EXPORT_SYMBOL_GPL(sst_dsp_free);
 

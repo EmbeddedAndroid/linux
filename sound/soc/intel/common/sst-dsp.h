@@ -28,6 +28,7 @@
 
 /* Supported SST DMA Devices */
 #define SST_DMA_TYPE_DW		1
+#define SST_DMA_TYPE_MID	2
 
 /* autosuspend delay 5s*/
 #define SST_RUNTIME_SUSPEND_DELAY	(5 * 1000)
@@ -160,14 +161,12 @@
 /* VDRTCTL0 */
 #define SST_VDRTCL0_D3PGD		(1 << 0)
 #define SST_VDRTCL0_D3SRAMPGD		(1 << 1)
-#define SST_VDRTCL0_DSRAMPGE_SHIFT	12
-#define SST_VDRTCL0_DSRAMPGE_MASK	(0xfffff << SST_VDRTCL0_DSRAMPGE_SHIFT)
-#define SST_VDRTCL0_ISRAMPGE_SHIFT	2
+#define SST_VDRTCL0_DSRAMPGE_SHIFT	16
+#define SST_VDRTCL0_DSRAMPGE_MASK	(0xffff << SST_VDRTCL0_DSRAMPGE_SHIFT)
+#define SST_VDRTCL0_ISRAMPGE_SHIFT	6
 #define SST_VDRTCL0_ISRAMPGE_MASK	(0x3ff << SST_VDRTCL0_ISRAMPGE_SHIFT)
 
 /* VDRTCTL2 */
-#define SST_VDRTCL2_DCLCGE		(1 << 1)
-#define SST_VDRTCL2_DTCGE		(1 << 10)
 #define SST_VDRTCL2_APLLSE_MASK		(1 << 31)
 
 /* PMCS */
@@ -205,7 +204,6 @@ struct sst_pdata {
 	const struct firmware *fw;
 
 	/* DMA */
-	int resindex_dma_base; /* other fields invalid if equals to -1 */
 	u32 dma_base;
 	u32 dma_size;
 	int dma_engine;

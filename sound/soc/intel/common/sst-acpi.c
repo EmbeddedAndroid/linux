@@ -142,7 +142,6 @@ static int sst_acpi_probe(struct platform_device *pdev)
 	sst_acpi->desc = desc;
 	sst_acpi->mach = mach;
 
-	sst_pdata->resindex_dma_base = desc->resindex_dma_base;
 	if (desc->resindex_dma_base >= 0) {
 		sst_pdata->dma_engine = desc->dma_engine;
 		sst_pdata->dma_base = desc->resindex_dma_base;
@@ -230,6 +229,7 @@ static struct sst_acpi_desc sst_acpi_haswell_desc = {
 
 static struct sst_acpi_mach broadwell_machines[] = {
 	{ "INT343A", "broadwell-audio", "intel/IntcSST2.bin" },
+	{ "RT5677CE", "bdw-rt5677", "intel/IntcSST2.bin" },
 	{}
 };
 
@@ -247,8 +247,8 @@ static struct sst_acpi_desc sst_acpi_broadwell_desc = {
 };
 
 static struct sst_acpi_mach baytrail_machines[] = {
-	{ "10EC5640", "byt-rt5640", "intel/fw_sst_0f28.bin-48kHz_i2s_master" },
-	{ "193C9890", "byt-max98090", "intel/fw_sst_0f28.bin-48kHz_i2s_master" },
+	{ "10EC5640", "byt-rt5640", "intel/fw_sst_0f28.bin-i2s_master" },
+	{ "193C9890", "byt-max98090", "intel/fw_sst_0f28.bin-i2s_master" },
 	{}
 };
 
@@ -263,7 +263,7 @@ static struct sst_acpi_desc sst_acpi_baytrail_desc = {
 	.resindex_dma_base = -1,
 };
 
-static const struct acpi_device_id sst_acpi_match[] = {
+static struct acpi_device_id sst_acpi_match[] = {
 	{ "INT33C8", (unsigned long)&sst_acpi_haswell_desc },
 	{ "INT3438", (unsigned long)&sst_acpi_broadwell_desc },
 	{ "80860F28", (unsigned long)&sst_acpi_baytrail_desc },
@@ -276,6 +276,7 @@ static struct platform_driver sst_acpi_driver = {
 	.remove = sst_acpi_remove,
 	.driver = {
 		.name = "sst-acpi",
+		.owner = THIS_MODULE,
 		.acpi_match_table = ACPI_PTR(sst_acpi_match),
 	},
 };
