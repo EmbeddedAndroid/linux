@@ -204,3 +204,11 @@ config QCOM_A53CC
 	  Support for the A53 clock controller on some Qualcomm devices.
 	  Say Y if you want to support CPU frequency scaling on devices
 	  such as MSM8916.
+
+config MSM_APCC_8996
+	tristate "MSM8996 CPU Clock Controller"
+	depends on COMMON_CLK_QCOM
+	help
+	  Support for the CPU clock controller on msm8996 devices.
+	  Say Y if you want to support CPU clock scaling using CPUfreq
+	  drivers for dyanmic power management.
