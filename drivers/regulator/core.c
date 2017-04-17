@@ -883,6 +883,7 @@ static int machine_constraints_voltage(struct regulator_dev *rdev,
 	    rdev->constraints->min_uV && rdev->constraints->max_uV) {
 		int target_min, target_max;
 		int current_uV = _regulator_get_voltage(rdev);
+		printk("regulator: machine constraints: current voltage: %s - %d\n", rdev->desc->name, current_uV);
 		if (current_uV < 0) {
 			rdev_err(rdev,
 				 "failed to get the current voltage(%d)\n",
@@ -3185,10 +3186,13 @@ static int _regulator_get_voltage(struct regulator_dev *rdev)
 	}
 
 	if (rdev->desc->ops->get_voltage_sel) {
+		printk("regulator: get_voltage_sel: %s\n", rdev->desc->name);
 		sel = rdev->desc->ops->get_voltage_sel(rdev);
+		printk("regulator: get_voltage_sel: %s - %d\n", rdev->desc->name, sel);
 		if (sel < 0)
 			return sel;
 		ret = rdev->desc->ops->list_voltage(rdev, sel);
+		printk("regulator: list_voltage: %s - %d\n", rdev->desc->name, ret);
 	} else if (rdev->desc->ops->get_voltage) {
 		ret = rdev->desc->ops->get_voltage(rdev);
 	} else if (rdev->desc->ops->list_voltage) {
@@ -3203,6 +3207,7 @@ static int _regulator_get_voltage(struct regulator_dev *rdev)
 
 	if (ret < 0)
 		return ret;
+	printk("regulator: get_voltage_sel: adjusted:  %s - %d\n", rdev->desc->name, (ret - rdev->constraints->uV_offset));
 	return ret - rdev->constraints->uV_offset;
 }
 
@@ -3222,6 +3227,7 @@ int regulator_get_voltage(struct regulator *regulator)
 	regulator_lock_supply(regulator->rdev);
 
 	ret = _regulator_get_voltage(regulator->rdev);
+	printk("_regulator_get_voltage: %s - %d\n", regulator->rdev->desc->name, ret);
 
 	regulator_unlock_supply(regulator->rdev);
 

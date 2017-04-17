@@ -119,10 +119,13 @@ static int anatop_regmap_core_set_voltage_sel(struct regulator_dev *reg,
 
 static int anatop_regmap_core_get_voltage_sel(struct regulator_dev *reg)
 {
+	printk("anatop: before rdev_get_drvdata\n");
 	struct anatop_regulator *anatop_reg = rdev_get_drvdata(reg);
 
-	if (anatop_reg->bypass || !anatop_regmap_is_enabled(reg))
+	if (anatop_reg->bypass || !anatop_regmap_is_enabled(reg)) {
+		printk("anatop: bypass is true, but regmap is disabled");
 		return anatop_reg->sel;
+	}
 
 	return regulator_get_voltage_sel_regmap(reg);
 }
@@ -303,6 +306,14 @@ static int anatop_regulator_probe(struct platform_device *pdev)
 		if (!sreg->sel && rdesc->name &&
 		    !strcmp(rdesc->name, "vddpcie"))
 			sreg->sel = 0x10;
+
+                /* set the default voltage of the usb hsic phy to be 1.100v */
+                if (!sreg->sel && rdesc->name &&
+                    !strcmp(rdesc->name, "vdd1p2")) {
+			printk("anatop: setting vdd1p2 sreg->sel to 0x10");
+                        sreg->sel = 0x10;
+		}
+
 
 		if (!sreg->bypass && !sreg->sel) {
 			dev_err(&pdev->dev, "Failed to read a valid default voltage selector.\n");

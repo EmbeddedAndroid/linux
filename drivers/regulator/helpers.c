@@ -118,11 +118,16 @@ int regulator_get_voltage_sel_regmap(struct regulator_dev *rdev)
 	int ret;
 
 	ret = regmap_read(rdev->regmap, rdev->desc->vsel_reg, &val);
-	if (ret != 0)
+	printk("regulator: helper: regmap_read %s \n", rdev->desc->name);
+	if (ret != 0) {
+		printk("regulator: helper: non-zero returned from regmap_read\n");
 		return ret;
+	}
 
 	val &= rdev->desc->vsel_mask;
 	val >>= ffs(rdev->desc->vsel_mask) - 1;
+
+	printk("regulator: helper: get_voltage_sel_regmap: %d \n", val);
 
 	return val;
 }
@@ -349,8 +354,12 @@ EXPORT_SYMBOL_GPL(regulator_map_voltage_linear_range);
 int regulator_list_voltage_linear(struct regulator_dev *rdev,
 				  unsigned int selector)
 {
-	if (selector >= rdev->desc->n_voltages)
+	printk("n_voltages: %s - %d", rdev->desc->name, rdev->desc->n_voltages);
+	printk("linear_min_sel: %s - %d", rdev->desc->name, rdev->desc->linear_min_sel);
+	if (selector >= rdev->desc->n_voltages) {
+		printk("regulator_list_voltage_linear: n_voltages EINVAL: %s", rdev->desc->name); 
 		return -EINVAL;
+	}
 	if (selector < rdev->desc->linear_min_sel)
 		return 0;
 
