@@ -1,0 +1,624 @@
+/*
+ * Copyright (C) 2015 Freescale Semiconductor, Inc.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ */
+
+/dts-v1/;
+
+#include <dt-bindings/input/input.h>
+#include "imx7d.dtsi"
+
+/ {
+	model = "Freescale i.MX7 DDR3L 19x19 96_Boards";
+	compatible = "fsl,imx7d-96Boards", "fsl,imx7d";
+
+	memory {
+		reg = <0x80000000 0x80000000>;
+	};
+
+	pxp_v4l2_out {
+		compatible = "fsl,imx7d-pxp-v4l2", "fsl,imx6sx-pxp-v4l2", "fsl,imx6sl-pxp-v4l2";
+		status = "okay";
+	};
+
+	regulators {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		reg_usb_otg1_vbus: regulator@0 {
+			compatible = "regulator-fixed";
+			reg = <0>;
+			regulator-name = "usb_otg1_vbus";
+			regulator-min-microvolt = <5000000>;
+			regulator-max-microvolt = <5000000>;
+			gpio = <&gpio1 5 GPIO_ACTIVE_HIGH>;
+			enable-active-high;
+		};
+
+		reg_usb_otg2_vbus: regulator@1 {
+			compatible = "regulator-fixed";
+			reg = <1>;
+			regulator-name = "usb_otg2_vbus";
+			regulator-min-microvolt = <5000000>;
+			regulator-max-microvolt = <5000000>;
+			gpio = <&gpio4 7 GPIO_ACTIVE_HIGH>;
+			enable-active-high;
+		};
+
+		reg_vref_1v8: regulator@3 {
+			compatible = "regulator-fixed";
+			regulator-name = "vref-1v8";
+			regulator-min-microvolt = <1800000>;
+			regulator-max-microvolt = <1800000>;
+		};
+
+		sw1a_reg: sw1a {
+			compatible = "regulator-fixed";
+			regulator-name = "sw1a_reg";
+			regulator-min-microvolt = <700000>;
+			regulator-max-microvolt = <1475000>;
+			regulator-boot-on;
+			regulator-always-on;
+			regulator-ramp-delay = <6250>;
+		};
+
+		wlreg_on: fixedregulator@100 {
+			compatible = "regulator-fixed";
+			regulator-name = "wlreg_on";
+			gpio = <&gpio6 15 GPIO_ACTIVE_HIGH>;
+			startup-delay-us = <100>;
+			enable-active-high;
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			regulator-always-on;
+		};
+	};
+
+	bcmdhd_wlan_0:	bcmdhd_wlan@0 {
+		compatible = "android,bcmdhd_wlan";
+		wlreg_on-supply = <&wlreg_on>;
+		bcmdhd_wlan_irq = <&gpio6 14 0>; 
+	};
+
+#if 0
+	sound-hdmi {
+		compatible = "fsl,imx7d-sdb-sii902x",
+			   "fsl,imx-audio-sii902x";
+		model = "sii902x-audio";
+		cpu-dai = <&sai1>;
+		hdmi-controler = <&sii902x>;
+	};
+
+#endif
+
+#if 0
+	hdmi1: hdmi@70 {
+		//compatible = "nxp,tda998x";
+		compatible = "mxs,tda19988";
+		reg = <0x70>;
+	};
+#endif
+
+
+	sound {
+		compatible = "simple-audio-card";
+		simple-audio-card,name = "mx7 96Board";
+		simple-audio-card,format = "i2s";
+		simple-audio-card,bitclock-master = <&dailink0_master>;
+		simple-audio-card,frame-master = <&dailink0_master>;
+		simple-audio-card,widgets =
+			"Line", "Line Out";
+		simple-audio-card,routing =
+			"Line Out", "LLOUT",
+			"Line Out", "RLOUT";
+
+        simple-audio-card,cpu {
+            sound-dai = <&sai1>;
+        };
+
+		dailink0_master: simple-audio-card,codec {
+				sound-dai = <&tda998x>;
+				//clocks = <&clks IMX7D_AUDIO_MCLK_ROOT_CLK>;
+				//clocks = <&clks IMX7D_SAI2_ROOT_CLK>;
+				clocks = <&clks>;
+		};
+	};
+};
+
+&cpu0 {
+	arm-supply = <&sw1a_reg>;
+};
+
+&epxp {
+	status = "okay";
+};
+
+// AWS - no LCDIF yet
+&lcdif {
+    disp-dev = "mipi_dsi_samsung";
+
+	pinctrl-names = "default";
+	display = <&display0>;
+	status = "okay";
+
+	display0: display {
+		bits-per-pixel = <24>;
+		bus-width = <24>;
+
+		display-timings {
+			native-mode = <&timing0>;
+			timing0: timing0 {
+            clock-frequency = <83500000>;
+            hactive = <1280>;
+            vactive = <800>;
+            hfront-porch = <390>;
+            hback-porch = <0>;
+            hsync-len = <11>;
+            vback-porch = <0>;
+            vfront-porch = <21>;
+            vsync-len = <10>;
+			};
+		};
+	};
+};
+
+&mipi_dsi {
+	status = "okay";
+	pinctrl-names = "default";
+	lcd_panel = "TRULY-TDA";
+//	resets = <&mipi_dsi_reset>;
+	status = "okay";
+};
+
+&i2c3 {
+	clock-frequency = <100000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_i2c3>;
+	status = "okay";
+};
+
+&i2c4 {
+	clock-frequency = <100000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_i2c4>;
+	status = "okay";
+
+	tda998x: hdmi-encoder {
+		//compatible = "nxp,tda998x";
+		compatible = "mxs,tda19988";
+		//reg = <0x70>;
+		reg = <0x37>;
+		interrupt-parent = <&gpio2>;
+		interrupts = <28 IRQ_TYPE_EDGE_FALLING>;           /* falling edge */
+	//	video-ports = <0x230145>;         		     /* default value */	
+		pinctrl-0 = <&pinctrl_tda998x &pinctrl_lcdif_dat &pinctrl_lcdif_ctrl>;	
+		pinctrl-names = "default";
+
+		#sound-dai-cells = <1>;
+
+		/*	DAI-format	AP_ENA reg value */
+		/*audio-ports = <TDA998x_I2S	0x03>;*/
+		audio-ports = <2 0x03>;
+	}; 
+
+#if 0
+     codec: tda998x@18 {
+     	compatible = "mxs,tda19988";
+     	#sound-dai-cells = <0>;
+     	reg = <0x37>;
+     	status="okay";
+     };
+#endif
+
+};
+
+&iomuxc {
+	pinctrl-names = "default";
+
+	imx7d-sdb {
+		pinctrl_enet1: enet1grp {
+			fsl,pins = <
+				MX7D_PAD_GPIO1_IO10__ENET1_MDIO		0x3
+				MX7D_PAD_GPIO1_IO11__ENET1_MDC		0x3
+				MX7D_PAD_ENET1_RGMII_TXC__ENET1_RGMII_TXC	0x1
+				MX7D_PAD_ENET1_RGMII_TD0__ENET1_RGMII_TD0	0x1
+				MX7D_PAD_ENET1_RGMII_TD1__ENET1_RGMII_TD1	0x1
+				MX7D_PAD_ENET1_RGMII_TD2__ENET1_RGMII_TD2	0x1
+				MX7D_PAD_ENET1_RGMII_TD3__ENET1_RGMII_TD3	0x1
+				MX7D_PAD_ENET1_RGMII_TX_CTL__ENET1_RGMII_TX_CTL	0x1
+				MX7D_PAD_ENET1_RGMII_RXC__ENET1_RGMII_RXC	0x1
+				MX7D_PAD_ENET1_RGMII_RD0__ENET1_RGMII_RD0	0x1
+				MX7D_PAD_ENET1_RGMII_RD1__ENET1_RGMII_RD1	0x1
+				MX7D_PAD_ENET1_RGMII_RD2__ENET1_RGMII_RD2	0x1
+				MX7D_PAD_ENET1_RGMII_RD3__ENET1_RGMII_RD3	0x1
+				MX7D_PAD_ENET1_RGMII_RX_CTL__ENET1_RGMII_RX_CTL	0x1
+			>;
+		};
+
+		pinctrl_i2c1: i2c1grp {
+			fsl,pins = <
+				MX7D_PAD_I2C1_SDA__I2C1_SDA	0x4000007f
+				MX7D_PAD_I2C1_SCL__I2C1_SCL	0x4000007f
+			>;
+		};
+
+		pinctrl_i2c2: i2c2grp {
+			fsl,pins = <
+				MX7D_PAD_I2C2_SDA__I2C2_SDA	0x4000007f
+				MX7D_PAD_I2C2_SCL__I2C2_SCL	0x4000007f
+			>;
+		};
+
+		pinctrl_i2c3: i2c3grp {
+			fsl,pins = <
+				MX7D_PAD_I2C3_SDA__I2C3_SDA          0x4000007f
+				MX7D_PAD_I2C3_SCL__I2C3_SCL          0x4000007f
+			>;
+		};
+
+		pinctrl_i2c4: i2c4grp {
+			fsl,pins = <
+				MX7D_PAD_SAI1_RX_BCLK__I2C4_SDA		0x4000007f
+				MX7D_PAD_SAI1_RX_SYNC__I2C4_SCL		0x4000007f
+			>;
+		};
+
+		pinctrl_lcdif_dat: lcdifdatgrp {
+			fsl,pins = <
+				MX7D_PAD_LCD_DATA00__LCD_DATA0	0x79
+				MX7D_PAD_LCD_DATA01__LCD_DATA1	0x79
+				MX7D_PAD_LCD_DATA02__LCD_DATA2	0x79
+				MX7D_PAD_LCD_DATA03__LCD_DATA3	0x79
+				MX7D_PAD_LCD_DATA04__LCD_DATA4	0x79
+				MX7D_PAD_LCD_DATA05__LCD_DATA5	0x79
+				MX7D_PAD_LCD_DATA06__LCD_DATA6	0x79
+				MX7D_PAD_LCD_DATA07__LCD_DATA7	0x79
+				MX7D_PAD_LCD_DATA08__LCD_DATA8	0x79
+				MX7D_PAD_LCD_DATA09__LCD_DATA9	0x79
+				MX7D_PAD_LCD_DATA10__LCD_DATA10	0x79
+				MX7D_PAD_LCD_DATA11__LCD_DATA11	0x79
+				MX7D_PAD_LCD_DATA12__LCD_DATA12	0x79
+				MX7D_PAD_LCD_DATA13__LCD_DATA13	0x79
+				MX7D_PAD_LCD_DATA14__LCD_DATA14	0x79
+				MX7D_PAD_LCD_DATA15__LCD_DATA15	0x79
+				MX7D_PAD_LCD_DATA16__LCD_DATA16	0x79
+				MX7D_PAD_LCD_DATA17__LCD_DATA17	0x79
+				MX7D_PAD_LCD_DATA18__LCD_DATA18	0x79
+				MX7D_PAD_LCD_DATA19__LCD_DATA19	0x79
+				MX7D_PAD_LCD_DATA20__LCD_DATA20	0x79
+				MX7D_PAD_LCD_DATA21__LCD_DATA21	0x79
+				MX7D_PAD_LCD_DATA22__LCD_DATA22	0x79
+				MX7D_PAD_LCD_DATA23__LCD_DATA23	0x79
+			>;
+		};
+
+		pinctrl_lcdif_ctrl: lcdifctrlgrp {
+			fsl,pins = <
+				MX7D_PAD_LCD_CLK__LCD_CLK	0x79
+				MX7D_PAD_LCD_ENABLE__LCD_ENABLE	0x79
+				MX7D_PAD_LCD_VSYNC__LCD_VSYNC	0x79
+				MX7D_PAD_LCD_HSYNC__LCD_HSYNC	0x79
+				MX7D_PAD_LCD_RESET__LCD_RESET	0x79
+			>;
+		};
+
+
+		pinctrl_tda998x: hdmigrp-1 {
+			fsl,pins = <
+				MX7D_PAD_LCD_CLK__LCD_CLK	0x79
+				MX7D_PAD_LCD_ENABLE__LCD_ENABLE	0x79
+				MX7D_PAD_LCD_VSYNC__LCD_VSYNC	0x79
+				MX7D_PAD_LCD_HSYNC__LCD_HSYNC	0x79
+				MX7D_PAD_LCD_RESET__LCD_RESET	0x79
+				MX7D_PAD_EPDC_BDR0__GPIO2_IO28 0x59
+			>;
+		};
+
+		pinctrl_uart1: uart1grp {
+			fsl,pins = <
+				MX7D_PAD_UART1_TX_DATA__UART1_DCE_TX 0x79
+				MX7D_PAD_UART1_RX_DATA__UART1_DCE_RX 0x79
+			>;
+		};
+
+		pinctrl_uart3: uart3grp {
+			fsl,pins = <
+				MX7D_PAD_SD3_DATA4__UART3_DCE_RX 0x79
+				MX7D_PAD_SD3_DATA5__UART3_DCE_TX 0x79
+				MX7D_PAD_SD3_DATA6__UART3_DCE_RTS 0x79
+				MX7D_PAD_SD3_DATA7__UART3_DCE_CTS 0x79
+			>;
+		};
+
+		pinctrl_uart5: uart5grp {
+			fsl,pins = <
+				MX7D_PAD_SAI1_RX_DATA__UART5_DCE_RX 0x79
+				MX7D_PAD_SAI1_TX_BCLK__UART5_DCE_TX 0x79
+				MX7D_PAD_SAI1_TX_DATA__UART5_DCE_RTS 0x79
+				MX7D_PAD_SAI1_TX_SYNC__UART5_DCE_CTS 0x79
+			>;
+		};
+
+		pinctrl_uart5dte: uart5dtegrp {
+			fsl,pins = <
+				MX7D_PAD_SAI1_TX_BCLK__UART5_DTE_RX 0x79
+				MX7D_PAD_SAI1_RX_DATA__UART5_DTE_TX 0x79
+				MX7D_PAD_SAI1_TX_SYNC__UART5_DTE_RTS 0x79
+				MX7D_PAD_SAI1_TX_DATA__UART5_DTE_CTS 0x79
+			>;
+		};
+
+		pinctrl_uart6: uart6grp {
+				fsl,pins = <
+					MX7D_PAD_SD1_CD_B__UART6_DCE_RX 0x79
+					MX7D_PAD_SD1_WP__UART6_DCE_TX   0x79
+				>;
+		};
+
+		pinctrl_uart7: uart7grp {
+				fsl,pins = <
+				/* BT UART */
+				MX7D_PAD_ECSPI2_SCLK__UART7_DCE_RX 0x79
+				MX7D_PAD_ECSPI2_MOSI__UART7_DCE_TX 0x79
+				MX7D_PAD_ECSPI2_MISO__UART7_DCE_RTS 0x79
+				MX7D_PAD_ECSPI2_MISO__UART7_DTE_CTS 0x79
+				>;
+		};
+#if 0
+		pinctrl_uart7dte: uart7dtegrp {
+				fsl,pins = <
+				/* BT UART */
+				MX7D_PAD_ECSPI2_SCLK__UART7_DTE_RX 0x79
+				MX7D_PAD_ECSPI2_MOSI__UART7_DTE_TX 0x79
+				MX7D_PAD_ECSPI2_MISO__UART7_DTE_RTS 0x79
+				MX7D_PAD_ECSPI2_MISO__UART7_DTE_CTS 0x79
+				>;
+		};
+#endif
+
+		pinctrl_usdhc1: usdhc1grp {
+			fsl,pins = <
+					MX7D_PAD_SD1_CMD__SD1_CMD       0x59
+					MX7D_PAD_SD1_CLK__SD1_CLK       0x19
+					MX7D_PAD_SD1_DATA0__SD1_DATA0   0x59
+					MX7D_PAD_SD1_DATA1__SD1_DATA1   0x59
+					MX7D_PAD_SD1_DATA2__SD1_DATA2   0x59
+					MX7D_PAD_SD1_DATA3__SD1_DATA3   0x59
+			>;
+		};
+
+		pinctrl_usdhc2: usdhc2grp {
+			fsl,pins = <
+				MX7D_PAD_SD2_CMD__SD2_CMD       0x59
+				MX7D_PAD_SD2_CLK__SD2_CLK       0x19
+				MX7D_PAD_SD2_DATA0__SD2_DATA0   0x59
+				MX7D_PAD_SD2_DATA1__SD2_DATA1   0x59
+				MX7D_PAD_SD2_DATA2__SD2_DATA2   0x59
+				MX7D_PAD_SD2_DATA3__SD2_DATA3   0x59
+				MX7D_PAD_ECSPI2_MOSI__GPIO4_IO21	0x59 /* WL_REG_ON */
+			>;
+		};
+
+		pinctrl_usdhc2_100mhz: usdhc2grp_100mhz {
+			fsl,pins = <
+				MX7D_PAD_SD2_CMD__SD2_CMD       0x5a
+				MX7D_PAD_SD2_CLK__SD2_CLK       0x1a
+				MX7D_PAD_SD2_DATA0__SD2_DATA0   0x5a
+				MX7D_PAD_SD2_DATA1__SD2_DATA1   0x5a
+				MX7D_PAD_SD2_DATA2__SD2_DATA2   0x5a
+				MX7D_PAD_SD2_DATA3__SD2_DATA3   0x5a
+			>;
+		};
+
+		pinctrl_usdhc2_200mhz: usdhc2grp_200mhz {
+			fsl,pins = <
+				MX7D_PAD_SD2_CMD__SD2_CMD       0x5b
+				MX7D_PAD_SD2_CLK__SD2_CLK       0x1b
+				MX7D_PAD_SD2_DATA0__SD2_DATA0   0x5b
+				MX7D_PAD_SD2_DATA1__SD2_DATA1   0x5b
+				MX7D_PAD_SD2_DATA2__SD2_DATA2   0x5b
+				MX7D_PAD_SD2_DATA3__SD2_DATA3   0x5b
+			>;
+		};
+
+		pinctrl_sai1: sai1grp {
+			fsl,pins = <
+				MX7D_PAD_SAI1_MCLK__SAI2_MCLK           0x1f
+				MX7D_PAD_ENET1_RX_CLK__SAI1_TX_BCLK     0x1f
+				MX7D_PAD_ENET1_CRS__SAI1_TX_SYNC	0x1f
+				MX7D_PAD_ENET1_COL__SAI1_TX_DATA0	0x30
+				MX7D_PAD_ENET1_TX_CLK__SAI1_RX_DATA0	0x1f
+			>;
+		};
+
+		pinctrl_sai2: sai2grp {
+			fsl,pins = <
+				MX7D_PAD_SAI2_TX_BCLK__SAI2_TX_BCLK     0x1f
+				MX7D_PAD_SAI2_TX_SYNC__SAI2_TX_SYNC     0x1f
+				MX7D_PAD_SAI2_TX_DATA__SAI2_TX_DATA0    0x30
+				MX7D_PAD_SAI2_RX_DATA__SAI2_RX_DATA0    0x1f
+			>;
+		};
+
+		pinctrl_spi1: spi1grp {
+			fsl,pins = <
+				MX7D_PAD_GPIO1_IO09__GPIO1_IO9	0x59
+				MX7D_PAD_GPIO1_IO12__GPIO1_IO12	0x59
+				MX7D_PAD_GPIO1_IO13__GPIO1_IO13	0x59
+			>;
+		};
+
+		pinctrl_wifi: wifigrp {
+			fsl,pins = <
+
+				/* WIFI pins */
+				MX7D_PAD_SD3_CMD__SD3_CMD       0x59 /* 0x17059 */
+				MX7D_PAD_SD3_CLK__SD3_CLK       0x19 /* 0x10059 */ /* 0x19 */
+				MX7D_PAD_SD3_DATA0__SD3_DATA0   0x59 /* 0x17059 */ /* 0x59 */
+				MX7D_PAD_SD3_DATA1__SD3_DATA1   0x59 /* 0x17059 */ /* 0x59 */
+				MX7D_PAD_SD3_DATA2__SD3_DATA2   0x59 /* 0x17059 */ /* 0x59 */
+				MX7D_PAD_SD3_DATA3__SD3_DATA3   0x59 /* 0x17059 */ /* 0x59 */
+
+				/* WLREG */
+				MX7D_PAD_SAI1_TX_DATA__GPIO6_IO15 0x59 /* 0x13069 */ /* 0x3031 */
+
+// AWS - Bluetooth not yet proven 
+
+				/* CLK REQ */
+				MX7D_PAD_SAI1_TX_SYNC__GPIO6_IO14 0x59
+
+				/* BT PCM */
+//				MX7D_PAD_SAI2_TX_SYNC__SAI2_TX_SYNC 0x1f
+//				MX7D_PAD_SAI2_TX_BCLK__SAI2_TX_BCLK 0x1f
+//				MX7D_PAD_SAI2_TX_DATA__SAI2_TX_DATA0 0x30
+//				MX7D_PAD_SAI2_RX_DATA__SAI2_RX_DATA0 0x1f
+
+				/* other BT lines */
+				MX7D_PAD_SAI1_TX_BCLK__GPIO6_IO13 0x59
+				MX7D_PAD_ECSPI1_MOSI__GPIO4_IO17 0x19
+
+			>;
+		};
+	};
+};
+
+&iomuxc_lpsr {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_hog_2>;
+
+	imx7d-sdb {
+		pinctrl_hog_2: hoggrp-2 {
+			fsl,pins = <
+/*				MX7D_PAD_GPIO1_IO05__GPIO5_IO5	0x14 */
+				MX7D_PAD_GPIO1_IO07__GPIO1_IO7	0x59  /* CAN_STBY */
+			>;
+		};
+		pinctrl_pwm1: pwm1grp {
+			fsl,pins = <
+				MX7D_PAD_GPIO1_IO01__PWM1_OUT	0x110b0
+			>;
+		};
+	};
+};
+
+&pcie {
+	pinctrl-names = "default";
+	/* reset-gpio = <&gpio_spi 1 GPIO_ACTIVE_HIGH>; */
+	status = "okay";
+};
+
+&clks {
+	assigned-clocks = <&clks IMX7D_PLL_AUDIO_POST_DIV>;
+	assigned-clock-rates = <884736000>;
+};
+
+&sai1 {
+	#sound-dai-cells = <0>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_sai1>;
+	assigned-clocks = <&clks IMX7D_SAI1_ROOT_SRC>,
+			  <&clks IMX7D_SAI1_ROOT_CLK>;
+	assigned-clock-parents = <&clks IMX7D_PLL_AUDIO_POST_DIV>;
+	assigned-clock-rates = <0>, <18432000>;
+	codec-handle=<&tda998x>;
+	status = "okay";
+};
+
+#if 0
+&sai2 {
+	pinctrl-names = "default";
+	//pinctrl-0 = <&pinctrl_sai1>;
+	assigned-clocks = <&clks IMX7D_SAI2_ROOT_SRC>,
+			  <&clks IMX7D_SAI2_ROOT_CLK>;
+	assigned-clock-parents = <&clks IMX7D_PLL_AUDIO_POST_DIV>;
+	assigned-clock-rates = <0>, <18432000>;
+	status = "okay";
+};
+#endif
+
+
+&sdma {
+	status = "okay";
+};
+
+&uart1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart1>;
+	assigned-clocks = <&clks IMX7D_UART1_ROOT_SRC>;
+	assigned-clock-parents = <&clks IMX7D_PLL_SYS_MAIN_240M_CLK>;
+	status = "okay";
+};
+
+&uart3 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart3>;
+	assigned-clocks = <&clks IMX7D_UART3_ROOT_SRC>;
+	assigned-clock-parents = <&clks IMX7D_PLL_SYS_MAIN_240M_CLK>;
+	fsl,uart-has-rtscts;
+	status = "okay";
+};
+
+&uart6 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart6>;
+	assigned-clocks = <&clks IMX7D_UART6_ROOT_SRC>;
+	assigned-clock-parents = <&clks IMX7D_PLL_SYS_MAIN_240M_CLK>;
+	fsl,uart-has-rtscts;
+	status = "okay";
+};
+
+&uart7 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart7>;
+	assigned-clocks = <&clks IMX7D_UART7_ROOT_SRC>;
+	assigned-clock-parents = <&clks IMX7D_PLL_SYS_MAIN_240M_CLK>;
+	fsl,uart-has-rtscts;
+	status = "okay";
+};
+
+
+&usbotg1 {
+	vbus-supply = <&reg_usb_otg1_vbus>;
+	status = "okay";
+};
+
+&usbotg2 {
+	vbus-supply = <&reg_usb_otg2_vbus>;
+	dr_mode = "host";
+	status = "okay";
+};
+
+&usdhc1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_usdhc1>;
+	enable-sdio-wakeup;
+	//non-removable;
+	keep-power-in-suspend;
+	tuning-step = <2>;
+	status = "okay";
+};
+
+&usdhc3 {
+	pinctrl-names = "default";
+//	pinctrl-0 = <&pinctrl_usdhc3>;
+//	pinctrl-1 = <&pinctrl_usdhc3_100mhz>;
+//	pinctrl-2 = <&pinctrl_usdhc3_200mhz>;
+	pinctrl-0 = <&pinctrl_wifi>;
+	bus-width = <4>;
+	no-1-8-v;
+	non-removable;
+// next two had been removed
+//	cd-post;
+//	pm-ignore-notify;
+
+	keep-power-in-suspend;
+	enable-sdio-wakeup;
+	vmmc-supply = <&wlreg_on>;
+	wifi-host;
+	status="okay";
+};
+
