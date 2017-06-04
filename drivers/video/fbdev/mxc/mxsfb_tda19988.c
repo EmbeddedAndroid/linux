@@ -42,6 +42,10 @@
 #include <asm/mach-types.h>
 #include <sound/asoundef.h>
 
+#include <sound/soc.h>
+#include <linux/of_device.h>
+
+#define DRV_NAME2 "mxs-hdmi-audio-codec"
 #define REG(page, addr) (((page) << 8) | (addr))
 #define REG2ADDR(reg)   ((reg) & 0xff)
 #define REG2PAGE(reg)   (((reg) >> 8) & 0xff)
@@ -949,7 +953,7 @@ static int tda19988_probe(struct i2c_client *client,
     while (offset < 0x70)
     {
         value = readl(virt_base+offset); 
-        printk("0x%08x: 0x%08x\n", virt_base+offset, value);
+        printk(KERN_ERR "0x%08x: 0x%08x\n", virt_base+offset, value);
         offset += 0x10;
     }
 
