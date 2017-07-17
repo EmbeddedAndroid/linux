@@ -182,6 +182,8 @@ const struct fb_videomode mxc_cea_mode[64] = {
 	},
 };
 
+EXPORT_SYMBOL(mxc_cea_mode);
+
 /*
  * We have a special version of fb_mode_is_equal that ignores
  * pixclock, since for many CEA modes, 2 frequencies are supported

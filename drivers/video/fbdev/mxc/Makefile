@@ -10,6 +10,6 @@ obj-$(CONFIG_FB_MXC_SYNC_PANEL) += mxc_dispdrv.o mxc_lcdif.o mxc_ipuv3_fb.o
 obj-$(CONFIG_FB_MXC_EINK_PANEL)			+= mxc_epdc_fb.o
 obj-$(CONFIG_FB_MXC_EINK_V2_PANEL)		+= mxc_epdc_v2_fb.o
 obj-$(CONFIG_FB_MXS_SII902X) += mxsfb_sii902x.o
-obj-$(CONFIG_FB_MXS_TDA19988)	+= mxsfb_tda19988.o mxcfb_96board_panel.o
+obj-$(CONFIG_FB_MXS_TDA19988)	+= mxsfb_tda19988.o mxcfb_96board_panel.o mipi_dsi_96board.o
 obj-$(CONFIG_FB_MXC_DCIC) += mxc_dcic.o
 obj-$(CONFIG_HANNSTAR_CABC) += hannstar_cabc.o

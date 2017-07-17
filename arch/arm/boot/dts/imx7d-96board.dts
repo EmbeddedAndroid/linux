@@ -58,7 +58,7 @@
 		};
 
 		sw1a_reg: sw1a {
-			compatible = "regulator-fixed";
+		/*	compatible = "regulator-fixed"; */
 			regulator-name = "sw1a_reg";
 			regulator-min-microvolt = <700000>;
 			regulator-max-microvolt = <1475000>;
@@ -76,6 +76,33 @@
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
 			regulator-always-on;
+		};
+
+                reg_sd1_vmmc: sd1_vmmc {
+                        compatible = "regulator-fixed";
+                        regulator-name = "SD1_SPWR";
+                        regulator-min-microvolt = <3300000>;
+                        regulator-max-microvolt = <3300000>;
+ 		}; 
+
+                reg_sd1_vqmmc: sd1_vqmmc {
+                        compatible = "regulator-fixed";
+                        regulator-name = "SD1_QSPWR";
+                        regulator-min-microvolt = <3300000>;
+                        regulator-max-microvolt = <3300000>;
+ 		}; 
+
+                reg_sd2_vqmmc: sd2_vqmmc {
+                        compatible = "regulator-fixed";
+                        regulator-name = "SD2_QSPWR";
+                        regulator-min-microvolt = <3300000>;
+                        regulator-max-microvolt = <3300000>;
+		};
+
+		dummy_regulator: fixedregulator@200 {
+			compatible = "regulator-fixed";
+			reg = <0>;
+			regulator-name = "dummy";
 		};
 	};
 
@@ -124,9 +151,6 @@
 		#clock-cells = <0>;
 		compatible = "gpio-gate-clock";
 		clocks = <&audclock_fixed>;
-#if 0
-	enable-gpios = <&gpio1 27 0>; /* BeagleBone Black Clk enable on GPIO1_27 */
-#endif
 		status="okay";
 	};  
 	sound-hdmi {
@@ -176,8 +200,8 @@
 			widgets = "Line", "Line Out";
 
 			cpu {
-            sound-dai = <&sai1>;
-        };
+            			sound-dai = <&sai1>;
+        		};
 
 			tda_dac: codec {
 				sound-dai = <&tda_codec 0>;
@@ -205,36 +229,41 @@
 
 &cpu0 {
 	arm-supply = <&sw1a_reg>;
+	clock-frequency = <0>;
 };
+
+&cpu1 {
+	clock-frequency = <0>;
+};
+
 
 &epxp {
 	status = "okay";
 };
 
-// AWS - no LCDIF yet
 &lcdif {
-    disp-dev = "mipi_dsi_samsung";
+    disp-dev = "mipi_dsi_96board";
 
 	pinctrl-names = "default";
-	display = <&display0>;
+	display = <&display1>;
 	status = "okay";
 
-	display0: display {
+	display1: display_name {
 		bits-per-pixel = <24>;
 		bus-width = <24>;
 
 		display-timings {
 			native-mode = <&timing0>;
 			timing0: timing0 {
-            clock-frequency = <83500000>;
-            hactive = <1280>;
-            vactive = <800>;
-            hfront-porch = <390>;
-            hback-porch = <0>;
-            hsync-len = <11>;
-            vback-porch = <0>;
-            vfront-porch = <21>;
-            vsync-len = <10>;
+				clock-frequency = <83500000>;
+				hactive = <1280>;
+				vactive = <800>;
+				hfront-porch = <390>;
+				hback-porch = <0>;
+				hsync-len = <11>;
+				vback-porch = <0>;
+				vfront-porch = <21>;
+				vsync-len = <10>;
 			};
 		};
 	};
@@ -244,7 +273,7 @@
 	status = "okay";
 	pinctrl-names = "default";
 	lcd_panel = "TRULY-TDA";
-//	resets = <&mipi_dsi_reset>;
+	disp-power-on-supply = <&dummy_regulator>;
 	status = "okay";
 };
 
@@ -532,16 +561,11 @@
 				/* WLREG */
 				MX7D_PAD_SAI1_TX_DATA__GPIO6_IO15 0x19 /* 0x13069 */ /* 0x3031 */
 
-// AWS - Bluetooth not yet proven 
 
 				/* CLK REQ */
 				MX7D_PAD_SAI1_TX_SYNC__GPIO6_IO14 0x59
 
 				/* BT PCM */
-//				MX7D_PAD_SAI2_TX_SYNC__SAI2_TX_SYNC 0x1f
-//				MX7D_PAD_SAI2_TX_BCLK__SAI2_TX_BCLK 0x1f
-//				MX7D_PAD_SAI2_TX_DATA__SAI2_TX_DATA0 0x30
-//				MX7D_PAD_SAI2_RX_DATA__SAI2_RX_DATA0 0x1f
 				MX7D_PAD_SAI2_TX_SYNC__SAI2_TX_SYNC 0x1f
 				MX7D_PAD_SAI2_TX_BCLK__SAI2_TX_BCLK 0x1f
 				MX7D_PAD_SAI2_TX_DATA__SAI2_TX_DATA0 0x30
@@ -663,34 +687,56 @@
 	status = "okay";
 };
 
+&usbphy_nop1 {
+	vcc-supply = <&dummy_regulator>;
+};
+
+&usbphy_nop2 {
+	vcc-supply = <&dummy_regulator>;
+};
+
 &usdhc1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usdhc1>;
 	enable-sdio-wakeup;
-	//non-removable;
+	voltage-ranges = <3300 3300>;
+
 	keep-power-in-suspend;
 	tuning-step = <2>;
+	vmmc-supply=<&reg_sd1_vmmc>;
+	vqmmc-supply=<&reg_sd1_vqmmc>;
+
 	status = "okay";
 };
 
 &usdhc3 {
 	pinctrl-names = "default";
-//	pinctrl-0 = <&pinctrl_usdhc3>;
-//	pinctrl-1 = <&pinctrl_usdhc3_100mhz>;
-//	pinctrl-2 = <&pinctrl_usdhc3_200mhz>;
 	pinctrl-0 = <&pinctrl_wifi>;
+
+	voltage-ranges = <3300 3300>;
 	bus-width = <4>;
 	no-1-8-v;
 	non-removable;
-// next two had been removed
-//	cd-post;
-//	pm-ignore-notify;
 
 	keep-power-in-suspend;
 	enable-sdio-wakeup;
 	vmmc-supply = <&wlreg_on>;
+	vqmmc-supply =<&reg_sd2_vqmmc>;
+
 	wifi-host;
 	status="okay";
+};
+
+&usbmisc1 {
+	 vbus-wakeup-supply = <&dummy_regulator>;
+};
+
+&usbmisc2 { 
+	vbus-wakeup-supply = <&dummy_regulator>;
+};
+
+&usbmisc3 {
+ 	vbus-wakeup-supply = <&dummy_regulator>;
 };
 
 &crypto {

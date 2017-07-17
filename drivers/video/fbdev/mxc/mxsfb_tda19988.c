@@ -949,15 +949,7 @@ static int tda19988_probe(struct i2c_client *client,
     value |= 0x04;
     writel(value, virt_base+0x20);
 
-
-    while (offset < 0x70)
-    {
-        value = readl(virt_base+offset); 
-        printk(KERN_ERR "0x%08x: 0x%08x\n", virt_base+offset, value);
-        offset += 0x10;
-    }
-
-	return 0;
+    return 0;
 }
 
 static int tda19988_remove(struct i2c_client *client)

@@ -181,6 +181,7 @@ void mipid_tda_get_lcd_videomode(struct fb_videomode **mode, int *size,
 	*size = ARRAY_SIZE(truly_lcd_modedb);
 	*data = &lcd_config;
 }
+EXPORT_SYMBOL(mipid_tda_get_lcd_videomode);
 
 int mipid_tda_lcd_setup(struct mipi_dsi_info *mipi_dsi)
 {
@@ -214,6 +215,7 @@ int mipid_tda_lcd_setup(struct mipi_dsi_info *mipi_dsi)
 #endif
 	return 0;
 }
+EXPORT_SYMBOL(mipid_tda_lcd_setup);
 
 static int mipid_bl_update_status(struct backlight_device *bl)
 {
