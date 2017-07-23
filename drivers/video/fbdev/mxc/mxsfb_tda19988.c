@@ -799,7 +799,7 @@ static void tda19988_fb_var(struct tda19988_data *data, struct fb_var_screeninfo
     value = value | VIP_CNTRL_3_H_TGL;
     reg_write(data,REG_VIP_CNTRL_3, value);
 
-    reg_write(data,REG_VIDFORMAT, 0x00);
+    reg_write(data,REG_VIDFORMAT, 0x02);
     reg_write16(data,REG_REFPIX_MSB, ref_pix);
     reg_write16(data,REG_REFLINE_MSB, ref_line);
     reg_write16(data,REG_NPIX_MSB, n_pix);

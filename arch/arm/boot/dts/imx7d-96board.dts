@@ -36,8 +36,8 @@
 			regulator-name = "usb_otg1_vbus";
 			regulator-min-microvolt = <5000000>;
 			regulator-max-microvolt = <5000000>;
-			gpio = <&gpio1 2 GPIO_ACTIVE_HIGH>;
-			enable-active-high;
+		 	gpio = <&gpio1 2 GPIO_ACTIVE_LOW>; 
+			enable-active-low;
 		};
 
 		reg_usb_otg2_vbus: regulator@1 {
@@ -46,8 +46,9 @@
 			regulator-name = "usb_otg2_vbus";
 			regulator-min-microvolt = <5000000>;
 			regulator-max-microvolt = <5000000>;
-			gpio = <&gpio4 7 GPIO_ACTIVE_HIGH>;
+		/*	gpio = <&gpio4 7 GPIO_ACTIVE_HIGH>; 
 			enable-active-high;
+		*/
 		};
 
 		reg_vref_1v8: regulator@3 {
@@ -58,7 +59,7 @@
 		};
 
 		sw1a_reg: sw1a {
-		/*	compatible = "regulator-fixed"; */
+			/*compatible = "regulator-fixed"; */
 			regulator-name = "sw1a_reg";
 			regulator-min-microvolt = <700000>;
 			regulator-max-microvolt = <1475000>;
@@ -255,15 +256,15 @@
 		display-timings {
 			native-mode = <&timing0>;
 			timing0: timing0 {
-				clock-frequency = <83500000>;
+				clock-frequency = <83500000>; /* NOV RECALC THIS */
 				hactive = <1280>;
-				vactive = <800>;
-				hfront-porch = <390>;
-				hback-porch = <0>;
-				hsync-len = <11>;
-				vback-porch = <0>;
+				vactive = <720>;
+				hfront-porch = <220>;
+				hback-porch = <110>;
+				hsync-len = <40>;
+				vback-porch = <5>;
 				vfront-porch = <21>;
-				vsync-len = <10>;
+				vsync-len = <5>;
 			};
 		};
 	};
@@ -273,7 +274,7 @@
 	status = "okay";
 	pinctrl-names = "default";
 	lcd_panel = "TRULY-TDA";
-	disp-power-on-supply = <&dummy_regulator>;
+ 	disp-power-on-supply = <&dummy_regulator>; 
 	status = "okay";
 };
 
@@ -452,7 +453,6 @@
 					MX7D_PAD_SD1_WP__UART6_DCE_TX   0x79
 				>;
 		};
-
 #if 0
 		pinctrl_uart7: uart7grp {
 				fsl,pins = <
@@ -495,7 +495,6 @@
 				MX7D_PAD_SD2_DATA1__SD2_DATA1   0x59
 				MX7D_PAD_SD2_DATA2__SD2_DATA2   0x59
 				MX7D_PAD_SD2_DATA3__SD2_DATA3   0x59
-				MX7D_PAD_ECSPI2_MOSI__GPIO4_IO21	0x59 /* WL_REG_ON */
 			>;
 		};
 
@@ -551,16 +550,15 @@
 			fsl,pins = <
 
 				/* WIFI pins */
-				MX7D_PAD_SD3_CMD__SD3_CMD       0x59 /* 0x17059 */
-				MX7D_PAD_SD3_CLK__SD3_CLK       0x0D /* 0x10059 */ /* 0x19 */
-				MX7D_PAD_SD3_DATA0__SD3_DATA0   0x59 /* 0x17059 */ /* 0x59 */
-				MX7D_PAD_SD3_DATA1__SD3_DATA1   0x59 /* 0x17059 */ /* 0x59 */
-				MX7D_PAD_SD3_DATA2__SD3_DATA2   0x59 /* 0x17059 */ /* 0x59 */
-				MX7D_PAD_SD3_DATA3__SD3_DATA3   0x59 /* 0x17059 */ /* 0x59 */
+				MX7D_PAD_SD3_CMD__SD3_CMD       0x59 
+				MX7D_PAD_SD3_CLK__SD3_CLK       0x0D 
+				MX7D_PAD_SD3_DATA0__SD3_DATA0   0x59 
+				MX7D_PAD_SD3_DATA1__SD3_DATA1   0x59 
+				MX7D_PAD_SD3_DATA2__SD3_DATA2   0x59 
+				MX7D_PAD_SD3_DATA3__SD3_DATA3   0x59 
 
 				/* WLREG */
-				MX7D_PAD_SAI1_TX_DATA__GPIO6_IO15 0x19 /* 0x13069 */ /* 0x3031 */
-
+				MX7D_PAD_SAI1_TX_DATA__GPIO6_IO15 0x19 
 
 				/* CLK REQ */
 				MX7D_PAD_SAI1_TX_SYNC__GPIO6_IO14 0x59
@@ -671,7 +669,7 @@
 	assigned-clocks = <&clks IMX7D_UART7_ROOT_SRC>;
 	assigned-clock-parents = <&clks IMX7D_PLL_SYS_MAIN_240M_CLK>;
 	fsl,uart-has-rtscts;
-	fsl,dte-mode;
+	fsl,dte-mode; 
 	status = "okay";
 };
 
@@ -699,7 +697,7 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usdhc1>;
 	enable-sdio-wakeup;
-	voltage-ranges = <3300 3300>;
+/*	voltage-ranges = <3300 3300>; */
 
 	keep-power-in-suspend;
 	tuning-step = <2>;
@@ -713,7 +711,7 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_wifi>;
 
-	voltage-ranges = <3300 3300>;
+	voltage-ranges = <3300 3300>; 
 	bus-width = <4>;
 	no-1-8-v;
 	non-removable;
@@ -721,6 +719,7 @@
 	keep-power-in-suspend;
 	enable-sdio-wakeup;
 	vmmc-supply = <&wlreg_on>;
+
 	vqmmc-supply =<&reg_sd2_vqmmc>;
 
 	wifi-host;

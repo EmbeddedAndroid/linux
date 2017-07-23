@@ -130,11 +130,20 @@ static int tdabl_brightness;
 
 static struct fb_videomode truly_lcd_modedb[] = {
 	{
-
-	    "TRULY-WVGA", 
-		60, 1280, 720, 13468,
-        220, 110,
-        20, 5,
+#if 0
+	"TRULY-WVGA", 
+	60, 1920, 1080, 6494,
+        148, 88, 
+        36, 4,
+        44, 5,
+        FB_SYNC_HOR_HIGH_ACT | FB_SYNC_VERT_HIGH_ACT,
+        FB_VMODE_NONINTERLACED,
+        0,
+#endif
+	"TRULY-WVGA", 
+	60, 1280, 720, 13468,
+        220, 110, 
+        21, 5,
         40, 5,
         FB_SYNC_HOR_HIGH_ACT | FB_SYNC_VERT_HIGH_ACT,
         FB_VMODE_NONINTERLACED,
