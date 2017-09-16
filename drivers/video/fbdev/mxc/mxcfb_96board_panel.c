@@ -130,49 +130,14 @@ static int tdabl_brightness;
 
 static struct fb_videomode truly_lcd_modedb[] = {
 	{
-#if 0
-	"TRULY-WVGA", 
-	60, 1920, 1080, 6494,
-        148, 88, 
-        36, 4,
-        44, 5,
-        FB_SYNC_HOR_HIGH_ACT | FB_SYNC_VERT_HIGH_ACT,
-        FB_VMODE_NONINTERLACED,
-        0,
-#endif
 	"TRULY-WVGA", 
 	60, 1280, 720, 13468,
         220, 110, 
         21, 5,
         40, 5,
-        FB_SYNC_HOR_HIGH_ACT | FB_SYNC_VERT_HIGH_ACT,
+	FB_SYNC_CLK_LAT_FALL,
         FB_VMODE_NONINTERLACED,
         0,
-#if 0
-        // these settings freeze/anger my TV
-		60, 1280, 720, 13468,
-        50, 38,
-        20, 29,
-        2, 1,
-        FB_SYNC_HOR_HIGH_ACT | FB_SYNC_VERT_HIGH_ACT,
-        FB_VMODE_NONINTERLACED,
-        0,
-#endif
-#if 0
-     50, 
-     480, 
-     854, 
-     41042,
-	 40, 
-     60,
-	 3, 
-     3,
-	 8, 
-     4,
-	 FB_SYNC_OE_LOW_ACT,
-	 FB_VMODE_NONINTERLACED,
-	 0,
-#endif
 	},
 };
 
