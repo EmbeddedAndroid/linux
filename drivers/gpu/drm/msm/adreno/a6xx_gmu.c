@@ -320,10 +320,18 @@ static int a6xx_gmu_start(struct a6xx_gmu *gmu)
 	gmu_write(gmu, REG_A6XX_GMU_CM3_SYSRESET, 0);
 
 	ret = gmu_poll_timeout(gmu, REG_A6XX_GMU_CM3_FW_INIT_RESULT, val,
-		(val & mask) == reset_val, 100, 10000);
+		(val & mask) == reset_val, 100, 30000000);
 
-	if (ret)
-		DRM_DEV_ERROR(gmu->dev, "GMU firmware initialization timed out\n");
+	if (ret) {
+		DRM_DEV_ERROR(gmu->dev,
+			      "GMU fw init timeout: FW_INIT_RESULT=0x%x want=0x%x/0x%x\n",
+			      val, reset_val, mask);
+		DRM_DEV_ERROR(gmu->dev, "GMU dbg: CM3_SYSRESET=0x%x CM3_CFG=0x%x\n",
+			gmu_read(gmu, REG_A6XX_GMU_CM3_SYSRESET),
+			gmu_read(gmu, REG_A6XX_GMU_CM3_CFG));
+		/* DEBUG: keep GMU/CX powered for JTAG inspection */
+		msleep(600000);
+	}
 
 	set_bit(GMU_STATUS_FW_START, &gmu->status);
 
