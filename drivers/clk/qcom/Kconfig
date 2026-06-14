@@ -873,6 +873,16 @@ config CLK_NORD_GPUCC
 	  support graphics controller devices and functionality such as 3D
 	  graphics on these devices.
 
+config CLK_NORD_DISPCC
+	tristate "Nord Display Clock Controller"
+	depends on ARM64 || COMPILE_TEST
+	select QCOM_GDSC
+	help
+	  Support for the display clock controller on Qualcomm Technologies,
+	  Inc Nord devices.
+	  Say Y if you want to support display devices and functionality such
+	  as splash screen.
+
 config SAR_GCC_2130P
 	tristate "SAR2130P Global Clock Controller"
 	select QCOM_GDSC
