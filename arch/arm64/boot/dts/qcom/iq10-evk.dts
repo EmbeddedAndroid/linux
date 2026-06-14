@@ -533,3 +533,39 @@
 	vdda-pll-supply = <&vreg_l2h_1p2>;
 	status = "okay";
 };
+
+/*
+ * ---- IQ10 EVK bring-up additions (tyler) ----
+ * LinuxLoader boot requirements: it patches SCMI channel capids into an
+ * mmio-sram node located via the "scmichannels" alias before ExitBootServices,
+ * and needs a non-zero /memory size cell. (Board/firmware-contract glue.)
+ */
+
+&{/memory@80000000} {
+	/* LinuxLoader overwrites with discovered RAM, but needs valid size cells */
+	reg = <0x0 0x80000000 0x0 0x80000000>;
+};
+
+/ {
+	aliases {
+		scmichannels = "/sram@d7600000";
+	};
+
+	sram@d7600000 {
+		compatible = "mmio-sram";
+		reg = <0x0 0xd7600000 0x0 0x10000>;
+		#address-cells = <0x1>;
+		#size-cells = <0x1>;
+		ranges = <0x0 0x0 0xd7600000 0x10000>;
+
+		scmi-sram@0 {
+			compatible = "arm,scmi-shmem";
+			reg = <0x0 0x1000>;
+		};
+
+		scmi-sram@1000 {
+			compatible = "arm,scmi-shmem";
+			reg = <0x1000 0x1000>;
+		};
+	};
+};
