@@ -117,6 +117,7 @@ obj-$(CONFIG_SA_CAMCC_8775P) += camcc-sa8775p.o
 obj-$(CONFIG_SA_DISPCC_8775P) += dispcc0-sa8775p.o dispcc1-sa8775p.o
 obj-$(CONFIG_SA_GCC_8775P) += gcc-sa8775p.o
 obj-$(CONFIG_SA_GPUCC_8775P) += gpucc-sa8775p.o
+obj-$(CONFIG_CLK_NORD_GPUCC) += gpucc-nord.o
 obj-$(CONFIG_SA_VIDEOCC_8775P) += videocc-sa8775p.o
 obj-$(CONFIG_SAR_GCC_2130P) += gcc-sar2130p.o
 obj-$(CONFIG_SAR_GPUCC_2130P) += gpucc-sar2130p.o
