@@ -1012,7 +1012,7 @@ scmi_xfer_command_acquire(struct scmi_chan_info *cinfo, u32 msg_hdr)
 	spin_lock_irqsave(&minfo->xfer_lock, flags);
 	xfer = scmi_xfer_lookup_unlocked(minfo, xfer_id);
 	if (IS_ERR(xfer)) {
-		dev_err(cinfo->dev,
+		dev_err_ratelimited(cinfo->dev,
 			"Message for %d type %d is not expected!\n",
 			xfer_id, msg_type);
 		spin_unlock_irqrestore(&minfo->xfer_lock, flags);
