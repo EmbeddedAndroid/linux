@@ -862,6 +862,17 @@ config SA_GPUCC_8775P
 	  Say Y if you want to support graphics controller devices and
 	  functionality such as 3D graphics.
 
+config CLK_NORD_GPUCC
+	tristate "Nord Graphics clock controller"
+	depends on ARM64 || COMPILE_TEST
+	select QCOM_GDSC
+	select CLK_NORD_GCC
+	help
+	  Support for the graphics clock controller (GPU_CC) on Qualcomm
+	  Technologies, Inc Nord devices. Say Y if you want to
+	  support graphics controller devices and functionality such as 3D
+	  graphics on these devices.
+
 config SAR_GCC_2130P
 	tristate "SAR2130P Global Clock Controller"
 	select QCOM_GDSC
