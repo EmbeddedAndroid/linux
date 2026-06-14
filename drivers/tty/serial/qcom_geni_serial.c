@@ -1087,7 +1087,15 @@ static irqreturn_t qcom_geni_serial_isr(int isr, void *dev)
 	writel(dma_tx_status, uport->membase + SE_DMA_TX_IRQ_CLR);
 	writel(dma_rx_status, uport->membase + SE_DMA_RX_IRQ_CLR);
 
-	if (WARN_ON(m_irq_status & M_ILLEGAL_CMD_EN))
+	/*
+	 * An illegal-command IRQ can fire transiently during the console handoff
+	 * on SMP. Do NOT printk here: this runs in the geni IRQ handler, often
+	 * with the port lock held by the interrupted console write; any printk
+	 * flushes synchronously back to this same geni console -> console_write ->
+	 * recursive port-lock acquisition -> deadlock that hangs SMP boot.
+	 * Recover silently. (Original code: WARN_ON(... M_ILLEGAL_CMD_EN).)
+	 */
+	if (m_irq_status & M_ILLEGAL_CMD_EN)
 		goto out_unlock;
 
 	if (s_irq_status & S_RX_FIFO_WR_ERR_EN) {
