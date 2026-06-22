@@ -533,3 +533,12 @@
 	vdda-pll-supply = <&vreg_l2h_1p2>;
 	status = "okay";
 };
+
+/ {
+	firmware {
+		optee {
+			compatible = "linaro,optee-tz";
+			method = "smc";
+		};
+	};
+};
