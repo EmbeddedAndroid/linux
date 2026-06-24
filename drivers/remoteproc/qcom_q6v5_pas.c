@@ -923,6 +923,23 @@ static const struct qcom_pas_data sa8775p_adsp_resource = {
 	.ssctl_id = 0x14,
 };
 
+/* nord (SA8797P/IQ-10): reuse the SA8775P ADSP, but with NO proxy power-domains.
+ * nord rpmhpd has no LCX/LMX, so attaching them would fail probe; the LPASS rails
+ * are managed elsewhere on the open EL2 stack, and PAS auth via OP-TEE does not
+ * need the proxy PDs for init_image/mem_setup. */
+static const struct qcom_pas_data nord_adsp_resource = {
+	.crash_reason_smem = 423,
+	.firmware_name = "adsp.mbn",
+	.pas_id = 1,
+	.minidump_id = 5,
+	.auto_boot = true,
+	.proxy_pd_names = (char*[]){ NULL },
+	.load_state = "adsp",
+	.ssr_name = "lpass",
+	.sysmon_name = "adsp",
+	.ssctl_id = 0x14,
+};
+
 static const struct qcom_pas_data sdm845_adsp_resource_init = {
 	.crash_reason_smem = 423,
 	.firmware_name = "adsp.mdt",
@@ -1547,6 +1564,7 @@ static const struct of_device_id qcom_pas_of_match[] = {
 	{ .compatible = "qcom,qcs404-cdsp-pas", .data = &cdsp_resource_init },
 	{ .compatible = "qcom,qcs404-wcss-pas", .data = &wcss_resource_init },
 	{ .compatible = "qcom,sa8775p-adsp-pas", .data = &sa8775p_adsp_resource },
+	{ .compatible = "qcom,sa8797p-adsp-pas", .data = &nord_adsp_resource },
 	{ .compatible = "qcom,sa8775p-cdsp0-pas", .data = &sa8775p_cdsp0_resource },
 	{ .compatible = "qcom,sa8775p-cdsp1-pas", .data = &sa8775p_cdsp1_resource },
 	{ .compatible = "qcom,sa8775p-gpdsp0-pas", .data = &sa8775p_gpdsp0_resource },
