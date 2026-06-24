@@ -1778,10 +1778,10 @@
 	 * location (0x408000); nord reuses the qcom,sa8775p-ipcc programming
 	 * model. SPI 229 per SA8775P. TODO: confirm nord IPCC SPI vs 0x408000
 	 * base against TZ ipcat. */
-	ipcc: mailbox@408000 {
+	ipcc: mailbox@9000000 {
 		compatible = "qcom,sa8775p-ipcc", "qcom,ipcc";
-		reg = <0x0 0x00408000 0x0 0x1000>;
-		interrupts = <GIC_SPI 229 IRQ_TYPE_LEVEL_HIGH>;
+		reg = <0x0 0x09000000 0x0 0x1000>;
+		interrupts = <GIC_SPI 279 IRQ_TYPE_LEVEL_HIGH>;
 		interrupt-controller;
 		#interrupt-cells = <3>;
 		#mbox-cells = <2>;
@@ -1812,7 +1812,7 @@
 		compatible = "qcom,sa8797p-adsp-pas";
 		reg = <0x0 0x30000000 0x0 0x100>;
 
-		interrupts-extended = <&pdc 6 IRQ_TYPE_EDGE_RISING>,
+		interrupts-extended = <&intc GIC_SPI 159 IRQ_TYPE_LEVEL_HIGH>,
 				      <&smp2p_adsp_in 0 IRQ_TYPE_EDGE_RISING>,
 				      <&smp2p_adsp_in 1 IRQ_TYPE_EDGE_RISING>,
 				      <&smp2p_adsp_in 2 IRQ_TYPE_EDGE_RISING>,
@@ -1826,7 +1826,6 @@
 
 		memory-region = <&hpass_dsp0_mem>;
 
-		qcom,qmp = <&aoss_qmp>;
 
 		qcom,smem-states = <&smp2p_adsp_out 0>;
 		qcom,smem-state-names = "stop";
@@ -1845,3 +1844,10 @@
 		};
 	};
 };
+
+
+/* PAS-auth diagnostic: AOP QMP endpoint is not up on the open BL31/OP-TEE/EDK2
+ * stack, so aoss_qmp qmp_open times out and the ADSP load_state defers forever.
+ * Drop the load_state + disable aoss_qmp so the ADSP probes and attempts the
+ * OP-TEE PAS auth (init_image/mem_setup/auth_and_reset). */
+&aoss_qmp { status = "disabled"; };
