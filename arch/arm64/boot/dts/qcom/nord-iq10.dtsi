@@ -766,7 +766,7 @@
 			 <0>, <0>,	/* dp0 link/vco phy pll */
 			 <0>, <0>,	/* dp1 link/vco phy pll */
 			 <&mdss_dp2_phy 0>, <&mdss_dp2_phy 1>,	/* dp2 link/vco */
-			 <0>, <0>;	/* dp3 link/vco phy pll */
+			 <&mdss_dp3_phy 0>, <&mdss_dp3_phy 1>;	/* dp3 link/vco */
 		power-domains = <&rpmhpd RPMHPD_MMCX>;
 		required-opps = <&rpmhpd_opp_low_svs>;
 		#clock-cells = <1>;
@@ -796,7 +796,7 @@
 		ranges;
 
 		mdss_mdp: display-controller@ae01000 {
-			compatible = "qcom,sm8650-dpu";
+			compatible = "qcom,x1e80100-dpu";
 			reg = <0x0 0x0ae01000 0x0 0x8f000>,
 			      <0x0 0x0aeb0000 0x0 0x3000>;
 			reg-names = "mdp", "vbif";
@@ -834,9 +834,25 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 
-				port@2 {
-					reg = <2>;
-					dpu_intf0_out: endpoint {
+				/*
+				 * x1e80100 DPU catalog INTF map (dpu_9_2_x1e80100.h):
+				 * the DPU port reg number is the INTF id, and the DP
+				 * controller_id selects the INTF via
+				 * dpu_encoder_get_intf(INTF_DP, controller_id):
+				 *   INTF_5 -> DP controller 3 (mdss_dp3 @ af6c000)
+				 *   INTF_6 -> DP controller 2 (mdss_dp2 @ af64000)
+				 * Mirrors upstream sc8280xp.dtsi mdss0 wiring.
+				 */
+				port@5 {
+					reg = <5>;
+					dpu_intf5_out: endpoint {
+						remote-endpoint = <&mdss_dp3_in>;
+					};
+				};
+
+				port@6 {
+					reg = <6>;
+					dpu_intf6_out: endpoint {
 						remote-endpoint = <&mdss_dp2_in>;
 					};
 				};
@@ -878,7 +894,7 @@
 				port@0 {
 					reg = <0>;
 					mdss_dp2_in: endpoint {
-						remote-endpoint = <&dpu_intf0_out>;
+						remote-endpoint = <&dpu_intf6_out>;
 					};
 				};
 
@@ -909,6 +925,70 @@
 				};
 			};
 		};
+
+		mdss_dp3: displayport-controller@af6c000 {
+			compatible = "qcom,glymur-dp";
+			reg = <0x0 0x0af6c000 0x0 0x200>,
+			      <0x0 0x0af6c200 0x0 0x200>,
+			      <0x0 0x0af6d000 0x0 0xc00>,
+			      <0x0 0x0af6e000 0x0 0x400>,
+			      <0x0 0x0af6f000 0x0 0x400>;
+			interrupts-extended = <&mdss 15>;
+			clocks = <&dispcc DISP_CC_MDSS_AHB_CLK>,
+				 <&dispcc DISP_CC_MDSS_DPTX3_AUX_CLK>,
+				 <&dispcc DISP_CC_MDSS_DPTX3_LINK_CLK>,
+				 <&dispcc DISP_CC_MDSS_DPTX3_LINK_INTF_CLK>,
+				 <&dispcc DISP_CC_MDSS_DPTX3_PIXEL0_CLK>;
+			clock-names = "core_iface", "core_aux", "ctrl_link",
+				      "ctrl_link_iface", "stream_pixel";
+			assigned-clocks = <&dispcc DISP_CC_MDSS_DPTX3_LINK_CLK_SRC>,
+					  <&dispcc DISP_CC_MDSS_DPTX3_PIXEL0_CLK_SRC>;
+			assigned-clock-parents = <&mdss_dp3_phy 0>,
+						 <&mdss_dp3_phy 1>;
+			phys = <&mdss_dp3_phy>;
+			phy-names = "dp";
+			power-domains = <&rpmhpd RPMHPD_MMCX>;
+			operating-points-v2 = <&dp3_opp_table>;
+			#sound-dai-cells = <0>;
+
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				port@0 {
+					reg = <0>;
+					mdss_dp3_in: endpoint {
+						remote-endpoint = <&dpu_intf5_out>;
+					};
+				};
+
+				port@1 {
+					reg = <1>;
+					mdss_dp3_out: endpoint { };
+				};
+			};
+
+			dp3_opp_table: opp-table {
+				compatible = "operating-points-v2";
+
+				opp-162000000 {
+					opp-hz = /bits/ 64 <162000000>;
+					opp-level = <RPMH_REGULATOR_LEVEL_LOW_SVS>;
+				};
+				opp-270000000 {
+					opp-hz = /bits/ 64 <270000000>;
+					opp-level = <RPMH_REGULATOR_LEVEL_SVS>;
+				};
+				opp-540000000 {
+					opp-hz = /bits/ 64 <540000000>;
+					opp-level = <RPMH_REGULATOR_LEVEL_SVS_L1>;
+				};
+				opp-810000000 {
+					opp-hz = /bits/ 64 <810000000>;
+					opp-level = <RPMH_REGULATOR_LEVEL_NOM>;
+				};
+			};
+		};
 	};
 
 	mdss_dp2_phy: phy@aec2a00 {
@@ -919,6 +999,35 @@
 		      <0x0 0x0aec2600 0x0 0xec>,
 		      <0x0 0x0aec2000 0x0 0x1c8>;
 		clocks = <&dispcc DISP_CC_MDSS_DPTX2_AUX_CLK>,
+			 <&dispcc DISP_CC_MDSS_AHB_CLK>;
+		clock-names = "aux", "cfg_ahb";
+		power-domains = <&rpmhpd RPMHPD_MX>;
+		#clock-cells = <1>;
+		#phy-cells = <0>;
+	};
+
+	/*
+	 * DP3 dedicated DisplayPort PHY (no USB3 combo, no USB30 GDSC -> no
+	 * RPMh dependency).  Reg sub-block bases verified against the Nord
+	 * (Pakala) SoC HWIO HWIO_AHB2EDPPHY_DP3_PHY_* in
+	 * QcomPkg/SocPkg/Pakala/Tools/hwio/scripts/hwio.cmm:
+	 *   EDP_PHY    (DP_PHY) @ 0xaec5a00  (mirrors DP2 @ 0xaec2a00)
+	 *   LANE_TX0            @ 0xaec5200
+	 *   LANE_TX1            @ 0xaec5600
+	 *   QSERDES_COM (PLL)   @ 0xaec5000
+	 * vdda-phy/vdda-pll deliberately left unwired: the only available
+	 * supplies are RPMh-backed (pmm8654au-rpmh-regulators), and wiring
+	 * them would reintroduce the RPMh dependency this display path avoids.
+	 * The PHY falls back to the dummy regulator (non-fatal, as on DP2).
+	 */
+	mdss_dp3_phy: phy@aec5a00 {
+		status = "disabled";
+		compatible = "qcom,sc8280xp-dp-phy";
+		reg = <0x0 0x0aec5a00 0x0 0x19c>,
+		      <0x0 0x0aec5200 0x0 0xec>,
+		      <0x0 0x0aec5600 0x0 0xec>,
+		      <0x0 0x0aec5000 0x0 0x1c8>;
+		clocks = <&dispcc DISP_CC_MDSS_DPTX3_AUX_CLK>,
 			 <&dispcc DISP_CC_MDSS_AHB_CLK>;
 		clock-names = "aux", "cfg_ahb";
 		power-domains = <&rpmhpd RPMHPD_MX>;

@@ -554,11 +554,13 @@
 &qupv3_1 { firmware-name = "qcom/sa8797p/qupv3fw.elf"; };
 &qupv3_2 { firmware-name = "qcom/sa8797p/qupv3fw.elf"; };
 
-/* enable the display subsystem for first-light (DPU + DP2 output + DP2 PHY) */
+/* enable the display subsystem for first-light (DPU + DP2/DP3 outputs + DP2/DP3 PHYs) */
 &mdss          { status = "okay"; };
 &mdss_mdp      { status = "okay"; };
 &mdss_dp2      { status = "okay"; };
 &mdss_dp2_phy  { status = "okay"; };
+&mdss_dp3      { status = "okay"; };
+&mdss_dp3_phy  { status = "okay"; };
 
 /* Disable the GPU/GMU so the msm DRM aggregate (DPU + DP) can complete and
  * register /dev/dri/card0.  The GPU (adreno) is bound as a component of the
