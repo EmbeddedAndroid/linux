@@ -1808,6 +1808,29 @@
 		drive-strength = <2>;
 		bias-disable;
 	};
+
+	/*
+	 * DisplayPort hot-plug-detect pads.  The msm DP driver does HPD
+	 * with the controller's internal HPD register block plus its own
+	 * platform IRQ; it consumes no hpd-gpios and binds no pinctrl
+	 * itself.  These states only mux the TLMM pad to the SoC HPD
+	 * function so the internal HPD block sees the sink edge - the
+	 * driver-core "default" pinctrl applies them at probe.  Mapping
+	 * from the Nord XBL pinctrl.dtsi:
+	 *   DP2 (af64000) HPD = GPIO51 func edp0_hot (downstream eDP0)
+	 *   DP3 (af6c000) HPD = GPIO52 func edp1_hot (downstream eDP1)
+	 */
+	dp2_hpd_default: dp2-hpd-default-state {
+		pins = "gpio51";
+		function = "edp0_hot";
+		bias-disable;
+	};
+
+	dp3_hpd_default: dp3-hpd-default-state {
+		pins = "gpio52";
+		function = "edp1_hot";
+		bias-disable;
+	};
 };
 
 &uart0 {
