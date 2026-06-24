@@ -13,6 +13,8 @@
 #include <dt-bindings/interconnect/qcom,nord-rpmh.h>
 #include <dt-bindings/power/qcom-rpmpd.h>
 #include <dt-bindings/soc/qcom,rpmh-rsc.h>
+#include <dt-bindings/mailbox/qcom-ipcc.h>
+#include <dt-bindings/power/qcom,rpmhpd.h>
 
 #include "nord.dtsi"
 
@@ -1720,6 +1722,126 @@
 				 /bits/ 64 <0>,
 				 /bits/ 64 <0>;
 			required-opps = <&rpmhpd_opp_nom>;
+		};
+	};
+};
+/*
+ * ADSP (LPASS QDSP6) remoteproc bring-up.
+ * Reuses qcom,sa8775p-adsp-pas (same SA8775P automotive family / "lemans"
+ * template). PIL firmware authentication is routed through the OP-TEE PAS
+ * PTA (PAS_ID_QDSP6 == pas_id 1). Minimal node set: remoteproc probe+start
+ * only; fastrpc / compute-cb intentionally omitted for this pass.
+ */
+
+/* SMEM: nord SMEM carveout (base 0x89b00000, size 0x400000). Sits exactly in
+ * the gap between qdss_apps_mem (ends 0x89b00000) and global_sync_mem
+ * (starts 0x89f00000) in nord.dtsi reserved-memory. */
+&reserved_memory {
+	smem_mem: smem-region@89b00000 {
+		compatible = "qcom,smem";
+		reg = <0x0 0x89b00000 0x0 0x00400000>;
+		no-map;
+		hwlocks = <&tcsr_mutex 3>;
+	};
+};
+
+/ {
+	/* SMP2P channel to the ADSP/LPASS subsystem, mailboxed over IPCC.
+	 * Provides the fatal/ready/handover/stop-ack smem-state interrupts the
+	 * qcom_q6v5_pas driver requires, plus the "stop" smem-state output. */
+	smp2p-adsp {
+		compatible = "qcom,smp2p";
+		qcom,smem = <443>, <429>;
+		interrupts-extended = <&ipcc IPCC_CLIENT_LPASS
+					     IPCC_MPROC_SIGNAL_SMP2P
+					     IRQ_TYPE_EDGE_RISING>;
+		mboxes = <&ipcc IPCC_CLIENT_LPASS IPCC_MPROC_SIGNAL_SMP2P>;
+
+		qcom,local-pid = <0>;
+		qcom,remote-pid = <2>;
+
+		smp2p_adsp_out: master-kernel {
+			qcom,entry-name = "master-kernel";
+			#qcom,smem-state-cells = <1>;
+		};
+
+		smp2p_adsp_in: slave-kernel {
+			qcom,entry-name = "slave-kernel";
+			interrupt-controller;
+			#interrupt-cells = <2>;
+		};
+	};
+};
+
+&soc {
+	/* IPCC inter-processor mailbox controller. Family-standard SA8775P
+	 * location (0x408000); nord reuses the qcom,sa8775p-ipcc programming
+	 * model. SPI 229 per SA8775P. TODO: confirm nord IPCC SPI vs 0x408000
+	 * base against TZ ipcat. */
+	ipcc: mailbox@408000 {
+		compatible = "qcom,sa8775p-ipcc", "qcom,ipcc";
+		reg = <0x0 0x00408000 0x0 0x1000>;
+		interrupts = <GIC_SPI 229 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-controller;
+		#interrupt-cells = <3>;
+		#mbox-cells = <2>;
+	};
+
+	/* AOSS QMP: AON message RAM doorbell. Base 0x0c300000 confirmed via
+	 * boot HWIO AOP_SS_MSG_RAM_START_ADDRESS_BASE. remoteproc references
+	 * this via qcom,qmp to vote the LPASS power/clk resources during auth. */
+	aoss_qmp: power-management@c300000 {
+		compatible = "qcom,sa8775p-aoss-qmp", "qcom,aoss-qmp";
+		reg = <0x0 0x0c300000 0x0 0x400>;
+		interrupts-extended = <&ipcc IPCC_CLIENT_AOP
+				       IPCC_MPROC_SIGNAL_GLINK_QMP
+				       IRQ_TYPE_EDGE_RISING>;
+		mboxes = <&ipcc IPCC_CLIENT_AOP IPCC_MPROC_SIGNAL_GLINK_QMP>;
+		#clock-cells = <0>;
+	};
+
+	/* ADSP / LPASS QDSP6 remoteproc.
+	 * reg is the family-standard PIL doorbell window (0x30000000/0x100),
+	 * identical across the SA8775P family; NOT the QDSP6 core block.
+	 * memory-region = hpass_dsp0_mem (already in nord.dtsi at
+	 * 0x96500000/0x2800000 == the requested pil_adsp_mem carveout).
+	 * Proxy PDs LCX/LMX from dt-bindings/power/qcom,rpmhpd.h.
+	 * interconnects intentionally omitted (driver does not consume them;
+	 * nord interconnect header lacks MASTER_LPASS_PROC). */
+	remoteproc_adsp: remoteproc@30000000 {
+		compatible = "qcom,sa8797p-adsp-pas";
+		reg = <0x0 0x30000000 0x0 0x100>;
+
+		interrupts-extended = <&pdc 6 IRQ_TYPE_EDGE_RISING>,
+				      <&smp2p_adsp_in 0 IRQ_TYPE_EDGE_RISING>,
+				      <&smp2p_adsp_in 1 IRQ_TYPE_EDGE_RISING>,
+				      <&smp2p_adsp_in 2 IRQ_TYPE_EDGE_RISING>,
+				      <&smp2p_adsp_in 3 IRQ_TYPE_EDGE_RISING>;
+		interrupt-names = "wdog", "fatal", "ready", "handover",
+				  "stop-ack";
+
+		clocks = <&rpmhcc RPMH_CXO_CLK>;
+		clock-names = "xo";
+
+
+		memory-region = <&hpass_dsp0_mem>;
+
+		qcom,qmp = <&aoss_qmp>;
+
+		qcom,smem-states = <&smp2p_adsp_out 0>;
+		qcom,smem-state-names = "stop";
+
+		status = "okay";
+
+		glink-edge {
+			interrupts-extended = <&ipcc IPCC_CLIENT_LPASS
+						     IPCC_MPROC_SIGNAL_GLINK_QMP
+						     IRQ_TYPE_EDGE_RISING>;
+			mboxes = <&ipcc IPCC_CLIENT_LPASS
+					IPCC_MPROC_SIGNAL_GLINK_QMP>;
+
+			label = "lpass";
+			qcom,remote-pid = <2>;
 		};
 	};
 };
