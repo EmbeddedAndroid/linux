@@ -533,3 +533,23 @@
 	vdda-pll-supply = <&vreg_l2h_1p2>;
 	status = "okay";
 };
+
+/* === IQ-10 EVK i2c/spi enablement (sensor discovery + spidev) === */
+&i2c19 { clock-frequency = <400000>; status = "okay"; };   /* IPCAT: SENSOR & power-monitor I2C (gpio156/157) */
+&i2c9  { clock-frequency = <400000>; status = "okay"; };   /* IPCAT: USB-PD/eUSB repeater & SMBus (gpio127/128) */
+&i2c7  { clock-frequency = <100000>; status = "okay"; };   /* DP1 DDC/AUX (gpio123/124) */
+&i2c12 { clock-frequency = <100000>; status = "okay"; };   /* DP0 DDC/AUX (gpio133-136) */
+
+&spi16 {                                                   /* qup0_se2, gpio145/146/147/148 */
+	status = "okay";
+	spidev@0 {
+		compatible = "rohm,dh2228fv";
+		reg = <0>;
+		spi-max-frequency = <10000000>;
+	};
+};
+
+/* GENI QUP serial-engine firmware (geni_load_se_firmware reads firmware-name from the wrapper) */
+&qupv3_0 { firmware-name = "qcom/sa8797p/qupv3fw.elf"; };
+&qupv3_1 { firmware-name = "qcom/sa8797p/qupv3fw.elf"; };
+&qupv3_2 { firmware-name = "qcom/sa8797p/qupv3fw.elf"; };
