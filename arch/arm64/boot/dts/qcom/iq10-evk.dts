@@ -559,3 +559,10 @@
 &mdss_mdp      { status = "okay"; };
 &mdss_dp2      { status = "okay"; };
 &mdss_dp2_phy  { status = "okay"; };
+
+/* Disable the GPU/GMU so the msm DRM aggregate (DPU + DP) can complete and
+ * register /dev/dri/card0.  The GPU (adreno) is bound as a component of the
+ * same DRM device; its bind was failing -19 (stuck behind the GMU CM3 init)
+ * and taking the whole DRM device down.  GPU/GMU bring-up tracked separately. */
+&gpu { status = "disabled"; };
+&gmu { status = "disabled"; };
