@@ -15,6 +15,7 @@
 #include <linux/export.h>
 #include <linux/firmware/qcom/qcom_scm.h>
 #include <linux/firmware/qcom/qcom_tzmem.h>
+#include <linux/firmware/qcom/qcom_pas_tee.h>
 #include <linux/init.h>
 #include <linux/interconnect.h>
 #include <linux/interrupt.h>
@@ -679,6 +680,11 @@ static int qcom_scm_pas_prep_and_init_image(struct qcom_scm_pas_context *ctx,
 int qcom_scm_pas_init_image(u32 pas_id, const void *metadata, size_t size,
 			    struct qcom_scm_pas_context *ctx)
 {
+	if (qcom_pas_tee_available()) {
+		if (ctx)
+			ctx->ptr = NULL;
+		return qcom_pas_tee_init_image(pas_id, metadata, size);
+	}
 	struct qcom_scm_res res;
 	dma_addr_t mdata_phys;
 	void *mdata_buf;
@@ -748,6 +754,8 @@ EXPORT_SYMBOL_GPL(qcom_scm_pas_metadata_release);
  */
 int qcom_scm_pas_mem_setup(u32 pas_id, phys_addr_t addr, phys_addr_t size)
 {
+	if (qcom_pas_tee_available())
+		return qcom_pas_tee_mem_setup(pas_id, addr, size);
 	int ret;
 	struct qcom_scm_desc desc = {
 		.svc = QCOM_SCM_SVC_PIL,
@@ -1003,6 +1011,8 @@ EXPORT_SYMBOL_GPL(qcom_scm_pas_auth_and_reset);
  */
 int qcom_scm_pas_prepare_and_auth_reset(struct qcom_scm_pas_context *ctx)
 {
+	if (qcom_pas_tee_available())
+		return qcom_pas_tee_auth_and_reset(ctx->pas_id, ctx->mem_phys, ctx->mem_size);
 	u64 handle;
 	int ret;
 
@@ -1037,6 +1047,8 @@ EXPORT_SYMBOL_GPL(qcom_scm_pas_prepare_and_auth_reset);
  */
 int qcom_scm_pas_shutdown(u32 pas_id)
 {
+	if (qcom_pas_tee_available())
+		return qcom_pas_tee_shutdown(pas_id);
 	int ret;
 	struct qcom_scm_desc desc = {
 		.svc = QCOM_SCM_SVC_PIL,
