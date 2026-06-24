@@ -572,3 +572,10 @@
  * Source: downstream TZ IORT DISPLAY_0 node (nord.c). Without this the DPU KMS
  * init fails "no IOMMU, bailing out" -> -19 (and oopses in the failure unwind). */
 &mdss { iommus = <&apps_smmu_1 0x3e0 0x20000>; };
+
+/* Disable the pdp_scmi arm,scmi transport.  Its arm-scmi platform device
+ * fails to set up the BASE protocol channel (protocol 0x10) and then
+ * retries via deferred probe indefinitely, flooding the log.  Its only
+ * protocol, cpu_perf (0x13), has no consumer in the device tree, so
+ * disabling the node loses no functionality and silences the boot. */
+&pdp_scmi { status = "disabled"; };
