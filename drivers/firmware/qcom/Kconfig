@@ -74,4 +74,18 @@ config QCOM_QSEECOM_UEFISECAPP
 	  Select Y here to provide access to EFI variables on the aforementioned
 	  platforms.
 
+config QCOM_PAS_TEE
+	bool "Qualcomm PAS OP-TEE backend"
+	depends on QCOM_SCM && OPTEE
+	default QCOM_SCM && OPTEE
+	help
+	  Enable routing of Qualcomm Peripheral Authentication Service (PAS)
+	  operations through the PAS Pseudo-Trusted-Application running in
+	  OP-TEE, instead of via SCM/TrustZone fastcalls.
+
+	  This is required on platforms such as the SA8797P ("Nord" / IQ-10)
+	  where firmware authentication and remoteproc bring-up for the modem,
+	  DSPs, video, GPU/GMU and IPA are handled by OP-TEE. The qcom_scm
+	  layer will use this backend when the PAS Pseudo-TA is present.
+
 endmenu
