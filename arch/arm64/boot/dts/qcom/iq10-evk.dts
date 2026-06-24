@@ -553,3 +553,9 @@
 &qupv3_0 { firmware-name = "qcom/sa8797p/qupv3fw.elf"; };
 &qupv3_1 { firmware-name = "qcom/sa8797p/qupv3fw.elf"; };
 &qupv3_2 { firmware-name = "qcom/sa8797p/qupv3fw.elf"; };
+
+/* enable the display subsystem for first-light (DPU + DP2 output + DP2 PHY) */
+&mdss          { status = "okay"; };
+&mdss_mdp      { status = "okay"; };
+&mdss_dp2      { status = "okay"; };
+&mdss_dp2_phy  { status = "okay"; };
