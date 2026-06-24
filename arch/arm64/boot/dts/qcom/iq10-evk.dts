@@ -566,3 +566,9 @@
  * and taking the whole DRM device down.  GPU/GMU bring-up tracked separately. */
 &gpu { status = "disabled"; };
 &gmu { status = "disabled"; };
+
+/* DPU MDSS IOMMU on the mdss wrapper (the DPU child inherits it).  SID 0x3e0
+ * block on apps_smmu_1 (TCU1); mask 0x20000 covers the pixel/config tag (0x203e0).
+ * Source: downstream TZ IORT DISPLAY_0 node (nord.c). Without this the DPU KMS
+ * init fails "no IOMMU, bailing out" -> -19 (and oopses in the failure unwind). */
+&mdss { iommus = <&apps_smmu_1 0x3e0 0x20000>; };
