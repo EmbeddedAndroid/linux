@@ -779,7 +779,7 @@
 		compatible = "qcom,sm8650-mdss";
 		reg = <0x0 0x0ae00000 0x0 0x1000>;
 		reg-names = "mdss";
-		interrupts = <GIC_SPI 436 IRQ_TYPE_LEVEL_HIGH>;
+		interrupts = <GIC_SPI 930 IRQ_TYPE_LEVEL_HIGH>; /* INTID 962 = MDSS_0 mdss_irq */
 		clocks = <&dispcc DISP_CC_MDSS_AHB_CLK>,
 			 <&nwgcc NW_GCC_DISP_0_HF_AXI_CLK>,
 			 <&dispcc DISP_CC_MDSS_MDP_CLK>;
