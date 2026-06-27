@@ -883,7 +883,7 @@
 						 <&mdss_dp2_phy 1>;
 			phys = <&mdss_dp2_phy>;
 			phy-names = "dp";
-			power-domains = <&rpmhpd RPMHPD_MMCX>;
+			power-domains = <&dispcc MDSS_INT2_GDSC>;
 			operating-points-v2 = <&dp2_opp_table>;
 			#sound-dai-cells = <0>;
 
@@ -947,7 +947,7 @@
 						 <&mdss_dp3_phy 1>;
 			phys = <&mdss_dp3_phy>;
 			phy-names = "dp";
-			power-domains = <&rpmhpd RPMHPD_MMCX>;
+			power-domains = <&dispcc MDSS_INT2_GDSC>;
 			operating-points-v2 = <&dp3_opp_table>;
 			#sound-dai-cells = <0>;
 
@@ -993,7 +993,7 @@
 
 	mdss_dp2_phy: phy@aec2a00 {
 		status = "disabled";
-		compatible = "qcom,sc8280xp-dp-phy";
+		compatible = "qcom,glymur-dp-phy";
 		reg = <0x0 0x0aec2a00 0x0 0x19c>,
 		      <0x0 0x0aec2200 0x0 0xec>,
 		      <0x0 0x0aec2600 0x0 0xec>,
@@ -1022,7 +1022,7 @@
 	 */
 	mdss_dp3_phy: phy@aec5a00 {
 		status = "disabled";
-		compatible = "qcom,sc8280xp-dp-phy";
+		compatible = "qcom,glymur-dp-phy";
 		reg = <0x0 0x0aec5a00 0x0 0x19c>,
 		      <0x0 0x0aec5200 0x0 0xec>,
 		      <0x0 0x0aec5600 0x0 0xec>,

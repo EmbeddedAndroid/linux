@@ -563,14 +563,22 @@
 	pinctrl-names = "default";
 	status = "okay";
 };
-&mdss_dp2_phy  { status = "okay"; };
+&mdss_dp2_phy {
+	vdda-phy-supply = <&vreg_l2h_1p2>;
+	vdda-pll-supply = <&vreg_l1i_0p9>;
+	status = "okay";
+};
 &mdss_dp3 {
 	/* HPD pad: GPIO52 func edp1_hot (downstream eDP1 -> DP3) */
 	pinctrl-0 = <&dp3_hpd_default>;
 	pinctrl-names = "default";
 	status = "okay";
 };
-&mdss_dp3_phy  { status = "okay"; };
+&mdss_dp3_phy {
+	vdda-phy-supply = <&vreg_l2h_1p2>;
+	vdda-pll-supply = <&vreg_l1i_0p9>;
+	status = "okay";
+};
 
 /* Disable the GPU/GMU so the msm DRM aggregate (DPU + DP) can complete and
  * register /dev/dri/card0.  The GPU (adreno) is bound as a component of the
