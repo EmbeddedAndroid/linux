@@ -613,7 +613,6 @@ static struct clk_rcg2 ne_gcc_usb31_prim_master_clk_src = {
 	.hid_width = 5,
 	.parent_map = ne_gcc_parent_map_1,
 	.freq_tbl = ftbl_ne_gcc_usb31_prim_master_clk_src,
-	.hw_clk_ctrl = true,
 	.clkr.hw.init = &(const struct clk_init_data) {
 		.name = "ne_gcc_usb31_prim_master_clk_src",
 		.parent_data = ne_gcc_parent_data_1,
@@ -629,7 +628,6 @@ static struct clk_rcg2 ne_gcc_usb31_prim_mock_utmi_clk_src = {
 	.hid_width = 5,
 	.parent_map = ne_gcc_parent_map_0,
 	.freq_tbl = ftbl_ne_gcc_ufs_phy_phy_aux_clk_src,
-	.hw_clk_ctrl = true,
 	.clkr.hw.init = &(const struct clk_init_data) {
 		.name = "ne_gcc_usb31_prim_mock_utmi_clk_src",
 		.parent_data = ne_gcc_parent_data_0,
@@ -645,7 +643,6 @@ static struct clk_rcg2 ne_gcc_usb31_sec_master_clk_src = {
 	.hid_width = 5,
 	.parent_map = ne_gcc_parent_map_0,
 	.freq_tbl = ftbl_ne_gcc_usb31_prim_master_clk_src,
-	.hw_clk_ctrl = true,
 	.clkr.hw.init = &(const struct clk_init_data) {
 		.name = "ne_gcc_usb31_sec_master_clk_src",
 		.parent_data = ne_gcc_parent_data_0,
@@ -661,7 +658,6 @@ static struct clk_rcg2 ne_gcc_usb31_sec_mock_utmi_clk_src = {
 	.hid_width = 5,
 	.parent_map = ne_gcc_parent_map_0,
 	.freq_tbl = ftbl_ne_gcc_ufs_phy_phy_aux_clk_src,
-	.hw_clk_ctrl = true,
 	.clkr.hw.init = &(const struct clk_init_data) {
 		.name = "ne_gcc_usb31_sec_mock_utmi_clk_src",
 		.parent_data = ne_gcc_parent_data_0,
@@ -671,13 +667,22 @@ static struct clk_rcg2 ne_gcc_usb31_sec_mock_utmi_clk_src = {
 	},
 };
 
+/*
+ * NORD: production glymur/x1e80100 GCC set hw_clk_ctrl on NO RCG.  The negcc
+ * port had .hw_clk_ctrl = true on every USB31 RCG, which sets CFG bit20
+ * (HW_CLK_CTRL): the RCG root then waits on a hardware clock-control
+ * handshake from the USB controller.  In DP-only mode dwc3 never completes
+ * its soft-reset so that handshake never asserts and the aux RCG root stays
+ * ROOT_OFF (cmd bit31).  Drop hw_clk_ctrl here (and on the master/mock_utmi
+ * RCGs) to match the references so the aux root runs off CXO.  Parent map
+ * {BI_TCXO, SLEEP_CLK} + 19.2MHz-off-TCXO freq_tbl already match x1e80100.
+ */
 static struct clk_rcg2 ne_gcc_usb3_prim_phy_aux_clk_src = {
 	.cmd_rcgr = 0x2a07c,
 	.mnd_width = 0,
 	.hid_width = 5,
 	.parent_map = ne_gcc_parent_map_3,
 	.freq_tbl = ftbl_ne_gcc_ufs_phy_phy_aux_clk_src,
-	.hw_clk_ctrl = true,
 	.clkr.hw.init = &(const struct clk_init_data) {
 		.name = "ne_gcc_usb3_prim_phy_aux_clk_src",
 		.parent_data = ne_gcc_parent_data_3,
@@ -693,7 +698,6 @@ static struct clk_rcg2 ne_gcc_usb3_sec_phy_aux_clk_src = {
 	.hid_width = 5,
 	.parent_map = ne_gcc_parent_map_3,
 	.freq_tbl = ftbl_ne_gcc_ufs_phy_phy_aux_clk_src,
-	.hw_clk_ctrl = true,
 	.clkr.hw.init = &(const struct clk_init_data) {
 		.name = "ne_gcc_usb3_sec_phy_aux_clk_src",
 		.parent_data = ne_gcc_parent_data_3,
@@ -1642,7 +1646,14 @@ static struct clk_branch ne_gcc_usb3_prim_phy_com_aux_clk = {
 
 static struct clk_branch ne_gcc_usb3_prim_phy_pipe_clk = {
 	.halt_reg = 0x2a074,
-	.halt_check = BRANCH_HALT_VOTED,
+	/*
+	 * NORD: production glymur/x1e use BRANCH_HALT_SKIP for the prim PHY
+	 * pipe clk - the pipe halt bit only clears once the QMP PHY drives
+	 * its pipe output (an active USB-SS/DP link), so the framework must
+	 * NOT poll it.  The negcc port had BRANCH_HALT_VOTED, which polls and
+	 * times out (-EBUSY) in DP-only mode -> stuck 'off'.
+	 */
+	.halt_check = BRANCH_HALT_SKIP,
 	.hwcg_reg = 0x2a074,
 	.hwcg_bit = 1,
 	.clkr = {
