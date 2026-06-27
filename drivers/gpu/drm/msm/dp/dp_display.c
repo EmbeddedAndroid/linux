@@ -73,6 +73,20 @@ struct msm_dp_display_private {
 	spinlock_t irq_thread_lock;
 	u32 hpd_isr_status;
 
+	/*
+	 * NORDDP0 HPD-poll workaround. On Nord/IQ-10 the MDSS GIC SPI 436
+	 * (mdss_irq, routed through the secure APSS INTU) is not forwarded to
+	 * the GIC by firmware, so dp_display_isr never fires and the DP HPD
+	 * plug/unplug events are never delivered (HW-confirmed: HPD_INT_STATUS
+	 * reads CONNECTED + plug-pending, GICD_ISPENDR[436] never latches,
+	 * dp_display_isr count stays 0; manually setting ISPENDR[436] makes the
+	 * ISR run and the connector go connected). Until BL31 forwards SPI 436,
+	 * poll the DP controller HPD state register and drive the bridge HPD
+	 * notify, mirroring the geni-console / RPMh poll WAs on this board.
+	 */
+	struct delayed_work nord_hpd_poll;
+	int nord_hpd_last;
+
 	bool wide_bus_supported;
 
 	struct msm_dp_audio *audio;
@@ -366,6 +380,8 @@ static void msm_dp_display_host_deinit(struct msm_dp_display_private *dp)
 	msm_dp_ctrl_core_clk_disable(dp->ctrl);
 	dp->core_initialized = false;
 }
+
+static void nord_hpd_poll_work(struct work_struct *work);
 
 static void msm_dp_display_handle_video_request(struct msm_dp_display_private *dp)
 {
@@ -881,6 +897,7 @@ enum drm_connector_status msm_dp_bridge_detect(struct drm_bridge *bridge,
 			status = connector_status_disconnected;
 	}
 
+
 end:
 	/*
 	 * If we detected the DPRX, leave the controller on so that it doesn't
@@ -1153,6 +1170,7 @@ static int msm_dp_display_probe(struct platform_device *pdev)
 	dp->hpd_isr_status = 0;
 
 	mutex_init(&dp->plugged_lock);
+	INIT_DELAYED_WORK(&dp->nord_hpd_poll, nord_hpd_poll_work);
 
 	rc = msm_dp_display_get_io(dp);
 	if (rc)
@@ -1477,6 +1495,35 @@ void msm_dp_bridge_mode_set(struct drm_bridge *drm_bridge,
 		msm_dp_display->msm_dp_mode.out_fmt_is_yuv_420 ? false : msm_dp_display->wide_bus_supported;
 }
 
+#define NORD_HPD_POLL_MS 500
+
+static void nord_hpd_poll_work(struct work_struct *work)
+{
+	struct msm_dp_display_private *dp =
+		container_of(work, struct msm_dp_display_private, nord_hpd_poll.work);
+	struct drm_bridge *bridge = dp->msm_dp_display.bridge;
+	int state;
+
+	if (!bridge)
+		goto resched;
+
+	/* HPD state status bits [31:29]: 2 = CONNECTED, 0 = DISCONNECTED */
+	state = msm_dp_aux_is_link_connected(dp->aux);
+
+	if (state != dp->nord_hpd_last) {
+		dp->nord_hpd_last = state;
+		/* ISR_CONNECTED == 2 (state status CONNECTED) */
+		if (state == ISR_CONNECTED || state == ISR_CONNECT_PENDING)
+			drm_bridge_hpd_notify(bridge, connector_status_connected);
+		else
+			drm_bridge_hpd_notify(bridge, connector_status_disconnected);
+	}
+
+resched:
+	schedule_delayed_work(&dp->nord_hpd_poll,
+			      msecs_to_jiffies(NORD_HPD_POLL_MS));
+}
+
 void msm_dp_bridge_hpd_enable(struct drm_bridge *bridge)
 {
 	struct msm_dp_bridge *msm_dp_bridge = to_dp_bridge(bridge);
@@ -1498,6 +1545,11 @@ void msm_dp_bridge_hpd_enable(struct drm_bridge *bridge)
 
 	msm_dp_aux_hpd_enable(dp->aux);
 	msm_dp_aux_hpd_intr_enable(dp->aux);
+
+	/* NORDDP0: start HPD polling (SPI 436 not delivered, see struct note) */
+	dp->nord_hpd_last = -1;
+	schedule_delayed_work(&dp->nord_hpd_poll,
+			      msecs_to_jiffies(NORD_HPD_POLL_MS));
 }
 
 void msm_dp_bridge_hpd_disable(struct drm_bridge *bridge)
@@ -1505,6 +1557,9 @@ void msm_dp_bridge_hpd_disable(struct drm_bridge *bridge)
 	struct msm_dp_bridge *msm_dp_bridge = to_dp_bridge(bridge);
 	struct msm_dp *msm_dp_display = msm_dp_bridge->msm_dp_display;
 	struct msm_dp_display_private *dp = container_of(msm_dp_display, struct msm_dp_display_private, msm_dp_display);
+
+	/* NORDDP0: stop HPD polling */
+	cancel_delayed_work_sync(&dp->nord_hpd_poll);
 
 	msm_dp_aux_hpd_intr_disable(dp->aux);
 	msm_dp_aux_hpd_disable(dp->aux);

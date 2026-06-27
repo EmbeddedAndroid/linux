@@ -1610,7 +1610,15 @@ static struct clk_branch ne_gcc_usb31_sec_sleep_clk = {
 
 static struct clk_branch ne_gcc_usb3_prim_phy_aux_clk = {
 	.halt_reg = 0x2a06c,
-	.halt_check = BRANCH_HALT,
+	/*
+	 * NORD aux-clock fix: this branch lives in the USB31_PRIM GDSC domain.
+	 * The combo-PHY (phy-qcom-qmp-combo.c) raw-pokes the GDSC SW_COLLAPSE
+	 * (0x2a004) on before the RCG runs, so CFG_GDSCR (0x2a008) bit16
+	 * GDSC_POWER_UP_COMPLETE never sets and this branch's CLK_OFF (bit31)
+	 * never clears -> clk_branch_wait times out ("Failed to enable clk
+	 * 'aux': -16").  Skip the halt poll, exactly like the prim PHY pipe clk.
+	 */
+	.halt_check = BRANCH_HALT_SKIP,
 	.clkr = {
 		.enable_reg = 0x2a06c,
 		.enable_mask = BIT(0),
@@ -1628,7 +1636,9 @@ static struct clk_branch ne_gcc_usb3_prim_phy_aux_clk = {
 
 static struct clk_branch ne_gcc_usb3_prim_phy_com_aux_clk = {
 	.halt_reg = 0x2a070,
-	.halt_check = BRANCH_HALT,
+	/* NORD aux-clock fix: same USB31_PRIM GDSC / force-poke issue as the
+	 * aux_clk branch above - skip the CLK_OFF poll the GDSC can't satisfy. */
+	.halt_check = BRANCH_HALT_SKIP,
 	.clkr = {
 		.enable_reg = 0x2a070,
 		.enable_mask = BIT(0),

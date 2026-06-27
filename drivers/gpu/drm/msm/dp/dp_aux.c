@@ -601,11 +601,16 @@ void msm_dp_aux_hpd_enable(struct drm_dp_aux *msm_dp_aux)
 
 	/* Configure REFTIMER and enable it */
 	reg = msm_dp_read_aux(aux, REG_DP_DP_HPD_REFTIMER);
-	reg |= DP_DP_HPD_REFTIMER_ENABLE;
+	reg |= DP_DP_HPD_REFTIMER_ENABLE | 0xFFFFu;
 	msm_dp_write_aux(aux, REG_DP_DP_HPD_REFTIMER, reg);
 
 	/* Enable HPD */
 	msm_dp_write_aux(aux, REG_DP_DP_HPD_CTRL, DP_DP_HPD_CTRL_HPD_EN);
+	/* NORD diag: do the HPD writes actually latch at enable time? */
+	DRM_INFO("NORDHPD enable: REFTIMER rb=%#x HPD_CTRL rb=%#x INTSTS rb=%#x\n",
+		 msm_dp_read_aux(aux, REG_DP_DP_HPD_REFTIMER),
+		 msm_dp_read_aux(aux, REG_DP_DP_HPD_CTRL),
+		 msm_dp_read_aux(aux, REG_DP_DP_HPD_INT_STATUS));
 }
 
 void msm_dp_aux_hpd_disable(struct drm_dp_aux *msm_dp_aux)

@@ -11,6 +11,7 @@
 #include <dt-bindings/clock/qcom,nord-gpucc.h>
 #include <dt-bindings/clock/qcom,nord-dispcc.h>
 #include <dt-bindings/clock/qcom,rpmh.h>
+#include <dt-bindings/phy/phy-qcom-qmp.h>
 #include <dt-bindings/interconnect/qcom,icc.h>
 #include <dt-bindings/interconnect/qcom,nord-rpmh.h>
 #include <dt-bindings/power/qcom-rpmpd.h>
@@ -29,6 +30,31 @@
 		compatible = "qcom,nord-mc-virt";
 		#interconnect-cells = <2>;
 		qcom,bcm-voters = <&apps_bcm_voter>;
+	};
+
+	/*
+	 * Static DP connector for DP0 (JDP0). The combo QMP PHY registers a
+	 * transparent DP aux-bridge whose downstream is taken from the PHY
+	 * port@0/endpoint@0 (drivers/gpu/drm/bridge/aux-bridge.c probe:
+	 * devm_drm_of_get_bridge(..., 0, 0)). Without a real drm_bridge there
+	 * the aux-bridge probe fails -ENODEV and DP0 defers forever. This
+	 * dp-connector (drivers/gpu/drm/bridge/display-connector.c) registers
+	 * a real DisplayPort drm_bridge from a static OF node, satisfying the
+	 * aux-bridge, with no pmic_glink / Type-C PD negotiation. HPD is
+	 * sourced from the DP controller internally (no hpd-gpios), matching
+	 * the DP2/DP3 internal-HPD pattern already used on this board.
+	 */
+	dp0_connector: dp0-connector {
+		compatible = "dp-connector";
+		label = "DP0";
+		type = "full-size";
+		status = "disabled";
+
+		port {
+			dp0_connector_in: endpoint {
+				remote-endpoint = <&usb_0_qmpphy_out>;
+			};
+		};
 	};
 };
 
@@ -763,7 +789,7 @@
 			 <&sleep_clk>,
 			 <0>, <0>,	/* dsi0 byte/pixel phy pll */
 			 <0>, <0>,	/* dsi1 byte/pixel phy pll */
-			 <0>, <0>,	/* dp0 link/vco phy pll */
+			 <&usb_0_qmpphy QMP_USB43DP_DP_LINK_CLK>, <&usb_0_qmpphy QMP_USB43DP_DP_VCO_DIV_CLK>,	/* dp0 link/vco */
 			 <0>, <0>,	/* dp1 link/vco phy pll */
 			 <&mdss_dp2_phy 0>, <&mdss_dp2_phy 1>,	/* dp2 link/vco */
 			 <&mdss_dp3_phy 0>, <&mdss_dp3_phy 1>;	/* dp3 link/vco */
@@ -779,7 +805,7 @@
 		compatible = "qcom,sm8650-mdss";
 		reg = <0x0 0x0ae00000 0x0 0x1000>;
 		reg-names = "mdss";
-		interrupts = <GIC_SPI 930 IRQ_TYPE_LEVEL_HIGH>; /* INTID 962 = MDSS_0 mdss_irq */
+		interrupts = <GIC_SPI 930 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&dispcc DISP_CC_MDSS_AHB_CLK>,
 			 <&nwgcc NW_GCC_DISP_0_HF_AXI_CLK>,
 			 <&dispcc DISP_CC_MDSS_MDP_CLK>;
@@ -843,6 +869,14 @@
 				 *   INTF_6 -> DP controller 2 (mdss_dp2 @ af64000)
 				 * Mirrors upstream sc8280xp.dtsi mdss0 wiring.
 				 */
+				/* INTF_0 -> DP controller 0 (mdss_dp0 @ af54000), per glymur */
+				port@0 {
+					reg = <0>;
+					dpu_intf0_out: endpoint {
+						remote-endpoint = <&mdss_dp0_in>;
+					};
+				};
+
 				port@5 {
 					reg = <5>;
 					dpu_intf5_out: endpoint {
@@ -855,6 +889,79 @@
 					dpu_intf6_out: endpoint {
 						remote-endpoint = <&mdss_dp2_in>;
 					};
+				};
+			};
+		};
+
+		mdss_dp0: displayport-controller@af54000 {
+			compatible = "qcom,glymur-dp";
+			reg = <0x0 0x0af54000 0x0 0x200>,
+			      <0x0 0x0af54200 0x0 0x200>,
+			      <0x0 0x0af55000 0x0 0xc00>,
+			      <0x0 0x0af56000 0x0 0x400>,
+			      <0x0 0x0af57000 0x0 0x400>,
+			      <0x0 0x0af58000 0x0 0x400>,
+			      <0x0 0x0af59000 0x0 0x400>,
+			      <0x0 0x0af5a000 0x0 0x600>,
+			      <0x0 0x0af5b000 0x0 0x600>;
+			interrupts-extended = <&mdss 12>;
+			clocks = <&dispcc DISP_CC_MDSS_AHB_CLK>,
+				 <&dispcc DISP_CC_MDSS_DPTX0_AUX_CLK>,
+				 <&dispcc DISP_CC_MDSS_DPTX0_LINK_CLK>,
+				 <&dispcc DISP_CC_MDSS_DPTX0_LINK_INTF_CLK>,
+				 <&dispcc DISP_CC_MDSS_DPTX0_PIXEL0_CLK>,
+				 <&dispcc DISP_CC_MDSS_DPTX0_PIXEL1_CLK>;
+			clock-names = "core_iface", "core_aux", "ctrl_link",
+				      "ctrl_link_iface", "stream_pixel", "stream_1_pixel";
+			assigned-clocks = <&dispcc DISP_CC_MDSS_DPTX0_LINK_CLK_SRC>,
+					  <&dispcc DISP_CC_MDSS_DPTX0_PIXEL0_CLK_SRC>,
+					  <&dispcc DISP_CC_MDSS_DPTX0_PIXEL1_CLK_SRC>;
+			assigned-clock-parents = <&usb_0_qmpphy QMP_USB43DP_DP_LINK_CLK>,
+						 <&usb_0_qmpphy QMP_USB43DP_DP_VCO_DIV_CLK>,
+						 <&usb_0_qmpphy QMP_USB43DP_DP_VCO_DIV_CLK>;
+			phys = <&usb_0_qmpphy QMP_USB43DP_DP_PHY>;
+			phy-names = "dp";
+			power-domains = <&rpmhpd RPMHPD_MMCX>;
+			operating-points-v2 = <&dp0_opp_table>;
+			#sound-dai-cells = <0>;
+
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				port@0 {
+					reg = <0>;
+					mdss_dp0_in: endpoint {
+						remote-endpoint = <&dpu_intf0_out>;
+					};
+				};
+
+				port@1 {
+					reg = <1>;
+					mdss_dp0_out: endpoint {
+						remote-endpoint = <&usb_dp_qmpphy_dp_in>;
+					};
+				};
+			};
+
+			dp0_opp_table: opp-table {
+				compatible = "operating-points-v2";
+
+				opp-162000000 {
+					opp-hz = /bits/ 64 <162000000>;
+					opp-level = <RPMH_REGULATOR_LEVEL_LOW_SVS>;
+				};
+				opp-270000000 {
+					opp-hz = /bits/ 64 <270000000>;
+					opp-level = <RPMH_REGULATOR_LEVEL_SVS>;
+				};
+				opp-540000000 {
+					opp-hz = /bits/ 64 <540000000>;
+					opp-level = <RPMH_REGULATOR_LEVEL_SVS_L1>;
+				};
+				opp-810000000 {
+					opp-hz = /bits/ 64 <810000000>;
+					opp-level = <RPMH_REGULATOR_LEVEL_NOM>;
 				};
 			};
 		};
@@ -991,6 +1098,139 @@
 		};
 	};
 
+	/*
+	 * USB-0 HS (eUSB2) PHY (m31).  Needed so the usb_0 DWC3 controller can
+	 * probe (a dwc3 will not bind without a usb2-phy).  Standalone m31
+	 * eUSB2: no eUSB2 repeater is required (the repeater phandle is
+	 * devm_phy_optional_get in phy-qcom-m31-eusb2.c) and none is populated
+	 * on the IQ10 EVK.  vdd/vdda12 are wired in iq10-evk.dts to always-on
+	 * pmau0102 LDOs (same rails as the DP PHYs), avoiding any RPMh stall.
+	 * Reset is the negcc QUSB2PHY_PRIM BCR (native, non-RPMh GCC clone).
+	 */
+	usb_0_hsphy: phy@fd3000 {
+		compatible = "qcom,glymur-m31-eusb2-phy",
+			     "qcom,sm8750-m31-eusb2-phy";
+		reg = <0x0 0x00fd3000 0x0 0x29c>;
+		#phy-cells = <0>;
+
+		clocks = <&rpmhcc RPMH_CXO_CLK>;
+		clock-names = "ref";
+
+		resets = <&negcc NE_GCC_QUSB2PHY_PRIM_BCR>;
+
+		status = "disabled";
+	};
+
+	/*
+	 * USB-0 DWC3 controller.  Enabled SOLELY to energize the USB0
+	 * clock/power domain (NE_GCC_USB31_PRIM_GDSC + master/aggre/cfg_noc
+	 * branches) so the combo QMP PHY voted aux clock
+	 * (NE_GCC_USB3_PRIM_PHY_AUX_CLK) leaves OFF and DP0 phy-init
+	 * succeeds.  Full USB enumeration is NOT a goal: dr_mode=host, no
+	 * usb-role-switch, no pmic_glink / Type-C PD, no SS graph endpoint
+	 * (the combo PHY is in DP-only mode and exposes no USB-SS port).  The
+	 * optional HS/SS phy-wake PDC IRQs are omitted (they are
+	 * platform_get_irq_byname_optional in dwc3-qcom.c) to avoid depending
+	 * on the nord PDC pin map; only the core dwc_usb3 + pwr_event SPIs are
+	 * wired.  Clocks/GDSC/BCR are the negcc USB31_PRIM equivalents of the
+	 * glymur GCC_USB30_PRIM_* set (Nord names the prim controller USB31).
+	 */
+	usb_0: usb@a600000 {
+		compatible = "qcom,glymur-dwc3", "qcom,snps-dwc3";
+		reg = <0x0 0x0a600000 0x0 0xfc100>;
+
+		clocks = <&negcc NE_GCC_CNOC_USB3_PRIM_AXI_CLK>,
+			 <&negcc NE_GCC_USB31_PRIM_MASTER_CLK>,
+			 <&negcc NE_GCC_AGGRE_NOC_USB3_PRIM_AXI_CLK>,
+			 <&negcc NE_GCC_USB31_PRIM_SLEEP_CLK>,
+			 <&negcc NE_GCC_USB31_PRIM_MOCK_UTMI_CLK>;
+		clock-names = "cfg_noc",
+			      "core",
+			      "iface",
+			      "sleep",
+			      "mock_utmi";
+
+		interrupts-extended = <&intc GIC_SPI 140 IRQ_TYPE_LEVEL_HIGH>,
+				      <&intc GIC_SPI 371 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "dwc_usb3",
+				  "pwr_event";
+
+		power-domains = <&negcc NE_GCC_USB31_PRIM_GDSC>;
+		resets = <&negcc NE_GCC_USB31_PRIM_BCR>;
+
+		iommus = <&apps_smmu_0 0x1420 0x0>;
+
+		phys = <&usb_0_hsphy>,
+		       <&usb_0_qmpphy QMP_USB43DP_USB3_PHY>;
+		phy-names = "usb2-phy",
+			    "usb3-phy";
+
+		dr_mode = "host";
+
+		snps,hird-threshold = /bits/ 8 <0x0>;
+		snps,dis-u1-entry-quirk;
+		snps,dis-u2-entry-quirk;
+		snps,is-utmi-l1-suspend;
+		snps,usb3_lpm_capable;
+		snps,has-lpm-erratum;
+		tx-fifo-resize;
+		snps,dis_u2_susphy_quirk;
+		snps,dis_enblslpm_quirk;
+
+		interconnects = <&aggre1_noc_tile MASTER_USB3_0 QCOM_ICC_TAG_ALWAYS
+				 &mc_virt SLAVE_EBI1 QCOM_ICC_TAG_ALWAYS>,
+				<&hscnoc MASTER_APPSS_PROC QCOM_ICC_TAG_ALWAYS
+				 &config_noc SLAVE_USB3_0 QCOM_ICC_TAG_ALWAYS>;
+		interconnect-names = "usb-ddr", "apps-usb";
+
+		status = "disabled";
+	};
+
+	/*
+	 * USB-0 / DP combo QMP PHY driving DP0 to the JDP0 connector.
+	 * DP-ONLY mode: no mode-switch / orientation-switch, no USB-SS
+	 * port@1 endpoint, and DP data-lanes <0 1 2 3> on port@0 ->
+	 * phy-qcom-qmp-combo selects QMPPHY_MODE_DP_ONLY. vdda-phy/
+	 * vdda-pll left unwired (rails are AOP-on; dummy regulator), as
+	 * with mdss_dp2_phy/mdss_dp3_phy, to avoid the RPMh dependency.
+	 */
+	usb_0_qmpphy: phy@fd5000 {
+		compatible = "qcom,glymur-qmp-usb3-dp-phy";
+		reg = <0x0 0x00fd5000 0x0 0x8000>;
+		clocks = <&negcc NE_GCC_USB3_PRIM_PHY_AUX_CLK>,
+			 <&rpmhcc RPMH_CXO_CLK>,
+			 <&negcc NE_GCC_USB3_PRIM_PHY_COM_AUX_CLK>,
+			 <&negcc NE_GCC_USB3_PRIM_PHY_PIPE_CLK>;
+		clock-names = "aux", "ref", "com_aux", "usb3_pipe";
+		resets = <&negcc NE_GCC_USB3_PHY_PRIM_BCR>,
+			 <&negcc NE_GCC_USB3PHY_PHY_PRIM_BCR>;
+		reset-names = "phy", "common";
+		power-domains = <&negcc NE_GCC_USB3_PHY_GDSC>;
+		#clock-cells = <1>;
+		#phy-cells = <1>;
+		status = "disabled";
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				reg = <0>;
+				usb_0_qmpphy_out: endpoint {
+					data-lanes = <3 2 1 0>;
+					remote-endpoint = <&dp0_connector_in>;
+				};
+			};
+
+			port@2 {
+				reg = <2>;
+				usb_dp_qmpphy_dp_in: endpoint {
+					remote-endpoint = <&mdss_dp0_out>;
+				};
+			};
+		};
+	};
+
 	mdss_dp2_phy: phy@aec2a00 {
 		status = "disabled";
 		compatible = "qcom,glymur-dp-phy";
@@ -1056,7 +1296,25 @@
 			     <GIC_SPI 685 IRQ_TYPE_LEVEL_HIGH>,
 			     <GIC_SPI 686 IRQ_TYPE_LEVEL_HIGH>,
 			     <GIC_SPI 687 IRQ_TYPE_LEVEL_HIGH>,
-			     <GIC_SPI 688 IRQ_TYPE_LEVEL_HIGH>;
+			     <GIC_SPI 688 IRQ_TYPE_LEVEL_HIGH>,
+			     /* NORD: HW reports 25 context banks; arm-smmu V2
+			      * requires one context IRQ per bank (else probe
+			      * fails -ENODEV -> GPU iommus dep never resolves ->
+			      * adreno defers to -19, GMU never probes). Original
+			      * list had only 15 (674-688); extend the contiguous
+			      * range to 25 context IRQs (689-698). The adreno only
+			      * allocates one context bank so the extra fault IRQs
+			      * for unused banks never fire. */
+			     <GIC_SPI 689 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 690 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 691 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 692 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 693 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 694 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 695 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 696 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 697 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 698 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&gpucc GPU_CC_HLOS1_VOTE_GPU_SMMU_CLK>,
 			 <&gpucc GPU_CC_AHB_CLK>;
 		clock-names = "hlos", "ahb";

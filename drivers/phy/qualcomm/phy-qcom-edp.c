@@ -1067,8 +1067,14 @@ static int qcom_edp_phy_power_on_v8(const struct qcom_edp *edp)
 	       edp->edp + DP_PHY_PD_CTL);
 	writel(0xfc, edp->edp + DP_PHY_MODE);
 
-	return readl_poll_timeout(edp->pll + DP_QSERDES_V8_COM_CMN_STATUS,
+	{
+		int ret = readl_poll_timeout(edp->pll + DP_QSERDES_V8_COM_CMN_STATUS,
 				     val, val & BIT(7), 5, 200);
+		pr_err("NORDPLL on_v8: ret=%d CMN_STATUS=%#x C_READY=%#x PD_CTL=%#x MODE=%#x\n",
+		       ret, readl(edp->pll + 0x314), readl(edp->pll + 0x33c),
+		       readl(edp->edp + 0x1c), readl(edp->edp + 0x20));
+		return ret;
+	}
 }
 
 static const struct phy_ver_ops qcom_edp_phy_ops_v8 = {

@@ -3687,9 +3687,105 @@ static int qmp_combo_com_init(struct qmp_combo *qmp, bool force)
 		goto err_disable_regulators;
 	}
 
+	/*
+	 * NORDUSB31 GDSC/BCR power-up (EVERY com_init, not one-shot).
+	 *
+	 * On Nord/IQ-10 the negcc USB31_PRIM + USB3/DP-PHY GDSCs and BCRs
+	 * are only half-wired into the clk/genpd framework, so the normal
+	 * clk_bulk_prepare_enable() below cannot bring the combo-PHY GDSC
+	 * out of collapse: cfg_gdscr bit16 (GDSC_POWER_UP_COMPLETE) never
+	 * sets and the aux/com_aux/pipe branches stay CLK_OFF.  Without a
+	 * powered GDSC the DP_COM / DP_PHY sub-blocks are unclocked, every
+	 * MMIO write (PHY_MODE_CTRL=DP_MODE, serdes, AUX) is dropped, and
+	 * DP AUX reads 0-byte EDID.
+	 *
+	 * This was previously a ONE-SHOT diagnostic poke gated on a static
+	 * bool, so it only fired on the very first com_init at boot.  After
+	 * the first DP detect the PHY gets com_exit'd / runtime-suspended
+	 * and the negcc GDSC re-collapses; on the next detect/HPD AUX the
+	 * poke no longer re-ran, the GDSC stayed down, and AUX failed
+	 * ("aux not connected", EDID=0).  JTAG confirmed cfg_gdscr=0x4088000
+	 * (bit16 clear) + aux_br=0x88000000 (CLK_OFF set) + DP regs all 0
+	 * during a live AUX attempt.
+	 *
+	 * Fix: deassert the BCRs and clear SW_COLLAPSE on both GDSCs on
+	 * EVERY com_init, then poll cfg_gdscr bit16 so the PHY is genuinely
+	 * powered before we program PHY_MODE_CTRL.  (Clean long-term fix is
+	 * to wire these GDSCs/BCRs into negcc genpd + add a real vote.)
+	 */
+	{
+		void __iomem *ng = ioremap(0x08900000, 0xf4200);
+
+		if (ng) {
+			int i;
+
+			writel_relaxed(0, ng + 0x2a000); /* USB31_PRIM_BCR       */
+			writel_relaxed(0, ng + 0x2b000); /* USB3_PHY_PRIM_BCR    */
+			writel_relaxed(0, ng + 0x2b004); /* USB3PHY_PHY_PRIM_BCR */
+			writel_relaxed(0, ng + 0x2b008); /* USB3_DP_PHY_PRIM_BCR */
+			/* clear SW_COLLAPSE (BIT0) on USB31_PRIM + USB3_PHY GDSCs */
+			writel_relaxed(readl_relaxed(ng + 0x2a004) & ~0x1,
+				       ng + 0x2a004);
+			writel_relaxed(readl_relaxed(ng + 0x2b00c) & ~0x1,
+				       ng + 0x2b00c);
+
+			/* wait for USB31_PRIM GDSC power-up (0x2a008 bit16) */
+			for (i = 0; i < 100; i++) {
+				if (readl_relaxed(ng + 0x2a008) & BIT(16))
+					break;
+				udelay(10);
+			}
+			/*
+			 * NORDUSB31 AUX FIX: ALSO wait for the USB3_PHY combo-PHY
+			 * GDSC (gdscr 0x2b00c = NE_GCC_USB3_PHY_GDSC, the DP PHY's
+			 * power-domain at 0xfd5000).  The code above clears its
+			 * SW_COLLAPSE but the old poll only checked the *controller*
+			 * GDSC (0x2a008), so com_init could go on to write
+			 * PHY_MODE_CTRL/serdes/AUX while the combo-PHY GDSC was still
+			 * collapsed -> every DP-PHY MMIO write dropped -> DP AUX
+			 * silent (TRANS_CTRL GO stuck, EDID=0, -110).  Poll the
+			 * combo-PHY GDSCR PWR_ON (bit31; same layout as the
+			 * controller GDSCR which reads 0x...F8.. with PWR_ON set).
+			 */
+			for (i = 0; i < 100; i++) {
+				if (readl_relaxed(ng + 0x2b00c) & BIT(31))
+					break;
+				udelay(10);
+			}
+			if (!(readl_relaxed(ng + 0x2a008) & BIT(16)) ||
+			    !(readl_relaxed(ng + 0x2b00c) & BIT(31)))
+				dev_warn(qmp->dev,
+				 "NORDUSB31 GDSC power-up incomplete ctrl=%#x combophy=%#x\n",
+				 readl_relaxed(ng + 0x2a008),
+				 readl_relaxed(ng + 0x2b00c));
+			iounmap(ng);
+		}
+	}
+
 	ret = clk_bulk_prepare_enable(qmp->num_clks, qmp->clks);
 	if (ret)
 		goto err_assert_reset;
+
+	/* NORDUSB31 aux-clk fix proof: re-read after clk_bulk enable. With the
+	 * BRANCH_HALT_SKIP fix the aux/com_aux branch CLK_OFF (bit31) may stay
+	 * set but the framework no longer errors; ret should now be 0 (no -16). */
+	{
+		static bool nordusb31_post_dumped;
+		if (!nordusb31_post_dumped) {
+			void __iomem *ng = ioremap(0x08900000, 0xf4200);
+			nordusb31_post_dumped = true;
+			if (ng) {
+				dev_info(qmp->dev,
+				 "NORDUSB31 post-clk_bulk ret=%d | cfg_gdscr=%#x (bit16=%lu) aux_br=%#x com_aux_br=%#x pipe_br=%#x master_cbcr=%#x\n",
+				 ret,
+				 readl_relaxed(ng + 0x2a008),
+				 (readl_relaxed(ng + 0x2a008) >> 16) & 0x1UL,
+				 readl_relaxed(ng + 0x2a06c), readl_relaxed(ng + 0x2a070),
+				 readl_relaxed(ng + 0x2a074), readl_relaxed(ng + 0x2a01c));
+				iounmap(ng);
+			}
+		}
+	}
 
 	/* In DP-only mode, the pipe clk is still required for USB2 */
 	ret = clk_prepare_enable(qmp->pipe_clk);

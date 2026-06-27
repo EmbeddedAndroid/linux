@@ -564,6 +564,7 @@
 	status = "okay";
 };
 &mdss_dp2_phy {
+	/* mirror UFS PHY: pmau0102 LDOs, always-on, no RPMh stall */
 	vdda-phy-supply = <&vreg_l2h_1p2>;
 	vdda-pll-supply = <&vreg_l1i_0p9>;
 	status = "okay";
@@ -575,17 +576,60 @@
 	status = "okay";
 };
 &mdss_dp3_phy {
+	/* mirror UFS PHY: pmau0102 LDOs, always-on, no RPMh stall */
 	vdda-phy-supply = <&vreg_l2h_1p2>;
 	vdda-pll-supply = <&vreg_l1i_0p9>;
 	status = "okay";
 };
 
-/* Disable the GPU/GMU so the msm DRM aggregate (DPU + DP) can complete and
- * register /dev/dri/card0.  The GPU (adreno) is bound as a component of the
- * same DRM device; its bind was failing -19 (stuck behind the GMU CM3 init)
- * and taking the whole DRM device down.  GPU/GMU bring-up tracked separately. */
-&gpu { status = "disabled"; };
-&gmu { status = "disabled"; };
+/* DP0 first-light: DPU INTF_0 -> mdss_dp0 -> USB-C combo QMP PHY (DP-only),
+ * JDP0 connector. PHY analog supplies are now WIRED (see &usb_0_qmpphy
+ * below) — leaving them unwired/dummy was the AUX -110 root cause. */
+&mdss_dp0 {
+	status = "okay";
+};
+&usb_0_qmpphy {
+	status = "okay";
+	/* Display fix: wire the combo-PHY analog supplies. Schematic
+	 * SOC_PWR_SERDES (p45): VDD_A_SERDES_1P2 <- L2H (1.2V),
+	 * VDD_A_SERDES_0P9 <- L1H (0.9V) — L1H is the combo PHY's *dedicated*
+	 * SERDES rail (read use=0/dummy because the PHY was left unwired).
+	 * The prior "leave unwired, AOP-on" choice was the bug: dummy regs =>
+	 * no load/mode vote => analog under-driven => DP-PHY regs read 0 /
+	 * writes dropped => AUX -110. RPMh works now, so the votes land.
+	 * NOTE: vdda-pll/refgen use L1H (vreg_l1h_0p9), NOT L1I — L1I is the
+	 * eDP/UFS 0.9V rail; the combo PHY has its own L1H per schematic. */
+	vdda-phy-supply = <&vreg_l2h_1p2>;	/* 1.2V VDD_A_SERDES_1P2 */
+	vdda-pll-supply = <&vreg_l1h_0p9>;	/* 0.9V VDD_A_SERDES_0P9 */
+	refgen-supply   = <&vreg_l1h_0p9>;	/* 0.9V ref (glymur requires) */
+};
+&dp0_connector {
+	status = "okay";
+};
+
+/* USB-0 domain power-up for DP0: bringing up the DWC3 controller votes the
+ * NE_GCC_USB31_PRIM_GDSC + master/cfg_noc clocks, which un-sticks the combo
+ * QMP PHY voted aux clock (NE_GCC_USB3_PRIM_PHY_AUX_CLK) that DP0 phy-init
+ * needs.  HS (eUSB2) PHY supplies use the same always-on pmau0102 LDOs as the
+ * DP PHYs (vreg_l1i_0p9 / vreg_l2h_1p2), so no RPMh stall is introduced.
+ * This is NOT for USB enumeration (dr_mode=host, no Type-C/pmic_glink). */
+&usb_0_hsphy {
+	vdd-supply = <&vreg_l1i_0p9>;
+	vdda12-supply = <&vreg_l2h_1p2>;
+	status = "okay";
+};
+&usb_0 {
+	status = "okay";
+};
+
+/* Enable the GPU (adreno-43030c00) + GMU now that the RPMh port lands the
+ * rpmhpd CX/GX/MX power domains (EL3 firmware SMC path) the GMU CM3 needs.
+ * Previously disabled: GMU CM3 init wall (-110) before RPMh, and the adreno
+ * bind (-19) took the whole msm DRM aggregate (DPU+DP) down. No zap-shader node
+ * (no device-signed zap) -> driver falls back to SECVID_TRUST_CNTL. */
+&adreno_smmu { status = "okay"; };
+&gpu { status = "okay"; };
+&gmu { status = "okay"; };
 
 /* DPU MDSS IOMMU on the mdss wrapper (the DPU child inherits it).  SID 0x3e0
  * block on apps_smmu_1 (TCU1); mask 0x20000 covers the pixel/config tag (0x203e0).
@@ -598,4 +642,30 @@
  * retries via deferred probe indefinitely, flooding the log.  Its only
  * protocol, cpu_perf (0x13), has no consumer in the device tree, so
  * disabling the node loses no functionality and silences the boot. */
-&pdp_scmi { status = "disabled"; };
+/* NORD FF-A Phase-2: repurpose pdp_scmi as the SCMI-over-OPTEE transport to the
+ * OP-TEE SCMI voltage-domain server, driving PMIC rails via SPMI and bypassing
+ * the CPUCP-dependent apps_rsc/RPMh. Drops the dead CPUCP mailbox transport and
+ * the consumerless cpu_perf protocol; adds an always-on test rail to prove the
+ * kernel->SCMI->OP-TEE path end to end. */
+&pdp_scmi {
+	compatible = "linaro,scmi-optee";
+	linaro,optee-channel-id = <0>;
+	status = "okay";
+	/delete-property/ mboxes;
+	/delete-property/ mbox-names;
+	/delete-property/ shmem;
+
+	scmi_vd: protocol@17 {
+		reg = <0x17>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		scmi_reg0: regulator@0 {
+			reg = <0>;
+			regulator-name = "scmi-test-rail0";
+			regulator-min-microvolt = <752000>;
+			regulator-max-microvolt = <752000>;
+			regulator-always-on;
+		};
+	};
+};
