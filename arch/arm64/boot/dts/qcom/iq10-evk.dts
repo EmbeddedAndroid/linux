@@ -618,8 +618,9 @@
 	vdda12-supply = <&vreg_l2h_1p2>;
 	status = "okay";
 };
+/* disabled: dwc3 needs fabric/RPMh up (tasks #77/#78); re-enable then */
 &usb_0 {
-	status = "okay";
+	status = "disabled";
 };
 
 /* Enable the GPU (adreno-43030c00) + GMU now that the RPMh port lands the
@@ -669,3 +670,17 @@
 		};
 	};
 };
+
+/* qcom-ice (crypto@1d48000): keep the ICE node ENABLED so the ufs-qcom
+ * variant init can resolve the qcom,ice phandle. Disabling it made
+ * of_qcom_ice_get() hit of_find_device_by_node()==NULL -> "Cannot find
+ * device node crypto" -> -ENODEV (-19), which aborts ufs_qcom_init and
+ * kills UFS entirely. With the node enabled, if TrustZone/OP-TEE does not
+ * expose the ICE key SCM interface the standalone qcom-ice probe returns
+ * -EOPNOTSUPP, of_qcom_ice_get() returns ERR_PTR(-EOPNOTSUPP), and
+ * ufs_qcom_ice_init() degrades gracefully ("Disabling inline encryption
+ * support") and UFS continues. CONFIG_SCSI_UFS_CRYPTO stays enabled. */
+
+/* arch-timer-mmio (timer@17810000): probes -22; the per-CPU arch timer is the
+ * primary timer and works, this memory-mapped frame is redundant + failing. */
+&memtimer { status = "disabled"; };
