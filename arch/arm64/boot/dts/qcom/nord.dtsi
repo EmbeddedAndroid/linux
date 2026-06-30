@@ -369,6 +369,11 @@
 				reg = <0x13>;
 				#clock-cells = <1>;
 			};
+
+			scmi_optee_pd: protocol@11 {
+				reg = <0x11>;
+				#power-domain-cells = <1>;
+			};
 		};
 
 		pdp_scmi: scmi {

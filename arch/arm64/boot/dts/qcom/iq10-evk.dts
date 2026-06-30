@@ -521,6 +521,9 @@
 &ufs_mem_hc {
 	reset-gpios = <&tlmm 181 GPIO_ACTIVE_LOW>;
 
+	/* UFS controller-island power via OP-TEE SCMI (SCMI-over-FF-A, 0x11) */
+	power-domains = <&scmi_optee_pd 0>;
+
 	vcc-supply = <&vreg_l3i_2p5>;
 	vcc-max-microamp = <1300000>;
 	vccq-supply = <&vreg_l2i_1p2>;
