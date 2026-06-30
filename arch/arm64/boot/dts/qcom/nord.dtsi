@@ -22,7 +22,7 @@
 			power-domains = <&cpu0_pd>;
 			power-domain-names = "psci";
 			next-level-cache = <&l2_0>;
-			clocks = <&cpu_perf 0>;
+			clocks = <&scmi_dvfs 0>;
 
 			l2_0: l2-cache {
 				compatible = "cache";
@@ -39,7 +39,7 @@
 			power-domains = <&cpu1_pd>;
 			power-domain-names = "psci";
 			next-level-cache = <&l2_0>;
-			clocks = <&cpu_perf 0>;
+			clocks = <&scmi_dvfs 0>;
 		};
 
 		cpu2: cpu@200 {
@@ -50,7 +50,7 @@
 			power-domains = <&cpu2_pd>;
 			power-domain-names = "psci";
 			next-level-cache = <&l2_0>;
-			clocks = <&cpu_perf 0>;
+			clocks = <&scmi_dvfs 0>;
 		};
 
 		cpu3: cpu@300 {
@@ -61,7 +61,7 @@
 			power-domains = <&cpu3_pd>;
 			power-domain-names = "psci";
 			next-level-cache = <&l2_0>;
-			clocks = <&cpu_perf 0>;
+			clocks = <&scmi_dvfs 0>;
 		};
 
 		cpu4: cpu@400 {
@@ -72,7 +72,7 @@
 			power-domains = <&cpu4_pd>;
 			power-domain-names = "psci";
 			next-level-cache = <&l2_0>;
-			clocks = <&cpu_perf 0>;
+			clocks = <&scmi_dvfs 0>;
 		};
 
 		cpu5: cpu@500 {
@@ -83,7 +83,7 @@
 			power-domains = <&cpu5_pd>;
 			power-domain-names = "psci";
 			next-level-cache = <&l2_0>;
-			clocks = <&cpu_perf 0>;
+			clocks = <&scmi_dvfs 0>;
 		};
 
 		cpu6: cpu@10000 {
@@ -94,7 +94,7 @@
 			power-domain-names = "psci";
 			enable-method = "psci";
 			next-level-cache = <&l2_10000>;
-			clocks = <&cpu_perf 1>;
+			clocks = <&scmi_dvfs 1>;
 
 			l2_10000: l2-cache {
 				compatible = "cache";
@@ -111,7 +111,7 @@
 			power-domains = <&cpu7_pd>;
 			power-domain-names = "psci";
 			next-level-cache = <&l2_10000>;
-			clocks = <&cpu_perf 1>;
+			clocks = <&scmi_dvfs 1>;
 		};
 
 		cpu8: cpu@10200 {
@@ -122,7 +122,7 @@
 			power-domains = <&cpu8_pd>;
 			power-domain-names = "psci";
 			next-level-cache = <&l2_10000>;
-			clocks = <&cpu_perf 1>;
+			clocks = <&scmi_dvfs 1>;
 		};
 
 		cpu9: cpu@10300 {
@@ -133,7 +133,7 @@
 			power-domains = <&cpu9_pd>;
 			power-domain-names = "psci";
 			next-level-cache = <&l2_10000>;
-			clocks = <&cpu_perf 1>;
+			clocks = <&scmi_dvfs 1>;
 		};
 
 		cpu10: cpu@10400 {
@@ -144,7 +144,7 @@
 			power-domains = <&cpu10_pd>;
 			power-domain-names = "psci";
 			next-level-cache = <&l2_10000>;
-			clocks = <&cpu_perf 1>;
+			clocks = <&scmi_dvfs 1>;
 		};
 
 		cpu11: cpu@10500 {
@@ -155,7 +155,7 @@
 			power-domains = <&cpu11_pd>;
 			power-domain-names = "psci";
 			next-level-cache = <&l2_10000>;
-			clocks = <&cpu_perf 1>;
+			clocks = <&scmi_dvfs 1>;
 		};
 
 		cpu12: cpu@20000 {
@@ -166,7 +166,7 @@
 			power-domains = <&cpu12_pd>;
 			power-domain-names = "psci";
 			next-level-cache = <&l2_20000>;
-			clocks = <&cpu_perf 2>;
+			clocks = <&scmi_dvfs 2>;
 
 			l2_20000: l2-cache {
 				compatible = "cache";
@@ -183,7 +183,7 @@
 			power-domains = <&cpu13_pd>;
 			power-domain-names = "psci";
 			next-level-cache = <&l2_20000>;
-			clocks = <&cpu_perf 2>;
+			clocks = <&scmi_dvfs 2>;
 		};
 
 		cpu14: cpu@20200 {
@@ -194,7 +194,7 @@
 			power-domains = <&cpu14_pd>;
 			power-domain-names = "psci";
 			next-level-cache = <&l2_20000>;
-			clocks = <&cpu_perf 2>;
+			clocks = <&scmi_dvfs 2>;
 		};
 
 		cpu15: cpu@20300 {
@@ -205,7 +205,7 @@
 			power-domains = <&cpu15_pd>;
 			power-domain-names = "psci";
 			next-level-cache = <&l2_20000>;
-			clocks = <&cpu_perf 2>;
+			clocks = <&scmi_dvfs 2>;
 		};
 
 		cpu16: cpu@20400 {
@@ -216,7 +216,7 @@
 			power-domains = <&cpu16_pd>;
 			power-domain-names = "psci";
 			next-level-cache = <&l2_20000>;
-			clocks = <&cpu_perf 2>;
+			clocks = <&scmi_dvfs 2>;
 		};
 
 		cpu17: cpu@20500 {
@@ -227,7 +227,7 @@
 			power-domains = <&cpu17_pd>;
 			power-domain-names = "psci";
 			next-level-cache = <&l2_20000>;
-			clocks = <&cpu_perf 2>;
+			clocks = <&scmi_dvfs 2>;
 		};
 
 		cpu-map {
@@ -347,6 +347,18 @@
 			compatible = "qcom,scm-nord",
 				     "qcom,scm";
 			qcom,dload-mode = <&tcsr 0x79000>;
+		};
+
+		scmi_optee: scmi-optee {
+			compatible = "linaro,scmi-optee";
+			linaro,optee-channel-id = <0>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			scmi_dvfs: protocol@13 {
+				reg = <0x13>;
+				#clock-cells = <1>;
+			};
 		};
 
 		pdp_scmi: scmi {
