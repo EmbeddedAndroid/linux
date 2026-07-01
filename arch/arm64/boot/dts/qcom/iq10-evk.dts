@@ -570,3 +570,31 @@
  * moved to the OP-TEE SCMI perf domain, so disabling the node loses no
  * functionality and silences the boot. */
 &pdp_scmi { status = "disabled"; };
+
+/* enable the display subsystem for first-light (DPU + DP2/DP3 outputs + DP2/DP3 PHYs) */
+&mdss          { status = "okay"; };
+&mdss_mdp      { status = "okay"; };
+&mdss_dp2 {
+	/* HPD pad: GPIO51 func edp0_hot (downstream eDP0 -> DP2) */
+	pinctrl-0 = <&dp2_hpd_default>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+&mdss_dp2_phy {
+	/* mirror UFS PHY: pmau0102 LDOs, always-on, no RPMh stall */
+	vdda-phy-supply = <&vreg_l2h_1p2>;
+	vdda-pll-supply = <&vreg_l1i_0p9>;
+	status = "okay";
+};
+&mdss_dp3 {
+	/* HPD pad: GPIO52 func edp1_hot (downstream eDP1 -> DP3) */
+	pinctrl-0 = <&dp3_hpd_default>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+&mdss_dp3_phy {
+	/* mirror UFS PHY: pmau0102 LDOs, always-on, no RPMh stall */
+	vdda-phy-supply = <&vreg_l2h_1p2>;
+	vdda-pll-supply = <&vreg_l1i_0p9>;
+	status = "okay";
+};
