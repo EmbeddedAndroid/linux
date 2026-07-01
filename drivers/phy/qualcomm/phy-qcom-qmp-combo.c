@@ -3658,6 +3658,79 @@ static int qmp_combo_dp_calibrate(struct phy *phy)
 	return ret;
 }
 
+/*
+ * Nord/IQ-10 bring-up workaround.  The negcc USB31_PRIM and USB3_PHY GDSCs
+ * are not yet wired into a working genpd vote path, so nothing brings the
+ * combo-PHY power domain out of collapse before com_init programs the PHY:
+ * the DP_COM/DP_PHY sub-blocks stay unpowered, every MMIO write is dropped
+ * and DP AUX goes silent (0-byte EDID, -ETIMEDOUT).
+ *
+ * Deassert the USB BCRs and clear SW_COLLAPSE on both GDSCs on every
+ * com_init (the domain re-collapses after com_exit/runtime suspend), then
+ * poll the controller GDSC POWER_UP_COMPLETE (CFG_GDSCR bit 16) and the
+ * PHY GDSC PWR_ON (GDSCR bit 31) so the PHY is genuinely powered before
+ * PHY_MODE_CTRL is written.  Remove once the negcc GDSCs work via genpd
+ * (the BRANCH_HALT_SKIP workaround on the negcc usb3_prim_phy aux clocks
+ * goes away with this too).
+ */
+#define NORD_NEGCC_BASE			0x08900000
+#define NORD_NEGCC_SIZE			0xf4200
+#define NORD_USB31_PRIM_BCR		0x2a000
+#define NORD_USB31_PRIM_GDSCR		0x2a004
+#define NORD_USB31_PRIM_CFG_GDSCR	0x2a008
+#define NORD_USB3_PHY_PRIM_BCR		0x2b000
+#define NORD_USB3PHY_PHY_PRIM_BCR	0x2b004
+#define NORD_USB3_DP_PHY_PRIM_BCR	0x2b008
+#define NORD_USB3_PHY_GDSCR		0x2b00c
+
+static void qmp_combo_nord_force_gdscs(struct qmp_combo *qmp)
+{
+	void __iomem *ng;
+	int i;
+
+	if (!of_machine_is_compatible("qcom,nord"))
+		return;
+
+	ng = ioremap(NORD_NEGCC_BASE, NORD_NEGCC_SIZE);
+	if (!ng)
+		return;
+
+	writel_relaxed(0, ng + NORD_USB31_PRIM_BCR);
+	writel_relaxed(0, ng + NORD_USB3_PHY_PRIM_BCR);
+	writel_relaxed(0, ng + NORD_USB3PHY_PHY_PRIM_BCR);
+	writel_relaxed(0, ng + NORD_USB3_DP_PHY_PRIM_BCR);
+
+	/* clear SW_COLLAPSE (bit 0) on the USB31_PRIM and USB3_PHY GDSCs */
+	writel_relaxed(readl_relaxed(ng + NORD_USB31_PRIM_GDSCR) & ~BIT(0),
+		       ng + NORD_USB31_PRIM_GDSCR);
+	writel_relaxed(readl_relaxed(ng + NORD_USB3_PHY_GDSCR) & ~BIT(0),
+		       ng + NORD_USB3_PHY_GDSCR);
+
+	/* controller GDSC power-up complete */
+	for (i = 0; i < 100; i++) {
+		if (readl_relaxed(ng + NORD_USB31_PRIM_CFG_GDSCR) & BIT(16))
+			break;
+		udelay(10);
+	}
+
+	/* combo-PHY GDSC PWR_ON: programming the PHY before this is set
+	 * drops every DP-PHY MMIO write and leaves DP AUX silent */
+	for (i = 0; i < 100; i++) {
+		if (readl_relaxed(ng + NORD_USB3_PHY_GDSCR) & BIT(31))
+			break;
+		udelay(10);
+	}
+
+	if (!(readl_relaxed(ng + NORD_USB31_PRIM_CFG_GDSCR) & BIT(16)) ||
+	    !(readl_relaxed(ng + NORD_USB3_PHY_GDSCR) & BIT(31)))
+		dev_warn(qmp->dev,
+			 "nord GDSC power-up incomplete ctrl=%#x combophy=%#x\n",
+			 readl_relaxed(ng + NORD_USB31_PRIM_CFG_GDSCR),
+			 readl_relaxed(ng + NORD_USB3_PHY_GDSCR));
+
+	iounmap(ng);
+}
+
 static int qmp_combo_com_init(struct qmp_combo *qmp, bool force)
 {
 	const struct qmp_phy_cfg *cfg = qmp->cfg;
@@ -3687,9 +3760,12 @@ static int qmp_combo_com_init(struct qmp_combo *qmp, bool force)
 		goto err_disable_regulators;
 	}
 
+	qmp_combo_nord_force_gdscs(qmp);
+
 	ret = clk_bulk_prepare_enable(qmp->num_clks, qmp->clks);
 	if (ret)
 		goto err_assert_reset;
+
 
 	/* In DP-only mode, the pipe clk is still required for USB2 */
 	ret = clk_prepare_enable(qmp->pipe_clk);
