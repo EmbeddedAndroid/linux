@@ -562,3 +562,11 @@
 /* arch-timer-mmio (timer@17810000): probes -22; the per-CPU arch timer is the
  * primary timer and works, this memory-mapped frame is redundant + failing. */
 &memtimer { status = "disabled"; };
+
+/* Disable the pdp_scmi arm,scmi transport.  Its arm-scmi platform device
+ * fails to set up the BASE protocol channel (protocol 0x10) and then
+ * retries via deferred probe indefinitely, flooding the log.  Its only
+ * protocol, cpu_perf (0x13), lost its last consumer when the cpu nodes
+ * moved to the OP-TEE SCMI perf domain, so disabling the node loses no
+ * functionality and silences the boot. */
+&pdp_scmi { status = "disabled"; };
