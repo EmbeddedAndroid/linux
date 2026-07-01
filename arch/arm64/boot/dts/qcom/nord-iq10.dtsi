@@ -11,6 +11,7 @@
 #include <dt-bindings/clock/qcom,nord-gpucc.h>
 #include <dt-bindings/clock/qcom,nord-dispcc.h>
 #include <dt-bindings/clock/qcom,rpmh.h>
+#include <dt-bindings/phy/phy-qcom-qmp.h>
 #include <dt-bindings/interconnect/qcom,icc.h>
 #include <dt-bindings/interconnect/qcom,nord-rpmh.h>
 #include <dt-bindings/power/qcom-rpmpd.h>
@@ -763,7 +764,7 @@
 			 <&sleep_clk>,
 			 <0>, <0>,	/* dsi0 byte/pixel phy pll */
 			 <0>, <0>,	/* dsi1 byte/pixel phy pll */
-			 <0>, <0>,	/* dp0 link/vco phy pll */
+			 <&usb_0_qmpphy QMP_USB43DP_DP_LINK_CLK>, <&usb_0_qmpphy QMP_USB43DP_DP_VCO_DIV_CLK>,	/* dp0 link/vco */
 			 <0>, <0>,	/* dp1 link/vco phy pll */
 			 <&mdss_dp2_phy 0>, <&mdss_dp2_phy 1>,	/* dp2 link/vco */
 			 <&mdss_dp3_phy 0>, <&mdss_dp3_phy 1>;	/* dp3 link/vco */
@@ -847,6 +848,14 @@
 				 *   INTF_6 -> DP controller 2 (mdss_dp2 @ af64000)
 				 * Mirrors upstream sc8280xp.dtsi mdss0 wiring.
 				 */
+				/* INTF_0 -> DP controller 0 (mdss_dp0 @ af54000), per glymur */
+				port@0 {
+					reg = <0>;
+					dpu_intf0_out: endpoint {
+						remote-endpoint = <&mdss_dp0_in>;
+					};
+				};
+
 				port@5 {
 					reg = <5>;
 					dpu_intf5_out: endpoint {
@@ -859,6 +868,79 @@
 					dpu_intf6_out: endpoint {
 						remote-endpoint = <&mdss_dp2_in>;
 					};
+				};
+			};
+		};
+
+		mdss_dp0: displayport-controller@af54000 {
+			compatible = "qcom,glymur-dp";
+			reg = <0x0 0x0af54000 0x0 0x200>,
+			      <0x0 0x0af54200 0x0 0x200>,
+			      <0x0 0x0af55000 0x0 0xc00>,
+			      <0x0 0x0af56000 0x0 0x400>,
+			      <0x0 0x0af57000 0x0 0x400>,
+			      <0x0 0x0af58000 0x0 0x400>,
+			      <0x0 0x0af59000 0x0 0x400>,
+			      <0x0 0x0af5a000 0x0 0x600>,
+			      <0x0 0x0af5b000 0x0 0x600>;
+			interrupts-extended = <&mdss 12>;
+			clocks = <&dispcc DISP_CC_MDSS_AHB_CLK>,
+				 <&dispcc DISP_CC_MDSS_DPTX0_AUX_CLK>,
+				 <&dispcc DISP_CC_MDSS_DPTX0_LINK_CLK>,
+				 <&dispcc DISP_CC_MDSS_DPTX0_LINK_INTF_CLK>,
+				 <&dispcc DISP_CC_MDSS_DPTX0_PIXEL0_CLK>,
+				 <&dispcc DISP_CC_MDSS_DPTX0_PIXEL1_CLK>;
+			clock-names = "core_iface", "core_aux", "ctrl_link",
+				      "ctrl_link_iface", "stream_pixel", "stream_1_pixel";
+			assigned-clocks = <&dispcc DISP_CC_MDSS_DPTX0_LINK_CLK_SRC>,
+					  <&dispcc DISP_CC_MDSS_DPTX0_PIXEL0_CLK_SRC>,
+					  <&dispcc DISP_CC_MDSS_DPTX0_PIXEL1_CLK_SRC>;
+			assigned-clock-parents = <&usb_0_qmpphy QMP_USB43DP_DP_LINK_CLK>,
+						 <&usb_0_qmpphy QMP_USB43DP_DP_VCO_DIV_CLK>,
+						 <&usb_0_qmpphy QMP_USB43DP_DP_VCO_DIV_CLK>;
+			phys = <&usb_0_qmpphy QMP_USB43DP_DP_PHY>;
+			phy-names = "dp";
+			power-domains = <&rpmhpd RPMHPD_MMCX>;
+			operating-points-v2 = <&dp0_opp_table>;
+			#sound-dai-cells = <0>;
+
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				port@0 {
+					reg = <0>;
+					mdss_dp0_in: endpoint {
+						remote-endpoint = <&dpu_intf0_out>;
+					};
+				};
+
+				port@1 {
+					reg = <1>;
+					mdss_dp0_out: endpoint {
+						remote-endpoint = <&usb_dp_qmpphy_dp_in>;
+					};
+				};
+			};
+
+			dp0_opp_table: opp-table {
+				compatible = "operating-points-v2";
+
+				opp-162000000 {
+					opp-hz = /bits/ 64 <162000000>;
+					opp-level = <RPMH_REGULATOR_LEVEL_LOW_SVS>;
+				};
+				opp-270000000 {
+					opp-hz = /bits/ 64 <270000000>;
+					opp-level = <RPMH_REGULATOR_LEVEL_SVS>;
+				};
+				opp-540000000 {
+					opp-hz = /bits/ 64 <540000000>;
+					opp-level = <RPMH_REGULATOR_LEVEL_SVS_L1>;
+				};
+				opp-810000000 {
+					opp-hz = /bits/ 64 <810000000>;
+					opp-level = <RPMH_REGULATOR_LEVEL_NOM>;
 				};
 			};
 		};
@@ -990,6 +1072,125 @@
 				opp-810000000 {
 					opp-hz = /bits/ 64 <810000000>;
 					opp-level = <RPMH_REGULATOR_LEVEL_NOM>;
+				};
+			};
+		};
+	};
+
+	/*
+	 * USB-0 HS (eUSB2) PHY (m31, standalone: no eUSB2 repeater is
+	 * populated on this platform, and the repeater phandle is optional
+	 * in phy-qcom-m31-eusb2).  The dwc3 controller will not bind
+	 * without a usb2-phy.
+	 */
+	usb_0_hsphy: phy@fd3000 {
+		compatible = "qcom,glymur-m31-eusb2-phy",
+			     "qcom,sm8750-m31-eusb2-phy";
+		reg = <0x0 0x00fd3000 0x0 0x29c>;
+		#phy-cells = <0>;
+
+		clocks = <&rpmhcc RPMH_CXO_CLK>;
+		clock-names = "ref";
+
+		resets = <&negcc NE_GCC_QUSB2PHY_PRIM_BCR>;
+
+		status = "disabled";
+	};
+
+	/*
+	 * USB-0 DWC3 controller.  Clocks, GDSC and BCR are the negcc
+	 * USB31_PRIM equivalents of the glymur GCC_USB30_PRIM_* set (Nord
+	 * names the prim controller USB31).  The optional HS/SS phy-wake PDC
+	 * interrupts are omitted pending the Nord PDC pin map; only the core
+	 * dwc_usb3 and pwr_event SPIs are wired.
+	 */
+	usb_0: usb@a600000 {
+		compatible = "qcom,glymur-dwc3", "qcom,snps-dwc3";
+		reg = <0x0 0x0a600000 0x0 0xfc100>;
+
+		clocks = <&negcc NE_GCC_CNOC_USB3_PRIM_AXI_CLK>,
+			 <&negcc NE_GCC_USB31_PRIM_MASTER_CLK>,
+			 <&negcc NE_GCC_AGGRE_NOC_USB3_PRIM_AXI_CLK>,
+			 <&negcc NE_GCC_USB31_PRIM_SLEEP_CLK>,
+			 <&negcc NE_GCC_USB31_PRIM_MOCK_UTMI_CLK>;
+		clock-names = "cfg_noc",
+			      "core",
+			      "iface",
+			      "sleep",
+			      "mock_utmi";
+
+		interrupts-extended = <&intc GIC_SPI 140 IRQ_TYPE_LEVEL_HIGH>,
+				      <&intc GIC_SPI 371 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "dwc_usb3",
+				  "pwr_event";
+
+		power-domains = <&negcc NE_GCC_USB31_PRIM_GDSC>;
+		resets = <&negcc NE_GCC_USB31_PRIM_BCR>;
+
+		iommus = <&apps_smmu_0 0x1420 0x0>;
+
+		phys = <&usb_0_hsphy>,
+		       <&usb_0_qmpphy QMP_USB43DP_USB3_PHY>;
+		phy-names = "usb2-phy",
+			    "usb3-phy";
+
+		dr_mode = "host";
+
+		snps,hird-threshold = /bits/ 8 <0x0>;
+		snps,dis-u1-entry-quirk;
+		snps,dis-u2-entry-quirk;
+		snps,is-utmi-l1-suspend;
+		snps,usb3_lpm_capable;
+		snps,has-lpm-erratum;
+		tx-fifo-resize;
+		snps,dis_u2_susphy_quirk;
+		snps,dis_enblslpm_quirk;
+
+		interconnects = <&aggre1_noc_tile MASTER_USB3_0 QCOM_ICC_TAG_ALWAYS
+				 &mc_virt SLAVE_EBI1 QCOM_ICC_TAG_ALWAYS>,
+				<&hscnoc MASTER_APPSS_PROC QCOM_ICC_TAG_ALWAYS
+				 &config_noc SLAVE_USB3_0 QCOM_ICC_TAG_ALWAYS>;
+		interconnect-names = "usb-ddr", "apps-usb";
+
+		status = "disabled";
+	};
+
+	/*
+	 * USB-0 / DP combo QMP PHY.  In DP-only use (no mode-switch /
+	 * orientation-switch, no USB-SS endpoint on port@1, DP data-lanes
+	 * set on the port@0 endpoint) phy-qcom-qmp-combo runs the PHY in
+	 * QMPPHY_MODE_DP_ONLY.
+	 */
+	usb_0_qmpphy: phy@fd5000 {
+		compatible = "qcom,glymur-qmp-usb3-dp-phy";
+		reg = <0x0 0x00fd5000 0x0 0x8000>;
+		clocks = <&negcc NE_GCC_USB3_PRIM_PHY_AUX_CLK>,
+			 <&rpmhcc RPMH_CXO_CLK>,
+			 <&negcc NE_GCC_USB3_PRIM_PHY_COM_AUX_CLK>,
+			 <&negcc NE_GCC_USB3_PRIM_PHY_PIPE_CLK>;
+		clock-names = "aux", "ref", "com_aux", "usb3_pipe";
+		resets = <&negcc NE_GCC_USB3_PHY_PRIM_BCR>,
+			 <&negcc NE_GCC_USB3PHY_PHY_PRIM_BCR>;
+		reset-names = "phy", "common";
+		power-domains = <&negcc NE_GCC_USB3_PHY_GDSC>;
+		#clock-cells = <1>;
+		#phy-cells = <1>;
+		status = "disabled";
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				reg = <0>;
+				usb_0_qmpphy_out: endpoint {
+				};
+			};
+
+			port@2 {
+				reg = <2>;
+				usb_dp_qmpphy_dp_in: endpoint {
+					remote-endpoint = <&mdss_dp0_out>;
 				};
 			};
 		};
