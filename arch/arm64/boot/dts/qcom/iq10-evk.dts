@@ -533,3 +533,7 @@
 	vdda-pll-supply = <&vreg_l2h_1p2>;
 	status = "okay";
 };
+
+/* arch-timer-mmio (timer@17810000): probes -22; the per-CPU arch timer is the
+ * primary timer and works, this memory-mapped frame is redundant + failing. */
+&memtimer { status = "disabled"; };
