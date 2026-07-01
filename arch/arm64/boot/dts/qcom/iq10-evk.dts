@@ -51,6 +51,26 @@
 			clock-div = <2>;
 		};
 	};
+
+	/*
+	 * Static full-size DisplayPort connector on JDP0.  The combo QMP
+	 * PHY registers a transparent DP aux-bridge whose downstream bridge
+	 * is taken from the PHY port@0 endpoint; this dp-connector provides
+	 * that drm_bridge without pmic_glink / Type-C PD negotiation.  HPD
+	 * is sourced from the DP controller's internal HPD block, as on
+	 * DP2/DP3.
+	 */
+	dp0_connector: dp0-connector {
+		compatible = "dp-connector";
+		label = "DP0";
+		type = "full-size";
+
+		port {
+			dp0_connector_in: endpoint {
+				remote-endpoint = <&usb_0_qmpphy_out>;
+			};
+		};
+	};
 };
 
 &apps_rsc {
@@ -596,5 +616,34 @@
 	/* mirror UFS PHY: pmau0102 LDOs, always-on, no RPMh stall */
 	vdda-phy-supply = <&vreg_l2h_1p2>;
 	vdda-pll-supply = <&vreg_l1i_0p9>;
+	status = "okay";
+};
+
+/* DP0: DPU INTF_0 -> mdss_dp0 -> USB-0 combo QMP PHY (DP-only) -> JDP0 */
+&mdss_dp0 {
+	status = "okay";
+};
+
+&usb_0_qmpphy {
+	/* Schematic SOC_PWR_SERDES: VDD_A_SERDES_1P2 <- L2H (1.2V) and
+	 * VDD_A_SERDES_0P9 <- L1H (0.9V), the combo PHY's dedicated SERDES
+	 * rail (not L1I, the eDP/UFS 0.9V rail). */
+	vdda-phy-supply = <&vreg_l2h_1p2>;
+	vdda-pll-supply = <&vreg_l1h_0p9>;
+	refgen-supply = <&vreg_l1h_0p9>;
+	status = "okay";
+};
+
+&usb_0_qmpphy_out {
+	data-lanes = <3 2 1 0>;
+	remote-endpoint = <&dp0_connector_in>;
+};
+
+/* USB-0 HS PHY rails: the same always-on pmau0102 LDOs as the DP PHYs.
+ * The DWC3 controller itself stays disabled until the fabric/RPMh
+ * dependencies behind its interconnect votes are in place. */
+&usb_0_hsphy {
+	vdd-supply = <&vreg_l1i_0p9>;
+	vdda12-supply = <&vreg_l2h_1p2>;
 	status = "okay";
 };
