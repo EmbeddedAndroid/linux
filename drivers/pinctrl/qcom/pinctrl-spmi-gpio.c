@@ -1214,6 +1214,8 @@ static void pmic_gpio_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id pmic_gpio_of_match[] = {
+	/* Nord/SA8797P companion PMIC (IQ10 ADP: 8x PMAU0102, GPIO_11 seen) */
+	{ .compatible = "qcom,pmau0102-gpio", .data = (void *) 12 },
 	{ .compatible = "qcom,pm2250-gpio", .data = (void *) 10 },
 	/* pm660 has 13 GPIOs with holes on 1, 5, 6, 7, 8 and 10 */
 	{ .compatible = "qcom,pm660-gpio", .data = (void *) 13 },
