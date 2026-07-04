@@ -16,6 +16,8 @@
 #include <dt-bindings/interconnect/qcom,nord-rpmh.h>
 #include <dt-bindings/power/qcom-rpmpd.h>
 #include <dt-bindings/soc/qcom,rpmh-rsc.h>
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/spmi/spmi.h>
 
 #include "nord.dtsi"
 
@@ -733,6 +735,381 @@
 		#clock-cells = <1>;
 		#reset-cells = <1>;
 		#power-domain-cells = <1>;
+	};
+
+	/*
+	 * SPMI PMIC arbiter (v7.3: core HW_VERSION reads 0x70030000 live).
+	 * Addresses from IPcat chip 567: core PMIC_ARB 0xc400000, chnls
+	 * PMIC_ARB_CORE_REGISTERS 0xc500000, obsrvr ..._OBS 0xc440000;
+	 * chnl_map at core+0x3000 and bus cnfg/chnl_owner offsets modeled
+	 * on glymur (same arbiter generation) - probe errors will correct.
+	 * The IQ10 ADP carries 8x PMAU0102 (schematic letters A/E/G/H/I/
+	 * J/K/L); SPMI USIDs unknown, so children are declared at every
+	 * even USID for discovery - absent SIDs fail probe harmlessly and
+	 * the boot log maps the bus.  Prize GPIOs (adp-schematic-analysis
+	 * section 7): PMH_GPIO_04 = DISP0_RESET_N (display card!),
+	 * PMH_GPIO_03 = Type-A VBUS, PMI_GPIO_09/10 + PML_GPIO_03 =
+	 * eUSB2 repeater resets.
+	 */
+	spmi: arbiter@c400000 {
+		compatible = "qcom,glymur-spmi-pmic-arb";
+		/*
+		 * Nord packs the arbiter blocks tighter than glymur - the
+		 * glymur-copied 4MB obsrvr size overlapped chnls and the
+		 * probe died -EBUSY on its own regions.  Disjoint map:
+		 * core 0xc400000, chnl_map +0x3000, chnl_owner 0xc42a000,
+		 * cnfg 0xc42d000, obsrvr 0xc440000 (to the PIC), intr/PIC
+		 * 0xc4c0000, chnls 0xc500000.
+		 */
+		reg = <0x0 0x0c400000 0x0 0x3000>,
+		      <0x0 0x0c500000 0x0 0x400000>,
+		      <0x0 0x0c440000 0x0 0x80000>,
+		      <0x0 0x0c403000 0x0 0x8000>;
+		reg-names = "core", "chnls", "obsrvr", "chnl_map";
+		qcom,channel = <0>;
+		qcom,ee = <0>;
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		spmi_bus0: spmi@c42d000 {
+			reg = <0x0 0x0c42d000 0x0 0x4000>,
+			      <0x0 0x0c4c0000 0x0 0x10000>,
+			      <0x0 0x0c42a000 0x0 0x3000>;
+			reg-names = "cnfg", "intr", "chnl_owner";
+			interrupts-extended = <&pdc 1 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "periph_irq";
+			interrupt-controller;
+			#interrupt-cells = <4>;
+			#address-cells = <2>;
+			#size-cells = <0>;
+
+			pmic@0 {
+				compatible = "qcom,pmau0102", "qcom,spmi-pmic";
+				reg = <0x0 SPMI_USID>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				pmic0_gpios: gpio@8800 {
+					compatible = "qcom,pmau0102-gpio",
+						     "qcom,spmi-gpio";
+					reg = <0x8800>;
+					gpio-controller;
+					#gpio-cells = <2>;
+					gpio-ranges = <&pmic0_gpios 0 0 12>;
+
+					/*
+					 * PMA GPIO_06 = PMS_PON_DONE to the
+					 * Kai baseboard (B2B p5).  Stock XBL
+					 * configures it as a PON special
+					 * function; our open stack left it an
+					 * unconfigured input, so Kai never
+					 * learns the SoC booted and keeps the
+					 * management domain (GLOBAL_MD_OE,
+					 * VREG_PER_5P0, i2c9 mux) parked.
+					 * Drive it high as a plain output as
+					 * the boot-complete flag.
+					 */
+					pinctrl-names = "default";
+					pinctrl-0 = <&pon_done_state>;
+
+					pon_done_state: pon-done-state {
+						pins = "gpio6";
+						function = "normal";
+						output-high;
+						power-source = <1>;
+						qcom,drive-strength = <2>;
+					};
+				};
+			};
+
+			pmic@2 {
+				compatible = "qcom,pmau0102", "qcom,spmi-pmic";
+				reg = <0x2 SPMI_USID>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				pmic2_gpios: gpio@8800 {
+					compatible = "qcom,pmau0102-gpio",
+						     "qcom,spmi-gpio";
+					reg = <0x8800>;
+					gpio-controller;
+					#gpio-cells = <2>;
+					gpio-ranges = <&pmic2_gpios 0 0 12>;
+				};
+			};
+
+			pmic@4 {
+				compatible = "qcom,pmau0102", "qcom,spmi-pmic";
+				reg = <0x4 SPMI_USID>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				pmic4_gpios: gpio@8800 {
+					compatible = "qcom,pmau0102-gpio",
+						     "qcom,spmi-gpio";
+					reg = <0x8800>;
+					gpio-controller;
+					#gpio-cells = <2>;
+					gpio-ranges = <&pmic4_gpios 0 0 12>;
+				};
+			};
+
+			pmic@6 {
+				compatible = "qcom,pmau0102", "qcom,spmi-pmic";
+				reg = <0x6 SPMI_USID>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				pmic6_gpios: gpio@8800 {
+					compatible = "qcom,pmau0102-gpio",
+						     "qcom,spmi-gpio";
+					reg = <0x8800>;
+					gpio-controller;
+					#gpio-cells = <2>;
+					gpio-ranges = <&pmic6_gpios 0 0 12>;
+				};
+			};
+
+			pmic@8 {
+				compatible = "qcom,pmau0102", "qcom,spmi-pmic";
+				reg = <0x8 SPMI_USID>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				pmic8_gpios: gpio@8800 {
+					compatible = "qcom,pmau0102-gpio",
+						     "qcom,spmi-gpio";
+					reg = <0x8800>;
+					gpio-controller;
+					#gpio-cells = <2>;
+					gpio-ranges = <&pmic8_gpios 0 0 12>;
+				};
+			};
+
+			pmic@a {
+				compatible = "qcom,pmau0102", "qcom,spmi-pmic";
+				reg = <0xa SPMI_USID>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				pmica_gpios: gpio@8800 {
+					compatible = "qcom,pmau0102-gpio",
+						     "qcom,spmi-gpio";
+					reg = <0x8800>;
+					gpio-controller;
+					#gpio-cells = <2>;
+					gpio-ranges = <&pmica_gpios 0 0 12>;
+				};
+			};
+
+			pmic@c {
+				compatible = "qcom,pmau0102", "qcom,spmi-pmic";
+				reg = <0xc SPMI_USID>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				pmicc_gpios: gpio@8800 {
+					compatible = "qcom,pmau0102-gpio",
+						     "qcom,spmi-gpio";
+					reg = <0x8800>;
+					gpio-controller;
+					#gpio-cells = <2>;
+					gpio-ranges = <&pmicc_gpios 0 0 12>;
+				};
+			};
+
+
+			pmic@1 {
+				compatible = "qcom,pmau0102", "qcom,spmi-pmic";
+				reg = <0x1 SPMI_USID>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				pmic1_gpios: gpio@8800 {
+					compatible = "qcom,pmau0102-gpio",
+						     "qcom,spmi-gpio";
+					reg = <0x8800>;
+					gpio-controller;
+					#gpio-cells = <2>;
+					gpio-ranges = <&pmic1_gpios 0 0 12>;
+				};
+			};
+
+			pmic@3 {
+				compatible = "qcom,pmau0102", "qcom,spmi-pmic";
+				reg = <0x3 SPMI_USID>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				pmic3_gpios: gpio@8800 {
+					compatible = "qcom,pmau0102-gpio",
+						     "qcom,spmi-gpio";
+					reg = <0x8800>;
+					gpio-controller;
+					#gpio-cells = <2>;
+					gpio-ranges = <&pmic3_gpios 0 0 12>;
+				};
+			};
+
+			pmic@5 {
+				compatible = "qcom,pmau0102", "qcom,spmi-pmic";
+				reg = <0x5 SPMI_USID>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				pmic5_gpios: gpio@8800 {
+					compatible = "qcom,pmau0102-gpio",
+						     "qcom,spmi-gpio";
+					reg = <0x8800>;
+					gpio-controller;
+					#gpio-cells = <2>;
+					gpio-ranges = <&pmic5_gpios 0 0 12>;
+				};
+			};
+
+			pmic@7 {
+				compatible = "qcom,pmau0102", "qcom,spmi-pmic";
+				reg = <0x7 SPMI_USID>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				pmic7_gpios: gpio@8800 {
+					compatible = "qcom,pmau0102-gpio",
+						     "qcom,spmi-gpio";
+					reg = <0x8800>;
+					gpio-controller;
+					#gpio-cells = <2>;
+					gpio-ranges = <&pmic7_gpios 0 0 12>;
+
+					/*
+					 * PMH (letter H = SPMI sid 7).
+					 * GPIO_04 = DISP0_RESET_N (display
+					 * board electronics), GPIO_03 =
+					 * USB2_PD_PWR_EN (Type-A VBUS via
+					 * TPS2559, 10k series).  Plain hogs
+					 * left the pads at VIN0 with no
+					 * observable output (stick LED dark)
+					 * - these self-applied pinctrl
+					 * states add the power-source
+					 * select.  PON resets the config
+					 * every warm boot, so this must
+					 * apply at every probe (it does).
+					 */
+					pinctrl-names = "default";
+					pinctrl-0 = <&disp0_reset_state>,
+						    <&usb2_vbus_state>;
+
+					disp0_reset_state: disp0-reset-state {
+						pins = "gpio4";
+						function = "normal";
+						output-high;
+						power-source = <2>;
+						qcom,drive-strength = <2>;
+					};
+
+					usb2_vbus_state: usb2-vbus-state {
+						pins = "gpio3";
+						function = "normal";
+						output-high;
+						power-source = <2>;
+						qcom,drive-strength = <2>;
+					};
+				};
+			};
+
+			pmic@9 {
+				compatible = "qcom,pmau0102", "qcom,spmi-pmic";
+				reg = <0x9 SPMI_USID>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				pmic9_gpios: gpio@8800 {
+					compatible = "qcom,pmau0102-gpio",
+						     "qcom,spmi-gpio";
+					reg = <0x8800>;
+					gpio-controller;
+					#gpio-cells = <2>;
+					gpio-ranges = <&pmic9_gpios 0 0 12>;
+				};
+			};
+
+			pmic@B {
+				compatible = "qcom,pmau0102", "qcom,spmi-pmic";
+				reg = <0xb SPMI_USID>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				pmicb_gpios: gpio@8800 {
+					compatible = "qcom,pmau0102-gpio",
+						     "qcom,spmi-gpio";
+					reg = <0x8800>;
+					gpio-controller;
+					#gpio-cells = <2>;
+					gpio-ranges = <&pmicb_gpios 0 0 12>;
+
+					/* PML GPIO_03 = Type-A eUSB2 repeater reset */
+					pinctrl-names = "default";
+					pinctrl-0 = <&eusb2_typea_reset_state>;
+
+					eusb2_typea_reset_state: eusb2-typea-reset-state {
+						pins = "gpio3";
+						function = "normal";
+						output-high;
+						power-source = <2>;
+						qcom,drive-strength = <2>;
+					};
+				};
+			};
+
+			pmic@D {
+				compatible = "qcom,pmau0102", "qcom,spmi-pmic";
+				reg = <0xd SPMI_USID>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				pmicd_gpios: gpio@8800 {
+					compatible = "qcom,pmau0102-gpio",
+						     "qcom,spmi-gpio";
+					reg = <0x8800>;
+					gpio-controller;
+					#gpio-cells = <2>;
+					gpio-ranges = <&pmicd_gpios 0 0 12>;
+				};
+			};
+
+			pmic@F {
+				compatible = "qcom,pmau0102", "qcom,spmi-pmic";
+				reg = <0xf SPMI_USID>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				pmicf_gpios: gpio@8800 {
+					compatible = "qcom,pmau0102-gpio",
+						     "qcom,spmi-gpio";
+					reg = <0x8800>;
+					gpio-controller;
+					#gpio-cells = <2>;
+					gpio-ranges = <&pmicf_gpios 0 0 12>;
+				};
+			};
+
+			pmic@e {
+				compatible = "qcom,pmau0102", "qcom,spmi-pmic";
+				reg = <0xe SPMI_USID>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				pmice_gpios: gpio@8800 {
+					compatible = "qcom,pmau0102-gpio",
+						     "qcom,spmi-gpio";
+					reg = <0x8800>;
+					gpio-controller;
+					#gpio-cells = <2>;
+					gpio-ranges = <&pmice_gpios 0 0 12>;
+				};
+			};
+		};
 	};
 
 	tcsrcc: clock-controller@f1d9000 {
