@@ -505,6 +505,10 @@
 			regulator-name = "vreg_l3l_1p8";
 			regulator-min-microvolt = <1800000>;
 			regulator-max-microvolt = <1800000>;
+			/* VDD_EUSB_1P8: the PTN3222 (U14) 1.8V.  Always-on for bring-up
+			 * so the redriver stays powered even if its I2C address guess is
+			 * wrong, letting i2cdetect find the real one. */
+			regulator-always-on;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
 			regulator-allow-set-load;
 			regulator-allowed-modes = <RPMH_REGULATOR_MODE_LPM
@@ -559,7 +563,41 @@
 
 /* === IQ-10 EVK i2c/spi enablement (sensor discovery + spidev) === */
 &i2c19 { clock-frequency = <400000>; status = "okay"; };   /* IPCAT: SENSOR & power-monitor I2C (gpio156/157) */
-&i2c9  { clock-frequency = <400000>; status = "okay"; };   /* IPCAT: USB-PD/eUSB repeater & SMBus (gpio127/128) */
+/* VREG_PER_5P0's 3.3V sibling - the peripheral 3.3V the QAM carrier provides
+ * (carrier UART: "Enabled MAIN VREG 3P3 ... 3.29 V").  Modeled as an always-on
+ * fixed regulator so the PTN3222 redriver's vdd3v3 has a real supply handle. */
+/ {
+	vreg_per_3p3: regulator-per-3p3 {
+		compatible = "regulator-fixed";
+		regulator-name = "vreg_per_3p3";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		regulator-always-on;
+	};
+};
+
+&i2c9 {
+	clock-frequency = <400000>;   /* IPCAT: USB-PD/eUSB repeater & SMBus (gpio127/128) */
+	status = "okay";
+
+	/*
+	 * U14: NXP PTN3222 eUSB2->USB2 redriver for the JUSB2 Type-A jack (usb_2).
+	 * Without it the SoC eUSB2 signal never reaches a standard USB2 device -
+	 * the port sees a connect but "unable to enumerate".  The m31 eUSB2 PHY
+	 * inits this as its optional repeater phy (usb_2_hsphy phys=<&ptn3222>).
+	 * Supplies (schematic sch440 U14): VDD1V8=vreg_l3l_1p8, VDD3V3=VREG_PER_3P3.
+	 * RST_N = PML_GPIO_03, kept released by the pmicb eusb2_typea_reset hog.
+	 * NOTE: reg 0x4f is a first guess; once powered, confirm the real address
+	 * with `i2cdetect -y 2` and correct it here.
+	 */
+	ptn3222: usb-redriver@4f {
+		compatible = "nxp,ptn3222";
+		reg = <0x4f>;
+		vdd3v3-supply = <&vreg_per_3p3>;
+		vdd1v8-supply = <&vreg_l3l_1p8>;
+		#phy-cells = <0>;
+	};
+};
 &i2c7  { clock-frequency = <100000>; status = "okay"; };   /* DP1 DDC/AUX (gpio123/124) */
 &i2c12 { clock-frequency = <100000>; status = "okay"; };   /* DP0 DDC/AUX (gpio133-136) */
 
@@ -646,4 +684,103 @@
 	vdd-supply = <&vreg_l1i_0p9>;
 	vdda12-supply = <&vreg_l2h_1p2>;
 	status = "okay";
+};
+
+/*
+ * USB-0 DWC3 in host mode on the JUSB0 Type-C jack (USB4200-03-A).
+ *
+ * VBUS: VBUS_USB0_5P0 is switched by a TPS2559 load switch (U16) whose
+ * enable, VBUS0_EN_MD1P8, is driven by GPIO3 of the FUSB15201 USB-PD
+ * controller (U15, on i2c9 / GPIO127-128) - there is no SoC- or
+ * PMIC-GPIO-controlled path to model as a vbus-supply regulator, so
+ * VBUS sourcing relies on the PD controller's own firmware policy.
+ * If a plugged device stays unpowered, poke U15 over i2c9.
+ *
+ * Only one SS lane pair is wired to the jack (SSTXP1/SSRXP1), so
+ * SuperSpeed enumerates in a single plug orientation; the flipped
+ * orientation falls back to high-speed.
+ */
+&usb_0 {
+	/*
+	 * Peripheral (gadget) mode on JUSB0 (Type-C -> galagos host Type-A),
+	 * reusing the flash cable as a USB-Ethernet gadget (CDC-ECM) so the
+	 * open stack has a proven USB data path without the FUSB15201 PD/
+	 * Type-C driver.
+	 *
+	 * KEEP the full PHY set (base: hs eUSB2 + usb_0_qmpphy SS): the dwc3
+	 * core soft reset needs the SS PHY's pipe clock running to complete -
+	 * dropping the combo phy gave "-ETIMEDOUT: failed to initialize core"
+	 * (hit live).  In host mode the same PHY set inits cleanly (only the
+	 * SS *link* fails on orientation); peripheral is the sole delta here.
+	 * Cap at high-speed: the combo SS PHY has no CC/orientation driver so
+	 * the SS *link* never trains ("unable to determine orientation") and the
+	 * host's SS port sits in "Cannot enable / config error" without falling
+	 * back to HS.  maximum-speed=high-speed makes the gadget advertise HS
+	 * only, so it enumerates on the host's HS path.  The SS PHY stays in the
+	 * phy list (base) so dwc3 core init still gets its pipe clock.
+	 */
+	dr_mode = "peripheral";
+	maximum-speed = "high-speed";
+	status = "okay";
+};
+
+/*
+ * USB-1: upstream of the onboard USB hub (U13), which fans out to the
+ * JUSB1 (Type-C) and JUSB2 (Type-A) jacks.  Hub reset GP170 is released
+ * by the tlmm hog below; the hub sources its own per-port VBUS via
+ * PWR_EN_USB_P1/P2/P3 once it enumerates.
+ */
+&usb_1_hsphy {
+	vdd-supply = <&vreg_l1i_0p9>;
+	vdda12-supply = <&vreg_l2h_1p2>;
+	status = "okay";
+};
+
+&usb_1_qmpphy {
+	vdda-phy-supply = <&vreg_l2h_1p2>;
+	vdda-pll-supply = <&vreg_l1h_0p9>;
+	refgen-supply = <&vreg_l1h_0p9>;
+	status = "okay";
+};
+
+&usb_1 {
+	/*
+	 * usb_1 is hardwired to the onboard GL3590 hub U13 (a soldered SS
+	 * link, no Type-C / no orientation switch), so it does NOT need the
+	 * FUSB15201 - usb_1_qmpphy already forces USB3-only, fixed-normal
+	 * orientation via data-lanes = <1 0> (nord-iq10.dtsi).  The earlier
+	 * "usb3-port1: Cannot enable" was a PHY receiver-detect miss: the
+	 * host never saw the hub's far-end SS receiver during LFPS detect.
+	 * The vendor's authoritative V1.12 SS-PHY tuning bumps RCV_DETECT_LVL_2
+	 * 0x12->0x14 (see nord_ssphy_tbl in phy-qcom-qmp-combo.c), which should
+	 * let the link train.  Attempt SuperSpeed (Gen1) to validate; if it
+	 * still fails to train it sits in "Cannot enable" (no HS fallback), so
+	 * revert to maximum-speed = "high-speed" to keep U13 at 480 Mbps.
+	 */
+	maximum-speed = "super-speed";
+	status = "okay";
+};
+
+/* USB-2 (usb20s): the JUSB2 Type-A jack via the PTN3222 eUSB2 repeater. */
+&usb_2_hsphy {
+	vdd-supply = <&vreg_l1i_0p9>;
+	vdda12-supply = <&vreg_l2h_1p2>;
+	/* PTN3222 redriver as the optional repeater phy: the m31 eUSB2 driver
+	 * phy_init()s it, powering+configuring the eUSB2->USB2 path to JUSB2. */
+	phys = <&ptn3222>;
+	status = "okay";
+};
+
+&usb_2 {
+	status = "okay";
+};
+
+&tlmm {
+	/* GP170_USB_HUB_RESET_MD1P8_N: drive high = release hub reset. */
+	usb-hub-reset-hog {
+		gpio-hog;
+		gpios = <170 GPIO_ACTIVE_HIGH>;
+		output-high;
+		line-name = "usb-hub-reset";
+	};
 };
