@@ -842,6 +842,16 @@ static struct clk_branch ne_gcc_ahb2phy_clk = {
 		.enable_mask = BIT(0),
 		.hw.init = &(const struct clk_init_data) {
 			.name = "ne_gcc_ahb2phy_clk",
+			/*
+			 * NORD: gates the 0x088e0000 AHB2PHY CSR window that
+			 * holds the USB combo PHYs AND the m31 eUSB2 HS PHYs.
+			 * The m31 binding cannot take a cfg_ahb clock and its
+			 * init runs before the combo PHY enables this branch,
+			 * so its register writes bounce ("write ... FAILED",
+			 * hit live on usb_1 bring-up).  Keep the tiny bridge
+			 * always on.
+			 */
+			.flags = CLK_IS_CRITICAL,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1719,7 +1729,13 @@ static struct clk_branch ne_gcc_usb3_sec_phy_com_aux_clk = {
 
 static struct clk_branch ne_gcc_usb3_sec_phy_pipe_clk = {
 	.halt_reg = 0x2c074,
-	.halt_check = BRANCH_HALT_VOTED,
+	/*
+	 * NORD: same fix as the prim pipe clk above - the pipe clock is
+	 * sourced by the QMP PHY itself, so the halt bit only clears once
+	 * the PHY drives it; polling at enable time deadlocks qmp_combo
+	 * com_init ("status stuck at 'off'", hit live on usb_1 bring-up).
+	 */
+	.halt_check = BRANCH_HALT_SKIP,
 	.hwcg_reg = 0x2c074,
 	.hwcg_bit = 1,
 	.clkr = {
@@ -1940,6 +1956,8 @@ static const struct qcom_reset_map ne_gcc_nord_resets[] = {
 	[NE_GCC_USB3PHY_PHY_PRIM_BCR] = { 0x2b004 },
 	[NE_GCC_USB3PHY_PHY_SEC_BCR] = { 0x2d004 },
 	[NE_GCC_QUSB2PHY_PRIM_BCR] = { 0x2e000 },
+	/* IPcat chip 567: NE_GCC_QUSB2PHY_SEC_BCR @ negcc+0x2f000 */
+	[NE_GCC_QUSB2PHY_SEC_BCR] = { 0x2f000 },
 };
 
 static const struct clk_rcg_dfs_data ne_gcc_nord_dfs_clocks[] = {
