@@ -263,7 +263,13 @@ static int m31eusb2_phy_probe(struct platform_device *pdev)
 	if (IS_ERR(phy->base))
 		return PTR_ERR(phy->base);
 
-	phy->reset = devm_reset_control_get_exclusive(dev, NULL);
+	/*
+	 * Optional: not every instance has a dedicated PHY BCR (Nord's
+	 * USB2PHY_2 on the usb20s subsystem has none - only the subsystem
+	 * BCR exists, and pulsing that from phy_init resets the DWC3 core
+	 * the glue just initialized).
+	 */
+	phy->reset = devm_reset_control_get_optional_exclusive(dev, NULL);
 	if (IS_ERR(phy->reset))
 		return PTR_ERR(phy->reset);
 
