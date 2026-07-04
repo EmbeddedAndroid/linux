@@ -1083,16 +1083,123 @@
 	 * in phy-qcom-m31-eusb2).  The dwc3 controller will not bind
 	 * without a usb2-phy.
 	 */
-	usb_0_hsphy: phy@fd3000 {
+	/*
+	 * eUSB2 HS PHY bases per IPcat chip 567 (0x088e0000 AHB2PHY window):
+	 * USB2PHY_0 @ 0x088ea000 (usb_0), USB2PHY_1 @ 0x088eb000 (usb_1),
+	 * USB2PHY_2 @ 0x088e0000 (usb20s/EUD).  The earlier 0x00fd3000 base
+	 * decodes to NOTHING on this chip (same copy-paste family as the
+	 * old 0xfd5000 combo-PHY bug): every HS PHY init write landed in a
+	 * hole, so nothing ever enumerated at high speed.
+	 */
+	usb_0_hsphy: phy@88ea000 {
 		compatible = "qcom,glymur-m31-eusb2-phy",
 			     "qcom,sm8750-m31-eusb2-phy";
-		reg = <0x0 0x00fd3000 0x0 0x29c>;
+		reg = <0x0 0x088ea000 0x0 0x29c>;
 		#phy-cells = <0>;
 
 		clocks = <&rpmhcc RPMH_CXO_CLK>;
 		clock-names = "ref";
 
 		resets = <&negcc NE_GCC_QUSB2PHY_PRIM_BCR>;
+
+		status = "disabled";
+	};
+
+	/*
+	 * USB-2 (usb20s) HS PHY - USB2PHY_2 @ 0x088e0000.  Serves the ADP's
+	 * JUSB2 Type-A jack through the on-board PTN3222 eUSB2 repeater
+	 * (reset = PML GPIO_03 hog; VBUS = PMH GPIO_03 hog).  No dedicated
+	 * PHY BCR exists in negcc for this instance - USB20_PRIM_BCR resets
+	 * the usb20 subsystem (the dwc3-qcom glue's reset is optional and
+	 * omitted on usb_2 to avoid an exclusive-reset conflict).
+	 */
+	usb_2_hsphy: phy@88e0000 {
+		compatible = "qcom,glymur-m31-eusb2-phy",
+			     "qcom,sm8750-m31-eusb2-phy";
+		reg = <0x0 0x088e0000 0x0 0x29c>;
+		#phy-cells = <0>;
+
+		clocks = <&rpmhcc RPMH_CXO_CLK>;
+		clock-names = "ref";
+
+		/*
+		 * No resets: USB2PHY_2 has no dedicated BCR, and pulsing the
+		 * USB20_PRIM subsystem BCR from phy_init resets the DWC3
+		 * core mid-probe (xhci then dies "can't setup: -110" - hit
+		 * live).  The m31 driver treats the reset as optional.
+		 */
+
+		status = "disabled";
+	};
+
+	/*
+	 * USB-2 DWC3 (usb20s @ 0xa200000, IPcat) - HS-only controller for
+	 * the Type-A jack.  IRQ INTIDs from IPcat map 3711: usb20s
+	 * ctrl_irq[0]=942, power_event=939 -> GIC_SPI 910/907.  No
+	 * assigned-clocks (glymur's HS-only instance runs on RCG defaults).
+	 * iommu SID pattern-guessed 0x1480 (usb_0=0x1420, usb_1=0x1460); an
+	 * SMMU fault will name the real one.
+	 */
+	usb_2: usb@a200000 {
+		compatible = "qcom,glymur-dwc3", "qcom,snps-dwc3";
+		reg = <0x0 0x0a200000 0x0 0xfc100>;
+
+		clocks = <&negcc NE_GCC_CNOC_USB2_AXI_CLK>,
+			 <&negcc NE_GCC_USB20_MASTER_CLK>,
+			 <&negcc NE_GCC_AGGRE_NOC_USB2_AXI_CLK>,
+			 <&negcc NE_GCC_USB20_SLEEP_CLK>,
+			 <&negcc NE_GCC_USB20_MOCK_UTMI_CLK>;
+		clock-names = "cfg_noc",
+			      "core",
+			      "iface",
+			      "sleep",
+			      "mock_utmi";
+
+		assigned-clocks = <&negcc NE_GCC_USB20_MOCK_UTMI_CLK>,
+				  <&negcc NE_GCC_USB20_MASTER_CLK>;
+		assigned-clock-rates = <19200000>, <120000000>;
+
+		interrupts-extended = <&intc GIC_SPI 910 IRQ_TYPE_LEVEL_HIGH>,
+				      <&intc GIC_SPI 907 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "dwc_usb3",
+				  "pwr_event";
+
+		power-domains = <&negcc NE_GCC_USB20_PRIM_GDSC>;
+
+		/* No iommus (bring-up): direct DMA + arm-smmu.disable_bypass=0,
+		 * same rationale as usb_0 (the 0x1480 SID was copy-paste; dwc3
+		 * fans DMA over several real streams). Lets the Type-A host port
+		 * enumerate devices. TODO: real SID list/mask from IPcat. */
+
+		interconnects = <&aggre1_noc_tile MASTER_USB2 QCOM_ICC_TAG_ALWAYS
+				 &mc_virt SLAVE_EBI1 QCOM_ICC_TAG_ALWAYS>,
+				<&hscnoc MASTER_APPSS_PROC QCOM_ICC_TAG_ALWAYS
+				 &config_noc SLAVE_USB2 QCOM_ICC_TAG_ALWAYS>;
+		interconnect-names = "usb-ddr", "apps-usb";
+
+		phys = <&usb_2_hsphy>;
+		phy-names = "usb2-phy";
+
+		dr_mode = "host";
+		maximum-speed = "high-speed";
+
+		snps,dis_u2_susphy_quirk;
+		snps,dis_enblslpm_quirk;
+
+		status = "disabled";
+	};
+
+	/* USB-1 HS (eUSB2) PHY - upstream port of the onboard hub (U13). */
+	usb_1_hsphy: phy@88eb000 {
+		compatible = "qcom,glymur-m31-eusb2-phy",
+			     "qcom,sm8750-m31-eusb2-phy";
+		reg = <0x0 0x088eb000 0x0 0x29c>;
+		#phy-cells = <0>;
+
+		clocks = <&rpmhcc RPMH_CXO_CLK>;
+		clock-names = "ref";
+
+		resets = <&negcc NE_GCC_QUSB2PHY_SEC_BCR>;
 
 		status = "disabled";
 	};
@@ -1119,15 +1226,40 @@
 			      "sleep",
 			      "mock_utmi";
 
-		interrupts-extended = <&intc GIC_SPI 140 IRQ_TYPE_LEVEL_HIGH>,
-				      <&intc GIC_SPI 371 IRQ_TYPE_LEVEL_HIGH>;
+		assigned-clocks = <&negcc NE_GCC_USB31_PRIM_MOCK_UTMI_CLK>,
+				  <&negcc NE_GCC_USB31_PRIM_MASTER_CLK>;
+		assigned-clock-rates = <19200000>, <200000000>;
+
+		/*
+		 * IPcat map 3711, u_usb31_gen2_subsystem_0 (= this a600000
+		 * controller; subsystem_1 in the same map is SPI 917/918 which
+		 * matches usb_1 above, confirming the mapping): ctrl_irq[0] ->
+		 * SYS_apcsQgicSPI[133], power_event -> SPI[130].  The old 140/371
+		 * were placeholders never looked up - the dwc3 core IRQ was
+		 * registered on a dead line (INTID 172) and fired ZERO times, so
+		 * in peripheral mode the gadget saw no reset/SETUP events and never
+		 * enumerated (host: descriptor read -110).  Host mode hid this
+		 * (xhci uses its own path).
+		 */
+		interrupts-extended = <&intc GIC_SPI 133 IRQ_TYPE_LEVEL_HIGH>,
+				      <&intc GIC_SPI 130 IRQ_TYPE_LEVEL_HIGH>;
 		interrupt-names = "dwc_usb3",
 				  "pwr_event";
 
 		power-domains = <&negcc NE_GCC_USB31_PRIM_GDSC>;
 		resets = <&negcc NE_GCC_USB31_PRIM_BCR>;
 
-		iommus = <&apps_smmu_0 0x1420 0x0>;
+		/*
+		 * No iommus on purpose (bring-up): the dwc3 gadget DMA fans out
+		 * over MANY apps_smmu_0 streams (observed live: 0x14e0, 0x1500,
+		 * 0x15c0, ... - not the single 0x1420 the copy-paste declared).
+		 * A translating domain covering only some of them left the rest
+		 * faulting so the gadget never answered SETUP (host: descriptor
+		 * read -110).  With no domain, dwc3 does direct (physical) DMA and
+		 * arm-smmu.disable_bypass=0 (cmdline) lets its unknown streams pass
+		 * through untranslated - physical==physical, no stream-ID guessing.
+		 * TODO proper fix: the exact usb_0 SID list/mask from IPcat.
+		 */
 
 		phys = <&usb_0_hsphy>,
 		       <&usb_0_qmpphy QMP_USB43DP_USB3_PHY>;
@@ -1135,6 +1267,7 @@
 			    "usb3-phy";
 
 		dr_mode = "host";
+		maximum-speed = "super-speed";
 
 		snps,hird-threshold = /bits/ 8 <0x0>;
 		snps,dis-u1-entry-quirk;
@@ -1161,14 +1294,33 @@
 	 * set on the port@0 endpoint) phy-qcom-qmp-combo runs the PHY in
 	 * QMPPHY_MODE_DP_ONLY.
 	 */
-	usb_0_qmpphy: phy@fd5000 {
-		compatible = "qcom,glymur-qmp-usb3-dp-phy";
-		reg = <0x0 0x00fd5000 0x0 0x8000>;
+	usb_0_qmpphy: phy@88e1000 {
+		/*
+		 * USB3_DP_PHY_0. Nord's combo PHY is the sm8550-generation IP
+		 * (v3 register offsets: com 0x0, usb3 serdes/tx/rx 0x1000+,
+		 * dp_serdes 0x2000, dp_dp_phy 0x2a00), NOT glymur (which uses
+		 * the v8 usb43dp layout with tx at 0x4000). The earlier
+		 * glymur compatible + base 0xfd5000 was a copy-paste that does
+		 * not exist in the Nord memory map (IPcat chip 567: 0xfd5000
+		 * decodes to nothing; 0x088e1000 = USB3_DP_PHY_0_USB3_DP_COM),
+		 * so every PHY init write landed in a hole and DP AUX stayed
+		 * dead (0-byte EDID). PHY_1 begins at 0x088e4000, so the
+		 * window is 0x3000.
+		 */
+		compatible = "qcom,sm8550-qmp-usb3-dp-phy";
+		reg = <0x0 0x088e1000 0x0 0x3000>;
+		/*
+		 * cfg_ahb = ne_gcc_ahb2phy_clk: the AHB2PHY bridge clock for
+		 * the 0x088e0000 CSR window. Without it every QMP register
+		 * read returns 0x01010101 fill (block dark) - the open stack
+		 * does not get it enabled by XBL the way stock does.
+		 */
 		clocks = <&negcc NE_GCC_USB3_PRIM_PHY_AUX_CLK>,
+			 <&negcc NE_GCC_AHB2PHY_CLK>,
 			 <&rpmhcc RPMH_CXO_CLK>,
 			 <&negcc NE_GCC_USB3_PRIM_PHY_COM_AUX_CLK>,
 			 <&negcc NE_GCC_USB3_PRIM_PHY_PIPE_CLK>;
-		clock-names = "aux", "ref", "com_aux", "usb3_pipe";
+		clock-names = "aux", "cfg_ahb", "ref", "com_aux", "usb3_pipe";
 		resets = <&negcc NE_GCC_USB3_PHY_PRIM_BCR>,
 			 <&negcc NE_GCC_USB3PHY_PHY_PRIM_BCR>;
 		reset-names = "phy", "common";
@@ -1194,6 +1346,129 @@
 				};
 			};
 		};
+	};
+
+	/*
+	 * USB3_DP_PHY_1 @ 0x088e4000 (per the PHY_0 comment above: PHY_1
+	 * begins at 0x088e4000, window 0x3000).  Serves usb_1, whose SS
+	 * lanes go to the onboard USB hub's upstream port (schematic p58:
+	 * U13 upstream = SOC_USB1_SS_*).  DP side unused.
+	 */
+	usb_1_qmpphy: phy@88e4000 {
+		compatible = "qcom,sm8550-qmp-usb3-dp-phy";
+		reg = <0x0 0x088e4000 0x0 0x3000>;
+		clocks = <&negcc NE_GCC_USB3_SEC_PHY_AUX_CLK>,
+			 <&negcc NE_GCC_AHB2PHY_CLK>,
+			 <&rpmhcc RPMH_CXO_CLK>,
+			 <&negcc NE_GCC_USB3_SEC_PHY_COM_AUX_CLK>,
+			 <&negcc NE_GCC_USB3_SEC_PHY_PIPE_CLK>;
+		clock-names = "aux", "cfg_ahb", "ref", "com_aux", "usb3_pipe";
+		resets = <&negcc NE_GCC_USB3_PHY_SEC_BCR>,
+			 <&negcc NE_GCC_USB3PHY_PHY_SEC_BCR>;
+		reset-names = "phy", "common";
+		power-domains = <&negcc NE_GCC_USB3_SEC_PHY_GDSC>;
+		#clock-cells = <1>;
+		#phy-cells = <1>;
+		status = "disabled";
+
+		/*
+		 * USB3-only, fixed normal orientation (no CC controller
+		 * driving a mode/orientation switch yet).  Without this the
+		 * driver cannot determine mode, the pipe clock never runs,
+		 * and the dwc3 core soft reset times out (hit live).
+		 */
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				#address-cells = <1>;
+				#size-cells = <0>;
+				reg = <0>;
+
+				endpoint@1 {
+					reg = <1>;
+					/* Must be <1 0>: this driver's static-mode logic only
+					 * derives USB3_ONLY from a *reverse* orientation; <0 1>
+					 * parses as "no orientation" -> "unable to determine
+					 * orientation & mode". Real lane routing is set by
+					 * TYPEC_CTRL, not this. */
+					data-lanes = <1 0>;
+				};
+			};
+		};
+	};
+
+	/*
+	 * USB-1 DWC3 controller @ 0x0a400000 (IPcat USB3_1_USB31_GEN2
+	 * subsystem).  negcc USB31_SEC clock/GDSC/BCR set.  IRQ INTIDs from
+	 * IPcat map 3711: subsystem_1 ctrl_irq[0]=949, power_event=950 ->
+	 * GIC_SPI 917/918.  iommu SID 0x1460 modeled on glymur usb_1 (an
+	 * SMMU fault will name the real SID if this is wrong).
+	 */
+	usb_1: usb@a400000 {
+		compatible = "qcom,glymur-dwc3", "qcom,snps-dwc3";
+		reg = <0x0 0x0a400000 0x0 0xfc100>;
+
+		clocks = <&negcc NE_GCC_CNOC_USB3_SEC_AXI_CLK>,
+			 <&negcc NE_GCC_USB31_SEC_MASTER_CLK>,
+			 <&negcc NE_GCC_AGGRE_NOC_USB3_SEC_AXI_CLK>,
+			 <&negcc NE_GCC_USB31_SEC_SLEEP_CLK>,
+			 <&negcc NE_GCC_USB31_SEC_MOCK_UTMI_CLK>;
+		clock-names = "cfg_noc",
+			      "core",
+			      "iface",
+			      "sleep",
+			      "mock_utmi";
+
+		assigned-clocks = <&negcc NE_GCC_USB31_SEC_MOCK_UTMI_CLK>,
+				  <&negcc NE_GCC_USB31_SEC_MASTER_CLK>;
+		assigned-clock-rates = <19200000>, <200000000>;
+
+		interrupts-extended = <&intc GIC_SPI 917 IRQ_TYPE_LEVEL_HIGH>,
+				      <&intc GIC_SPI 918 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "dwc_usb3",
+				  "pwr_event";
+
+		power-domains = <&negcc NE_GCC_USB31_SEC_GDSC>;
+		resets = <&negcc NE_GCC_USB31_SEC_BCR>;
+
+		/* No iommus (bring-up): direct DMA + arm-smmu.disable_bypass=0,
+		 * same rationale as usb_0 (the 0x1460 SID was copy-paste). Lets
+		 * usb_1's onboard hub (U13) + its JUSB1/JUSB2 downstream ports
+		 * enumerate. TODO: real SID list/mask from IPcat. */
+
+		/*
+		 * Without the apps-usb config-noc vote the USB3_1 CSR path
+		 * never opens and dwc3 core init dies -ETIMEDOUT (hit live:
+		 * GDSC + clocks verified good, first probe attempt timed
+		 * out with these absent).
+		 */
+		interconnects = <&aggre1_noc_tile MASTER_USB3_1 QCOM_ICC_TAG_ALWAYS
+				 &mc_virt SLAVE_EBI1 QCOM_ICC_TAG_ALWAYS>,
+				<&hscnoc MASTER_APPSS_PROC QCOM_ICC_TAG_ALWAYS
+				 &config_noc SLAVE_USB3_1 QCOM_ICC_TAG_ALWAYS>;
+		interconnect-names = "usb-ddr", "apps-usb";
+
+		phys = <&usb_1_hsphy>,
+		       <&usb_1_qmpphy QMP_USB43DP_USB3_PHY>;
+		phy-names = "usb2-phy",
+			    "usb3-phy";
+
+		dr_mode = "host";
+		maximum-speed = "super-speed";
+
+		snps,hird-threshold = /bits/ 8 <0x0>;
+		snps,dis-u1-entry-quirk;
+		snps,dis-u2-entry-quirk;
+		snps,is-utmi-l1-suspend;
+		snps,usb3_lpm_capable;
+		snps,has-lpm-erratum;
+		tx-fifo-resize;
+		snps,dis_u2_susphy_quirk;
+		snps,dis_enblslpm_quirk;
+
+		status = "disabled";
 	};
 
 	mdss_dp2_phy: phy@aec2a00 {
