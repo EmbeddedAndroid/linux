@@ -1020,6 +1020,10 @@ int audioreach_tplg_init(struct snd_soc_component *component);
 
 /* Module specific */
 void audioreach_graph_free_buf(struct q6apm_graph *graph);
+int audioreach_send_cmd_sync_timeout(struct device *dev, gpr_device_t *gdev, struct gpr_ibasic_rsp_result_t *result,
+				     struct mutex *cmd_lock, gpr_port_t *port, wait_queue_head_t *cmd_wait,
+				     const struct gpr_pkt *pkt, uint32_t rsp_opcode,
+				     unsigned long timeout, bool quiet);
 int audioreach_send_cmd_sync(struct device *dev, gpr_device_t *gdev, struct gpr_ibasic_rsp_result_t *result,
 			     struct mutex *cmd_lock, gpr_port_t *port, wait_queue_head_t *cmd_wait,
 			     const struct gpr_pkt *pkt, uint32_t rsp_opcode);

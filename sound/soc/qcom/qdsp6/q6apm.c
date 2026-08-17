@@ -29,13 +29,21 @@ struct apm_graph_mgmt_cmd {
 
 static struct q6apm *g_apm;
 
-int q6apm_send_cmd_sync(struct q6apm *apm, const struct gpr_pkt *pkt,
-			uint32_t rsp_opcode)
+int q6apm_send_cmd_sync_timeout(struct q6apm *apm, const struct gpr_pkt *pkt,
+				uint32_t rsp_opcode, unsigned long timeout, bool quiet)
 {
 	gpr_device_t *gdev = apm->gdev;
 
-	return audioreach_send_cmd_sync(&gdev->dev, gdev, &apm->result, &apm->lock,
-					NULL, &apm->wait, pkt, rsp_opcode);
+	return audioreach_send_cmd_sync_timeout(&gdev->dev, gdev, &apm->result, &apm->lock,
+						NULL, &apm->wait, pkt, rsp_opcode,
+						timeout, quiet);
+}
+EXPORT_SYMBOL_GPL(q6apm_send_cmd_sync_timeout);
+
+int q6apm_send_cmd_sync(struct q6apm *apm, const struct gpr_pkt *pkt,
+			uint32_t rsp_opcode)
+{
+	return q6apm_send_cmd_sync_timeout(apm, pkt, rsp_opcode, 5 * HZ, false);
 }
 
 static struct audioreach_graph *q6apm_get_audioreach_graph(struct q6apm *apm, uint32_t graph_id)
@@ -142,12 +150,33 @@ static void q6apm_put_audioreach_graph(struct kref *ref)
 
 static int q6apm_get_apm_state(struct q6apm *apm)
 {
-	struct gpr_pkt *pkt __free(kfree) = audioreach_alloc_apm_cmd_pkt(0,
-								APM_CMD_GET_SPF_STATE, 0);
-	if (IS_ERR(pkt))
-		return PTR_ERR(pkt);
+	int ret, retries = 50;
 
-	q6apm_send_cmd_sync(apm, pkt, APM_CMD_RSP_GET_SPF_STATE);
+	/*
+	 * During boot the APM service may take a short time after GPR registration
+	 * before responding to GET_SPF_STATE. Instead of a single 5-second blocking
+	 * wait on an unhandled initial packet, poll with short timeouts (100ms) so
+	 * we unblock as soon as the DSP APM service is ready.
+	 */
+	while (retries--) {
+		struct gpr_pkt *pkt __free(kfree) = audioreach_alloc_apm_cmd_pkt(0,
+									APM_CMD_GET_SPF_STATE, 0);
+		if (IS_ERR(pkt))
+			return PTR_ERR(pkt);
+
+		ret = q6apm_send_cmd_sync_timeout(apm, pkt, APM_CMD_RSP_GET_SPF_STATE,
+						  msecs_to_jiffies(100), true);
+		if (!ret && apm->state) {
+			dev_info(apm->dev, "APM service ready (state: 0x%x)\n", apm->state);
+			return apm->state;
+		}
+
+		if (ret != -ETIMEDOUT)
+			break;
+	}
+
+	if (!apm->state)
+		dev_err(apm->dev, "APM service did not become ready (state: 0x%x)\n", apm->state);
 
 	return apm->state;
 }

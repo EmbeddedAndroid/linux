@@ -590,10 +590,11 @@ void *audioreach_alloc_graph_pkt(struct q6apm *apm,
 }
 EXPORT_SYMBOL_GPL(audioreach_alloc_graph_pkt);
 
-int audioreach_send_cmd_sync(struct device *dev, gpr_device_t *gdev,
-			     struct gpr_ibasic_rsp_result_t *result, struct mutex *cmd_lock,
-			     gpr_port_t *port, wait_queue_head_t *cmd_wait,
-			     const struct gpr_pkt *pkt, uint32_t rsp_opcode)
+int audioreach_send_cmd_sync_timeout(struct device *dev, gpr_device_t *gdev,
+				     struct gpr_ibasic_rsp_result_t *result, struct mutex *cmd_lock,
+				     gpr_port_t *port, wait_queue_head_t *cmd_wait,
+				     const struct gpr_pkt *pkt, uint32_t rsp_opcode,
+				     unsigned long timeout, bool quiet)
 {
 
 	const struct gpr_hdr *hdr = &pkt->hdr;
@@ -615,15 +616,17 @@ int audioreach_send_cmd_sync(struct device *dev, gpr_device_t *gdev,
 
 	if (rsp_opcode)
 		rc = wait_event_timeout(*cmd_wait, (result->opcode == hdr->opcode) ||
-					(result->opcode == rsp_opcode),	5 * HZ);
+					(result->opcode == rsp_opcode),	timeout);
 	else
-		rc = wait_event_timeout(*cmd_wait, (result->opcode == hdr->opcode), 5 * HZ);
+		rc = wait_event_timeout(*cmd_wait, (result->opcode == hdr->opcode), timeout);
 
 	if (!rc) {
-		dev_err(dev, "CMD timeout for [%x] opcode\n", hdr->opcode);
+		if (!quiet)
+			dev_err(dev, "CMD timeout for [%x] opcode\n", hdr->opcode);
 		rc = -ETIMEDOUT;
 	} else if (result->status > 0) {
-		dev_err(dev, "DSP returned error[%x] %x\n", hdr->opcode, result->status);
+		if (!quiet)
+			dev_err(dev, "DSP returned error[%x] %x\n", hdr->opcode, result->status);
 		rc = -EINVAL;
 	} else {
 		/* DSP successfully finished the command */
@@ -633,6 +636,17 @@ int audioreach_send_cmd_sync(struct device *dev, gpr_device_t *gdev,
 err:
 	mutex_unlock(cmd_lock);
 	return rc;
+}
+EXPORT_SYMBOL_GPL(audioreach_send_cmd_sync_timeout);
+
+int audioreach_send_cmd_sync(struct device *dev, gpr_device_t *gdev,
+			     struct gpr_ibasic_rsp_result_t *result, struct mutex *cmd_lock,
+			     gpr_port_t *port, wait_queue_head_t *cmd_wait,
+			     const struct gpr_pkt *pkt, uint32_t rsp_opcode)
+{
+	return audioreach_send_cmd_sync_timeout(dev, gdev, result, cmd_lock,
+						port, cmd_wait, pkt, rsp_opcode,
+						5 * HZ, false);
 }
 EXPORT_SYMBOL_GPL(audioreach_send_cmd_sync);
 
