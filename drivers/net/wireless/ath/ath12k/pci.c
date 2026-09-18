@@ -504,9 +504,10 @@ static int ath12k_pci_ext_grp_napi_poll(struct napi_struct *napi, int budget)
 
 	work_done = ath12k_dp_service_srng(dp, irq_grp, budget);
 	if (work_done < budget) {
-		napi_complete_done(napi, work_done);
-		for (i = 0; i < irq_grp->num_irq; i++)
-			enable_irq(irq_grp->ab->irq_num[irq_grp->irqs[i]]);
+		if (napi_complete_done(napi, work_done)) {
+			for (i = 0; i < irq_grp->num_irq; i++)
+				enable_irq(irq_grp->ab->irq_num[irq_grp->irqs[i]]);
+		}
 	}
 
 	if (work_done > budget)

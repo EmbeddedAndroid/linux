@@ -122,6 +122,11 @@ static const struct of_device_id pwrseq_pwrctrl_of_match[] = {
 		.compatible = "pci17cb,1107",
 		.data = &pwrseq_pwrctrl_qcom_wcn_pdata,
 	},
+	{
+		/* ATH12K in QCC2072 package. */
+		.compatible = "pci17cb,1112",
+		.data = &pwrseq_pwrctrl_qcom_wcn_pdata,
+	},
 	{ }
 };
 MODULE_DEVICE_TABLE(of, pwrseq_pwrctrl_of_match);
