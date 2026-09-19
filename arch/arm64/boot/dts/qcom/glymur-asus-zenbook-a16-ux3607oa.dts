@@ -990,8 +990,7 @@
 };
 
 &remoteproc_soccp {
-	firmware-name = "qcom/glymur/ASUSTeK/UX3607OA/soccp.mbn",
-			"qcom/glymur/ASUSTeK/UX3607OA/soccp_dtb.mbn";
+	/* Firmware-attached SOCCP: preserve the current DT's default names. */
 };
 
 &smb2370_j_e2_eusb2_repeater {
@@ -1437,6 +1436,11 @@
 	refgen-supply = <&vreg_l4f_e1>;
 
 	status = "okay";
+};
+
+/* Compatibility only; built-in CPUCP versus polling needs a separate trial. */
+&{/firmware/scmi} {
+	arm,no-completion-irq;
 };
 
 /* Local compatibility: retain the validated CPU/LLC cooling-map coverage. */
