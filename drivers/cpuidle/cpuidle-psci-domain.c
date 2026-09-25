@@ -121,19 +121,16 @@ static void psci_pd_remove(void)
 	}
 }
 
-static const struct of_device_id psci_of_match[] = {
-	{ .compatible = "arm,psci-1.0" },
-	{}
-};
-
-static int psci_cpuidle_domain_probe(struct platform_device *pdev)
+static void psci_pd_remove_topology(struct device_node *np)
 {
-	struct device_node *np = pdev->dev.of_node;
-	bool use_osi = psci_has_osi_support();
-	int ret = 0, pd_count = 0;
+	dt_idle_pd_remove_topology(np);
+	psci_pd_remove();
+}
 
-	if (!np)
-		return -ENODEV;
+/* Returns the number of PM domains created or a negative error code. */
+static int psci_pd_init_topology(struct device_node *np, bool use_osi)
+{
+	int ret, pd_count = 0;
 
 	/*
 	 * Parse child nodes for the "#power-domain-cells" property and
@@ -145,32 +142,63 @@ static int psci_cpuidle_domain_probe(struct platform_device *pdev)
 
 		ret = psci_pd_init(node, use_osi);
 		if (ret)
-			goto exit;
+			return ret;
 
 		pd_count++;
 	}
 
-	/* Bail out if not using the hierarchical CPU topology. */
 	if (!pd_count)
 		return 0;
 
 	/* Link genpd masters/subdomains to model the CPU topology. */
 	ret = dt_idle_pd_init_topology(np);
-	if (ret)
-		goto remove_pd;
+	if (ret) {
+		psci_pd_remove_topology(np);
+		return ret;
+	}
 
-	/* let's try to enable OSI. */
-	ret = psci_set_osi_mode(use_osi);
-	if (ret)
-		goto remove_pd;
+	return pd_count;
+}
+
+static const struct of_device_id psci_of_match[] = {
+	{ .compatible = "arm,psci-1.0" },
+	{}
+};
+
+static int psci_cpuidle_domain_probe(struct platform_device *pdev)
+{
+	struct device_node *np = pdev->dev.of_node;
+	bool use_osi = psci_has_osi_support();
+	int ret;
+
+	if (!np)
+		return -ENODEV;
+
+	ret = psci_pd_init_topology(np, use_osi);
+	if (ret < 0)
+		goto exit;
+
+	/* Bail out if not using the hierarchical CPU topology. */
+	if (!ret)
+		return 0;
+
+	/*
+	 * Firmware that denies the switch to OSI mode stays in PC mode.
+	 * Devices other than CPUs may use the PM domains, so re-create them
+	 * for PC mode rather than removing them.
+	 */
+	if (use_osi && psci_set_osi_mode(true)) {
+		psci_pd_remove_topology(np);
+		use_osi = false;
+		ret = psci_pd_init_topology(np, use_osi);
+		if (ret < 0)
+			goto exit;
+	}
 
 	pr_info("Initialized CPU PM domain topology using %s mode\n",
 		use_osi ? "OSI" : "PC");
 	return 0;
 
-remove_pd:
-	dt_idle_pd_remove_topology(np);
-	psci_pd_remove();
 exit:
 	pr_err("failed to create CPU PM domains ret=%d\n", ret);
 	return ret;
