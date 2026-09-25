@@ -23,3 +23,14 @@ config DRIVER_SWNODE_KUNIT_TEST
 	tristate "KUnit Tests for software node fw_devlink links" if !KUNIT_ALL_TESTS
 	depends on KUNIT
 	default KUNIT_ALL_TESTS
+
+config PM_CLK_KUNIT_TEST
+	tristate "KUnit Tests for the PM clock layer" if !KUNIT_ALL_TESTS
+	depends on KUNIT && PM_CLK && COMMON_CLK
+	default KUNIT_ALL_TESTS
+	help
+	  KUnit tests for the PM clock layer (pm_clk_resume() and
+	  pm_clk_suspend()), including a clock that fails to enable on
+	  resume.
+
+	  If unsure, say N.
