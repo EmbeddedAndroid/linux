@@ -8,9 +8,11 @@
  */
 
 #include <linux/firmware.h>
+#include <linux/fwnode.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/notifier.h>
+#include <linux/of.h>
 #include <linux/remoteproc.h>
 #include <linux/remoteproc/qcom_rproc.h>
 #include <linux/auxiliary_bus.h>
@@ -252,6 +254,9 @@ void qcom_add_glink_subdev(struct rproc *rproc, struct qcom_rproc_glink *glink,
 	if (!glink->node)
 		return;
 
+	/* The edge and its children become devices only once the remote runs */
+	fwnode_set_flag(of_fwnode_handle(glink->node), FWNODE_FLAG_POPULATED_LATER);
+
 	glink->ssr_name = kstrdup_const(ssr_name, GFP_KERNEL);
 	if (!glink->ssr_name) {
 		of_node_put(glink->node);
@@ -355,6 +360,9 @@ void qcom_add_smd_subdev(struct rproc *rproc, struct qcom_rproc_subdev *smd)
 	smd->node = of_get_child_by_name(dev->parent->of_node, "smd-edge");
 	if (!smd->node)
 		return;
+
+	/* The edge and its children become devices only once the remote runs */
+	fwnode_set_flag(of_fwnode_handle(smd->node), FWNODE_FLAG_POPULATED_LATER);
 
 	smd->dev = dev;
 	smd->subdev.start = smd_subdev_start;
