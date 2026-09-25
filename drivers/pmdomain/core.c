@@ -2960,6 +2960,14 @@ void of_genpd_del_provider(struct device_node *np)
 	}
 	mutex_unlock(&of_genpd_mutex);
 	mutex_unlock(&gpd_list_lock);
+
+	/*
+	 * device_del() leaves the removal of the device links of a genpd's
+	 * device to a workqueue, which drops their references to the device
+	 * later. The genpd may be freed as soon as it has been removed, so
+	 * wait for that.
+	 */
+	device_link_wait_removal();
 }
 EXPORT_SYMBOL_GPL(of_genpd_del_provider);
 
