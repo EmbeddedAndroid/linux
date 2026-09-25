@@ -144,6 +144,9 @@ static void pm_clk_op_unlock(struct pm_subsys_data *psd, unsigned long *flags)
  * @dev: The device for the given clock
  * @ce: PM clock entry corresponding to the clock.
  *
+ * A failure is logged as an error unless it is -ESHUTDOWN, which a clock
+ * provider returns once it is shutting down.
+ *
  * Return: 0 on success or if the clock is not in a state to be enabled,
  * the error from the clock framework otherwise.
  */
@@ -161,11 +164,20 @@ static inline int __pm_clk_enable(struct device *dev, struct pm_clock_entry *ce)
 	default:
 		return 0;
 	}
-	if (!ret)
+	if (!ret) {
 		ce->status = PCE_STATUS_ENABLED;
-	else
+	} else if (ret == -ESHUTDOWN) {
+		/*
+		 * The consumers of a provider that is going away are unbound
+		 * first, and the driver core resumes each of them before its
+		 * unbind: that resume is expected to fail.
+		 */
+		dev_dbg(dev, "%s: provider of clk %p is shutting down\n",
+			__func__, ce->clk);
+	} else {
 		dev_err(dev, "%s: failed to enable clk %p, error %d\n",
 			__func__, ce->clk, ret);
+	}
 
 	return ret;
 }
@@ -521,7 +533,10 @@ EXPORT_SYMBOL_GPL(pm_clk_suspend);
  *
  * If a clock fails to enable, the clocks preceding it in the list are
  * disabled again and the error is returned, so that the device is not
- * treated as operational while one of its clocks is off.
+ * treated as operational while one of its clocks is off. A clock provider
+ * that is shutting down, for example because the remote processor that
+ * implements its clocks has stopped, fails them with -ESHUTDOWN; that
+ * error is returned like any other, but not logged as an error.
  *
  * Return: 0 on success, a negative error code otherwise.
  */

@@ -147,6 +147,21 @@ static void pm_clk_test_resume_error(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, ctx->vote.prepare_count, 0);
 }
 
+/*
+ * A clock whose provider is shutting down fails the resume like any other
+ * failing clock, although the failure is not logged as an error.
+ */
+static void pm_clk_test_resume_shutdown(struct kunit *test)
+{
+	struct pm_clk_test_ctx *ctx = test->priv;
+
+	ctx->vote.prepare_ret = -ESHUTDOWN;
+
+	KUNIT_EXPECT_EQ(test, pm_clk_resume(ctx->dev), -ESHUTDOWN);
+	KUNIT_EXPECT_EQ(test, ctx->gate.enable_count, 0);
+	KUNIT_EXPECT_EQ(test, ctx->vote.prepare_count, 0);
+}
+
 /* A failed resume leaves the clock list in a state that a retry can use. */
 static void pm_clk_test_resume_retry(struct kunit *test)
 {
@@ -168,6 +183,7 @@ static void pm_clk_test_resume_retry(struct kunit *test)
 static struct kunit_case pm_clk_test_cases[] = {
 	KUNIT_CASE(pm_clk_test_resume_suspend),
 	KUNIT_CASE(pm_clk_test_resume_error),
+	KUNIT_CASE(pm_clk_test_resume_shutdown),
 	KUNIT_CASE(pm_clk_test_resume_retry),
 	{ }
 };
