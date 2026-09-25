@@ -22,6 +22,7 @@ struct q6prm {
 	wait_queue_head_t wait;
 	struct gpr_ibasic_rsp_result_t result;
 	struct mutex lock;
+	bool removed;
 };
 
 #define PRM_CMD_REQUEST_HW_RSC		0x0100100F
@@ -61,6 +62,18 @@ static int q6prm_send_cmd_sync(struct q6prm *prm, struct gpr_pkt *pkt, uint32_t 
 					NULL, &prm->wait, pkt, rsp_opcode);
 }
 
+/*
+ * prm_remove() runs before the clock controller below the service and its
+ * consumers are removed, and from then on the packet router drops the
+ * responses to the service: a new request could only fail or time out, so
+ * it fails at once. Releases are still sent, so that a DSP that keeps
+ * running frees the resource even though its response is lost.
+ */
+static bool q6prm_removed(struct q6prm *prm)
+{
+	return READ_ONCE(prm->removed);
+}
+
 static int q6prm_set_hw_core_req(struct device *dev, uint32_t hw_block_id, bool enable)
 {
 	struct q6prm *prm = dev_get_drvdata(dev->parent);
@@ -69,6 +82,9 @@ static int q6prm_set_hw_core_req(struct device *dev, uint32_t hw_block_id, bool 
 	gpr_device_t *gdev = prm->gdev;
 	uint32_t opcode, rsp_opcode;
 	bool lpr_req = (hw_block_id == Q6PRM_HW_LPR_VOTE);
+
+	if (enable && q6prm_removed(prm))
+		return -ESHUTDOWN;
 
 	if (enable) {
 		opcode = PRM_CMD_REQUEST_HW_RSC;
@@ -121,6 +137,9 @@ static int q6prm_request_lpass_clock(struct device *dev, int clk_id, int clk_att
 	struct apm_module_param_data *param_data;
 	struct prm_cmd_request_rsc *req;
 	gpr_device_t *gdev = prm->gdev;
+
+	if (q6prm_removed(prm))
+		return -ESHUTDOWN;
 
 	struct gpr_pkt *pkt __free(kfree) =
 		audioreach_alloc_cmd_pkt(sizeof(*req), PRM_CMD_REQUEST_HW_RSC, 0,
@@ -228,6 +247,13 @@ static int prm_probe(gpr_device_t *gdev)
 	return devm_of_platform_populate(dev);
 }
 
+static void prm_remove(gpr_device_t *gdev)
+{
+	struct q6prm *prm = dev_get_drvdata(&gdev->dev);
+
+	WRITE_ONCE(prm->removed, true);
+}
+
 #ifdef CONFIG_OF
 static const struct of_device_id prm_device_id[]  = {
 	{ .compatible = "qcom,q6prm" },
@@ -238,6 +264,7 @@ MODULE_DEVICE_TABLE(of, prm_device_id);
 
 static gpr_driver_t prm_driver = {
 	.probe = prm_probe,
+	.remove = prm_remove,
 	.gpr_callback = prm_callback,
 	.driver = {
 		.name = "qcom-prm",
