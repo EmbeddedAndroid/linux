@@ -22018,6 +22018,7 @@ S:	Supported
 B:	https://bugzilla.kernel.org
 T:	git git://git.kernel.org/pub/scm/linux/kernel/git/rafael/linux-pm
 F:	drivers/base/power/
+F:	drivers/base/test/pm-clk-test.c
 F:	drivers/powercap/
 F:	include/linux/intel_rapl.h
 F:	include/linux/pm.h
