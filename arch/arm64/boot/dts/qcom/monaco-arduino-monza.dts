@@ -326,7 +326,7 @@
 		reg = <0x10>;
 		pinctrl-0 = <&max98091_default>;
 		pinctrl-names = "default";
-		interrupts-extended = <&tlmm 16 IRQ_TYPE_LEVEL_HIGH>; /* GPIO_16 */
+		interrupts-extended = <&tlmm 16 IRQ_TYPE_EDGE_FALLING>; /* GPIO_16 */
 		clocks = <&q6prmcc LPASS_CLK_ID_MCLK_3 LPASS_CLK_ATTRIBUTE_COUPLE_NO>;
 		clock-names = "mclk";
 		#sound-dai-cells = <0>;
