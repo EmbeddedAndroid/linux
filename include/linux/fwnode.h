@@ -42,6 +42,11 @@ struct device;
  * BEST_EFFORT: The fwnode/device needs to probe early and might be missing some
  *		suppliers. Only enforce ordering with suppliers that have
  *		drivers.
+ * POPULATED_LATER: The fwnode and its descendants are populated as struct
+ *		    devices only after the device of an ancestor has bound to
+ *		    its driver, for example once a remote processor has booted.
+ *		    fw_devlink must not assume that they will never become
+ *		    devices when that ancestor binds.
  */
 #define FWNODE_FLAG_LINKS_ADDED			0
 #define FWNODE_FLAG_NOT_DEVICE			1
@@ -49,6 +54,7 @@ struct device;
 #define FWNODE_FLAG_NEEDS_CHILD_BOUND_ON_ADD	3
 #define FWNODE_FLAG_BEST_EFFORT			4
 #define FWNODE_FLAG_VISITED			5
+#define FWNODE_FLAG_POPULATED_LATER		6
 
 struct fwnode_handle {
 	struct fwnode_handle *secondary;
