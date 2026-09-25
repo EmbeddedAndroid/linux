@@ -315,6 +315,109 @@ static void swnode_devlink_test_probe_order(struct kunit *test)
 	kunit_platform_device_unregister(test, consumer);
 }
 
+/*
+ * Delete a supplier device while its software node is still attached, so that
+ * the driver core sees the fwnode of the device it deletes, and detach the
+ * node only afterwards.
+ */
+static void swnode_test_supplier_delete(void *data)
+{
+	struct platform_device *pdev = data;
+
+	platform_device_del(pdev);
+	device_remove_software_node(&pdev->dev);
+	platform_device_put(pdev);
+}
+
+/*
+ * A supplier device that is deleted and then added again for the same fwnode
+ * must be linked to its consumer again: the consumer is unbound along with
+ * the first supplier device and probes again once the second one has bound.
+ */
+static void swnode_devlink_test_supplier_readded(struct kunit *test)
+{
+	static const struct software_node supplier_swnode = {
+		.name = "swnode-devlink-test-supplier",
+	};
+
+	const struct property_entry consumer_props[] = {
+		PROPERTY_ENTRY_REF("supplier-ref", &supplier_swnode),
+		{ }
+	};
+
+	struct platform_device *supplier, *consumer;
+	struct swnode_test_probe_order *order;
+	struct fwnode_handle *fwnode;
+	int ret;
+
+	order = kunit_kzalloc(test, sizeof(*order), GFP_KERNEL);
+	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, order);
+	init_waitqueue_head(&order->wq);
+
+	fwnode = kunit_software_node_register(test, &supplier_swnode);
+	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, fwnode);
+
+	ret = kunit_platform_driver_register(test, &swnode_test_supplier_driver);
+	KUNIT_ASSERT_EQ(test, ret, 0);
+	ret = kunit_platform_driver_register(test, &swnode_test_consumer_driver);
+	KUNIT_ASSERT_EQ(test, ret, 0);
+
+	consumer = kunit_platform_device_alloc(test, SWNODE_DEVLINK_TEST_CONSUMER,
+					       PLATFORM_DEVID_NONE);
+	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, consumer);
+	platform_set_drvdata(consumer, order);
+	ret = device_create_managed_software_node(&consumer->dev,
+						  consumer_props, NULL);
+	KUNIT_ASSERT_EQ(test, ret, 0);
+	ret = kunit_platform_device_add(test, consumer);
+	KUNIT_ASSERT_EQ(test, ret, 0);
+
+	supplier = platform_device_alloc(SWNODE_DEVLINK_TEST_SUPPLIER,
+					 PLATFORM_DEVID_NONE);
+	KUNIT_ASSERT_NOT_NULL(test, supplier);
+	platform_set_drvdata(supplier, order);
+	ret = device_add_software_node(&supplier->dev, &supplier_swnode);
+	if (!ret) {
+		ret = platform_device_add(supplier);
+		if (ret)
+			device_remove_software_node(&supplier->dev);
+	}
+	if (ret)
+		platform_device_put(supplier);
+	KUNIT_ASSERT_EQ(test, ret, 0);
+	ret = kunit_add_action_or_reset(test, swnode_test_supplier_delete, supplier);
+	KUNIT_ASSERT_EQ(test, ret, 0);
+
+	ret = wait_event_interruptible_timeout(order->wq, order->count == 2,
+					       msecs_to_jiffies(SWNODE_DEVLINK_TEST_TIMEOUT_MS));
+	KUNIT_ASSERT_GT(test, ret, 0);
+
+	/* Deleting the supplier device unbinds the consumer first. */
+	kunit_release_action(test, swnode_test_supplier_delete, supplier);
+	KUNIT_EXPECT_NULL(test, consumer->dev.driver);
+
+	/* Unbinding cleared the driver data that records the probe order. */
+	platform_set_drvdata(consumer, order);
+
+	supplier = kunit_platform_device_alloc(test, SWNODE_DEVLINK_TEST_SUPPLIER,
+					       PLATFORM_DEVID_NONE);
+	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, supplier);
+	platform_set_drvdata(supplier, order);
+	ret = kunit_device_add_software_node(test, &supplier->dev, &supplier_swnode);
+	KUNIT_ASSERT_EQ(test, ret, 0);
+	ret = kunit_platform_device_add(test, supplier);
+	KUNIT_ASSERT_EQ(test, ret, 0);
+
+	ret = wait_event_interruptible_timeout(order->wq, order->count == 4,
+					       msecs_to_jiffies(SWNODE_DEVLINK_TEST_TIMEOUT_MS));
+	KUNIT_EXPECT_GT(test, ret, 0);
+	KUNIT_EXPECT_EQ(test, order->count, 4);
+	KUNIT_EXPECT_STREQ(test, order->probed[2], SWNODE_DEVLINK_TEST_SUPPLIER);
+	KUNIT_EXPECT_STREQ(test, order->probed[3], SWNODE_DEVLINK_TEST_CONSUMER);
+
+	kunit_platform_device_unregister(test, consumer);
+}
+
 #define SWNODE_DEVLINK_TEST_PARENT	"swnode-link-parent"
 
 static struct platform_driver swnode_test_parent_driver = {
@@ -452,6 +555,7 @@ static struct kunit_case swnode_test_cases[] = {
 	KUNIT_CASE(swnode_devlink_test_remote_endpoint_excluded),
 	KUNIT_CASE(swnode_devlink_test_ref_array),
 	KUNIT_CASE(swnode_devlink_test_probe_order),
+	KUNIT_CASE(swnode_devlink_test_supplier_readded),
 	KUNIT_CASE(swnode_devlink_test_child_dangling),
 	KUNIT_CASE(swnode_devlink_test_child_populated_later),
 	{ }
