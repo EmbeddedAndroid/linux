@@ -1691,6 +1691,38 @@ void device_links_unbind_consumers(struct device *dev)
 }
 
 /**
+ * fw_devlink_restore_fwnode_link - Restore the fwnode link behind a device link
+ * @link: Device link whose supplier device is being deleted.
+ *
+ * fw_devlink deletes the fwnode link between a consumer and a supplier once it
+ * has created a device link for it. When the supplier device is deleted, the
+ * dependency described by the firmware would be lost along with that device
+ * link, and a device added later for the same supplier fwnode would not be
+ * linked to the consumer. Restore the fwnode link so that fw_devlink links the
+ * consumer to the next device of that fwnode.
+ *
+ * Only links created by fw_devlink for the consumer's own fwnode are restored.
+ *
+ * The fwnode_link_lock needs to be held when this function is called.
+ */
+static void fw_devlink_restore_fwnode_link(struct device_link *link)
+{
+	struct fwnode_handle *con = link->consumer->fwnode;
+	struct fwnode_handle *sup = link->supplier->fwnode;
+
+	lockdep_assert_held(&fwnode_link_lock);
+
+	if (!device_link_test(link, DL_FLAG_INFERRED) ||
+	    device_link_flag_is_sync_state_only(link->flags))
+		return;
+
+	if (!con || !sup)
+		return;
+
+	__fwnode_link_add(con, sup, 0);
+}
+
+/**
  * device_links_purge - Delete existing links to other devices.
  * @dev: Target device.
  */
@@ -1705,6 +1737,7 @@ static void device_links_purge(struct device *dev)
 	 * Delete all of the remaining links from this device to any other
 	 * devices (either consumers or suppliers).
 	 */
+	guard(mutex)(&fwnode_link_lock);
 	device_links_write_lock();
 
 	list_for_each_entry_safe_reverse(link, ln, &dev->links.suppliers, c_node) {
@@ -1715,6 +1748,7 @@ static void device_links_purge(struct device *dev)
 	list_for_each_entry_safe_reverse(link, ln, &dev->links.consumers, s_node) {
 		WARN_ON(link->status != DL_STATE_DORMANT &&
 			link->status != DL_STATE_NONE);
+		fw_devlink_restore_fwnode_link(link);
 		__device_link_del(&link->kref);
 	}
 
