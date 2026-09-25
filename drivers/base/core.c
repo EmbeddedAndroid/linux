@@ -222,7 +222,8 @@ static void __fwnode_links_move_consumers(struct fwnode_handle *from,
  * If the @fwnode has a corresponding struct device and the device supports
  * probing (that is, added to a bus), then we want to let fw_devlink create
  * MANAGED device links to this device, so leave @fwnode and its descendant's
- * fwnode links alone.
+ * fwnode links alone. The same applies if @fwnode is marked as populated
+ * later: its devices do not exist yet, but will.
  *
  * Otherwise, move its consumers to the new supplier @new_sup.
  */
@@ -232,6 +233,9 @@ static void __fw_devlink_pickup_dangling_consumers(struct fwnode_handle *fwnode,
 	struct fwnode_handle *child;
 
 	if (fwnode->dev && fwnode->dev->bus)
+		return;
+
+	if (fwnode_test_flag(fwnode, FWNODE_FLAG_POPULATED_LATER))
 		return;
 
 	fwnode_set_flag(fwnode, FWNODE_FLAG_NOT_DEVICE);
