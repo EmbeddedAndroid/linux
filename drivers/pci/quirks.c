@@ -6544,4 +6544,23 @@ static void pci_mask_replay_timer_timeout(struct pci_dev *pdev)
 }
 DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_GLI, 0x9750, pci_mask_replay_timer_timeout);
 DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_GLI, 0x9755, pci_mask_replay_timer_timeout);
+
+/*
+ * The PI7C9X2G304 reports a Link Training Error in the undefined bit 0 of
+ * the Uncorrectable Error Status register, as Fatal by default. The Secondary
+ * Bus Reset done to recover from it retrains the link and can raise it again,
+ * so a link that never trains keeps resetting.
+ */
+static void pci_mask_pericom_training_error(struct pci_dev *pdev)
+{
+	int aer = pci_find_ext_capability(pdev, PCI_EXT_CAP_ID_ERR);
+
+	if (!aer)
+		return;
+
+	pci_info(pdev, "mask Training Error Uncorrectable Errors\n");
+	pci_clear_and_set_config_dword(pdev, aer + PCI_ERR_UNCOR_MASK, 0,
+				       PCI_ERR_UNC_UND);
+}
+DECLARE_PCI_FIXUP_EARLY(PCI_VENDOR_ID_PERICOM, 0xb304, pci_mask_pericom_training_error);
 #endif
