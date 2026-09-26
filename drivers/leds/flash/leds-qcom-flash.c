@@ -5,12 +5,15 @@
 
 #include <linux/bitfield.h>
 #include <linux/bits.h>
+#include <linux/debugfs.h>
 #include <linux/leds.h>
 #include <linux/led-class-flash.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/property.h>
 #include <linux/regmap.h>
+#include <linux/seq_file.h>
+#include <linux/uaccess.h>
 #include <media/v4l2-flash-led-class.h>
 
 /* registers definitions */
@@ -168,6 +171,9 @@ static const struct reg_field mvflash_4ch_regs[REG_MAX_COUNT] = {
 struct qcom_flash_data {
 	struct v4l2_flash	**v4l2_flash;
 	struct regmap_field     *r_fields[REG_MAX_COUNT];
+	struct regmap		*regmap;
+	u32			reg_base;
+	struct dentry		*debugfs;
 	struct mutex		lock;
 	enum hw_type		hw_type;
 	u32			total_ma;
@@ -835,6 +841,65 @@ static int qcom_flash_register_led_device(struct device *dev,
 	return qcom_flash_v4l2_init(dev, led, node);
 }
 
+/*
+ * LOCAL TEST: raw access to this flash peripheral's 256-byte register block
+ * for bring-up of strobe modes the LED class does not expose. Reading dumps
+ * the block; writing "<offset> <value>" sets one register.
+ */
+static int qcom_flash_regs_show(struct seq_file *s, void *unused)
+{
+	struct qcom_flash_data *flash_data = s->private;
+	unsigned int off, val;
+	int rc;
+
+	for (off = 0; off < 0x100; off++) {
+		rc = regmap_read(flash_data->regmap, flash_data->reg_base + off, &val);
+		if (rc)
+			return rc;
+		seq_printf(s, "%02x%s", val, (off & 0xf) == 0xf ? "\n" : " ");
+	}
+
+	return 0;
+}
+
+static int qcom_flash_regs_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, qcom_flash_regs_show, inode->i_private);
+}
+
+static ssize_t qcom_flash_regs_write(struct file *file, const char __user *ubuf,
+				     size_t count, loff_t *ppos)
+{
+	struct qcom_flash_data *flash_data = file_inode(file)->i_private;
+	unsigned int off, val;
+	char buf[32];
+	int rc;
+
+	if (count >= sizeof(buf))
+		return -EINVAL;
+	if (copy_from_user(buf, ubuf, count))
+		return -EFAULT;
+	buf[count] = '\0';
+
+	if (sscanf(buf, "%i %i", &off, &val) != 2 || off > 0xff || val > 0xff)
+		return -EINVAL;
+
+	mutex_lock(&flash_data->lock);
+	rc = regmap_write(flash_data->regmap, flash_data->reg_base + off, val);
+	mutex_unlock(&flash_data->lock);
+
+	return rc ? rc : count;
+}
+
+static const struct file_operations qcom_flash_regs_fops = {
+	.owner = THIS_MODULE,
+	.open = qcom_flash_regs_open,
+	.read = seq_read,
+	.write = qcom_flash_regs_write,
+	.llseek = seq_lseek,
+	.release = single_release,
+};
+
 static int qcom_flash_led_probe(struct platform_device *pdev)
 {
 	struct qcom_flash_data *flash_data;
@@ -924,6 +989,8 @@ static int qcom_flash_led_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, flash_data);
 	mutex_init(&flash_data->lock);
+	flash_data->regmap = regmap;
+	flash_data->reg_base = reg_base;
 
 	count = device_get_child_node_count(dev);
 	if (count == 0 || count > flash_data->max_channels) {
@@ -951,6 +1018,9 @@ static int qcom_flash_led_probe(struct platform_device *pdev)
 		flash_data->leds_count++;
 	}
 
+	flash_data->debugfs = debugfs_create_file("qcom-flash-regs", 0600, NULL, flash_data,
+						  &qcom_flash_regs_fops);
+
 	return regmap_field_write(flash_data->r_fields[REG_TORCH_CLAMP], flash_data->torch_clamp);
 release:
 	while (flash_data->v4l2_flash[flash_data->leds_count] && flash_data->leds_count)
@@ -962,6 +1032,7 @@ static void qcom_flash_led_remove(struct platform_device *pdev)
 {
 	struct qcom_flash_data *flash_data = platform_get_drvdata(pdev);
 
+	debugfs_remove(flash_data->debugfs);
 	while (flash_data->v4l2_flash[flash_data->leds_count] && flash_data->leds_count)
 		v4l2_flash_release(flash_data->v4l2_flash[flash_data->leds_count--]);
 
