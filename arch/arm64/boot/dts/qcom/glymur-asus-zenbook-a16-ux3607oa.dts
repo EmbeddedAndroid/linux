@@ -1216,14 +1216,15 @@
 	status = "okay";
 
 	/*
-	 * GLYMUR-A16: WCN7850 Bluetooth. Konrad's tree enables this UART and wires it
-	 * into the pcie-m2-e-connector graph but declares no serdev child, so nothing
-	 * probes a BT controller (bluetooth.service inactive, zero hci devices, no
-	 * Bluetooth in rfkill). Supplies come from the qcom,wcn7850-pmu node we add for
-	 * Wi-Fi, so these labels already resolve. Needs hci_uart + btqca.
+	 * GLYMUR-A16: the Bluetooth part is a QCC2072 (ORN firmware), not the
+	 * WCN7850 the Wi-Fi side suggests. Konrad's tree enables this UART but
+	 * declares no serdev child, so nothing probes a BT controller. The
+	 * supplies are not consumed by the QCC2072 driver data; vddaon-supply
+	 * is what matches this node to the qcom,wcn7850-pmu power sequencer,
+	 * which drives BT_EN. Needs hci_uart + btqca.
 	 */
 	bluetooth {
-		compatible = "qcom,wcn7850-bt";
+		compatible = "qcom,qcc2072-bt";
 		max-speed = <3200000>;
 
 		vddaon-supply = <&vreg_pmu_aon_0p59>;
