@@ -421,6 +421,9 @@
 &pcieport0 {
 	reset-gpios = <&tlmm 2 GPIO_ACTIVE_LOW>;
 
+	/* Requests to the switch can hang with L1 PM Substates enabled. */
+	aspm-no-l1ss;
+
 	pcie@0,0 {
 		#address-cells = <3>;
 		#size-cells = <2>;
