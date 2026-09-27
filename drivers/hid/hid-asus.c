@@ -116,6 +116,11 @@ MODULE_DESCRIPTION("Asus HID Keyboard and TouchPad");
  */
 #define ASUS_KBD_BACKLIGHT_MAX		3
 
+static unsigned int kbd_backlight_level;
+module_param(kbd_backlight_level, uint, 0444);
+MODULE_PARM_DESC(kbd_backlight_level,
+		 "Keyboard backlight level (0-3) set when hid-asus registers the LED itself");
+
 #define I2C_KEYBOARD_QUIRKS			(QUIRK_FIX_NOTEBOOK_REPORT | \
 						 QUIRK_NO_INIT_REPORTS | \
 						 QUIRK_NO_CONSUMER_USAGES)
@@ -1071,6 +1076,15 @@ static int asus_kbd_register_leds(struct hid_device *hdev)
 		drvdata->worker->cdev.max_brightness = ASUS_KBD_BACKLIGHT_MAX;
 		drvdata->worker->cdev.brightness_set = asus_kbd_backlight_cdev_set;
 		drvdata->worker->cdev.brightness_get = asus_kbd_backlight_cdev_get;
+
+		/*
+		 * The keyboard keeps whatever level it had across a reboot or
+		 * driver rebind, and the driver cannot read it back: set it to
+		 * the level the LED reports.
+		 */
+		drvdata->kbd_backlight_brightness = min(kbd_backlight_level,
+							ASUS_KBD_BACKLIGHT_MAX);
+		asus_kbd_set_brightness(hdev, drvdata->kbd_backlight_brightness);
 
 		ret = devm_led_classdev_register(&hdev->dev, &drvdata->worker->cdev);
 		if (ret < 0) {
