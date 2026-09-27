@@ -1090,6 +1090,19 @@
 	wake-gpios = <&tlmm 154 GPIO_ACTIVE_LOW>;
 };
 
+&pmh0101_flash {
+	status = "okay";
+
+	led-0 {
+		function = LED_FUNCTION_FLASH;
+		color = <LED_COLOR_ID_IR>;
+		led-sources = <1>, <4>;
+		led-max-microamp = <200000>;
+		flash-max-microamp = <700000>;
+		flash-max-timeout-us = <100000>;
+	};
+};
+
 &pmh0101_gpios {
 	nvme_reg_en: nvme-reg-en-state {
 		pins = "gpio14";
