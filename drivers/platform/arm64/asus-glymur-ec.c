@@ -12,6 +12,7 @@
 
 #include <linux/cleanup.h>
 #include <linux/container_of.h>
+#include <linux/debugfs.h>
 #include <linux/delay.h>
 #include <linux/device.h>
 #include <linux/dev_printk.h>
@@ -24,6 +25,7 @@
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/pm.h>
+#include <linux/seq_file.h>
 #include <linux/types.h>
 #include <linux/unaligned.h>
 #include <linux/units.h>
@@ -450,6 +452,41 @@ static const struct hwmon_chip_info asus_ec_hwmon_chip_info = {
 	.info	= asus_ec_hwmon_info,
 };
 
+/* omz LOCAL diagnostic: raw EC temperature page and the ASUS sensor block. */
+static int asus_ec_dump_show(struct seq_file *s, void *unused)
+{
+	struct asus_ec *ec = s->private;
+	u16 v;
+	u8 b;
+	int i;
+
+	guard(mutex)(&ec->lock);
+	seq_puts(s, "page c6 (ram 0x06xx):");
+	for (i = 0; i < 256; i++) {
+		if (i % 16 == 0)
+			seq_printf(s, "\n%02x:", i);
+		if (asus_ec_readb(ec, 0xc6, i, &b))
+			seq_puts(s, " --");
+		else
+			seq_printf(s, " %02x", b);
+	}
+	seq_puts(s, "\nram 0x0b40:");
+	for (i = 0; i < 32; i++) {
+		if (asus_qcom_ec_read_ram(ec, 0x0b40 + i, 1, &v))
+			seq_puts(s, " --");
+		else
+			seq_printf(s, " %02x", v);
+	}
+	seq_putc(s, '\n');
+	return 0;
+}
+DEFINE_SHOW_ATTRIBUTE(asus_ec_dump);
+
+static void asus_ec_dump_remove(void *dentry)
+{
+	debugfs_remove(dentry);
+}
+
 static int asus_glymur_ec_probe(struct i2c_client *client)
 {
 	struct device *dev = &client->dev;
@@ -499,6 +536,12 @@ static int asus_glymur_ec_probe(struct i2c_client *client)
 		return dev_err_probe(dev, PTR_ERR(ec->hwmon_dev),
 				     "Failed to register hwmon\n");
 	}
+
+	ret = devm_add_action_or_reset(dev, asus_ec_dump_remove,
+				       debugfs_create_file("asus_glymur_ec_dump", 0400, NULL, ec,
+							   &asus_ec_dump_fops));
+	if (ret)
+		return ret;
 
 	return 0;
 }
