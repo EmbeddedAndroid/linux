@@ -137,7 +137,7 @@
 			panic-indicator;
 		};
 
-		privacy-led {
+		privacy_led: privacy-led {
 			function = LED_FUNCTION_INDICATOR;
 			color = <LED_COLOR_ID_WHITE>;
 			gpios = <&tlmm 111 GPIO_ACTIVE_HIGH>;
@@ -680,6 +680,8 @@
 	camera@24 {
 		compatible = "himax,hm1092";
 		reg = <0x24>;
+		leds = <&privacy_led>;
+		led-names = "privacy";
 
 		reset-gpios = <&tlmm 109 GPIO_ACTIVE_LOW>;
 		pinctrl-0 = <&cam_mclk0_default>, <&cam_ir_reset_default>;
@@ -713,6 +715,8 @@
 	camera@36 {
 		compatible = "ovti,ov02c10";
 		reg = <0x36>;
+		leds = <&privacy_led>;
+		led-names = "privacy";
 
 		reset-gpios = <&tlmm 239 GPIO_ACTIVE_LOW>;
 		pinctrl-0 = <&cam_mclk4_default>, <&cam_front_reset_default>;
