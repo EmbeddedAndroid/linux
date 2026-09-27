@@ -6,6 +6,7 @@
 #include <linux/pm_runtime.h>
 
 #include "iris_core.h"
+#include "iris_ctrls.h"
 #include "iris_firmware.h"
 #include "iris_state.h"
 #include "iris_vpu_common.h"
@@ -75,6 +76,8 @@ int iris_core_init(struct iris_core *core)
 	ret = iris_fw_load(core);
 	if (ret)
 		goto error_power_off;
+
+	iris_session_init_caps(core);
 
 	ret = iris_vpu_boot_firmware(core);
 	if (ret)

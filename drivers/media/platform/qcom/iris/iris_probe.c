@@ -394,8 +394,6 @@ static int iris_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
-	iris_session_init_caps(core);
-
 	ret = iris_init_cb_devs(core);
 	if (ret)
 		return ret;
