@@ -962,6 +962,16 @@
 	};
 };
 
+&iris {
+	firmware-name = "qcom/glymur/ASUSTeK/UX3607OA/qcvss8480.mbn";
+
+	status = "okay";
+
+	video-firmware {
+		iommus = <&apps_smmu 0x19e2 0x0>;
+	};
+};
+
 &lpass_vamacro {
 	vdd-micb-supply = <&vreg_l1b_e0>;
 
