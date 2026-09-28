@@ -71,6 +71,8 @@
 			linux,code = <SW_LID>;
 			wakeup-source;
 			wakeup-event-action = <EV_ACT_DEASSERTED>;
+			/* On AC the lid line pulses in deep sleep with the lid open */
+			wakeup-on-state-change;
 		};
 	};
 
