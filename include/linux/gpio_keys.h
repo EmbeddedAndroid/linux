@@ -38,6 +38,7 @@ struct gpio_keys_button {
 	int value;
 	unsigned int irq;
 	unsigned int wakeirq;
+	bool wakeup_on_change;
 };
 
 /**

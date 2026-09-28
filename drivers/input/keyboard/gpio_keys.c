@@ -53,6 +53,12 @@ struct gpio_button_data {
 	bool key_pressed;
 	bool suspended;
 	bool debounce_use_hrtimer;
+
+	/* wakeup_on_change: level at suspend, updated by each edge after it */
+	bool wake_filter;
+	bool sleeping;
+	bool wake_armed;
+	int wake_state;
 };
 
 struct gpio_keys_drvdata {
@@ -408,11 +414,54 @@ static enum hrtimer_restart gpio_keys_debounce_timer(struct hrtimer *t)
 	return HRTIMER_NORESTART;
 }
 
+/*
+ * Wake only when the switch really changed state in the direction
+ * wakeup-event-action asks for. A switch whose line can glitch while the
+ * system sleeps (the A16 lid on AC power) would otherwise wake it on an edge
+ * that leaves it where it was. Every edge updates the recorded state, so a
+ * close followed by an open still wakes on the open.
+ */
+static void gpio_keys_filtered_wakeup(struct gpio_button_data *bdata)
+{
+	struct device *dev = bdata->input->dev.parent;
+	int state = gpiod_get_value(bdata->gpiod);
+	bool wake;
+
+	if (state < 0 || state == bdata->wake_state)
+		return;
+
+	bdata->wake_state = state;
+	if (!bdata->wake_armed)
+		return;
+
+	switch (bdata->button->wakeup_event_action) {
+	case EV_ACT_ASSERTED:
+		wake = state;
+		break;
+	case EV_ACT_DEASSERTED:
+		wake = !state;
+		break;
+	default:
+		wake = true;
+		break;
+	}
+
+	dev_dbg(dev, "%s: state %d while asleep, %s\n", bdata->button->desc ?: "button",
+		state, wake ? "waking" : "staying asleep");
+	if (wake)
+		pm_wakeup_dev_event(dev, 0, true);
+}
+
 static irqreturn_t gpio_keys_gpio_isr(int irq, void *dev_id)
 {
 	struct gpio_button_data *bdata = dev_id;
 
 	BUG_ON(irq != bdata->irq);
+
+	if (READ_ONCE(bdata->sleeping)) {
+		gpio_keys_filtered_wakeup(bdata);
+		return IRQ_HANDLED;
+	}
 
 	if (bdata->button->wakeup) {
 		const struct gpio_keys_button *button = bdata->button;
@@ -598,6 +647,21 @@ static int gpio_keys_setup_key(struct platform_device *pdev,
 
 		isr = gpio_keys_gpio_isr;
 		irqflags = IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING;
+
+		/*
+		 * The line stays live through suspend and the handler decides
+		 * whether an edge wakes the system, so it must be able to read
+		 * the level from hard interrupt context.
+		 */
+		if (button->wakeup_on_change) {
+			if (gpiod_cansleep(bdata->gpiod)) {
+				dev_warn(dev, "%s: wakeup-on-state-change needs a non-sleeping GPIO, ignored\n",
+					 desc);
+			} else {
+				irqflags |= IRQF_NO_SUSPEND;
+				bdata->wake_filter = true;
+			}
+		}
 
 		switch (button->wakeup_event_action) {
 		case EV_ACT_ASSERTED:
@@ -823,6 +887,9 @@ gpio_keys_get_devtree_pdata(struct device *dev)
 		fwnode_property_read_u32(child, "wakeup-event-action",
 					 &button->wakeup_event_action);
 
+		button->wakeup_on_change =
+			fwnode_property_read_bool(child, "wakeup-on-state-change");
+
 		button->can_disable =
 			fwnode_property_read_bool(child, "linux,can-disable");
 
@@ -946,6 +1013,11 @@ gpio_keys_button_enable_wakeup(struct gpio_button_data *bdata)
 {
 	int error;
 
+	if (bdata->wake_filter) {
+		bdata->wake_armed = true;
+		return 0;
+	}
+
 	error = enable_irq_wake(bdata->irq);
 	if (error) {
 		dev_err(bdata->input->dev.parent,
@@ -978,6 +1050,11 @@ static void __maybe_unused
 gpio_keys_button_disable_wakeup(struct gpio_button_data *bdata)
 {
 	int error;
+
+	if (bdata->wake_filter) {
+		bdata->wake_armed = false;
+		return;
+	}
 
 	if (bdata->wakeirq) {
 		enable_irq(bdata->irq);
@@ -1042,8 +1119,25 @@ gpio_keys_disable_wakeup(struct gpio_keys_drvdata *ddata)
 	for (i = 0; i < ddata->pdata->nbuttons; i++) {
 		bdata = &ddata->data[i];
 		bdata->suspended = false;
-		if (irqd_is_wakeup_set(irq_get_irq_data(bdata->irq)))
+		if (bdata->wake_filter ||
+		    irqd_is_wakeup_set(irq_get_irq_data(bdata->irq)))
 			gpio_keys_button_disable_wakeup(bdata);
+	}
+}
+
+static void gpio_keys_set_sleeping(struct gpio_keys_drvdata *ddata, bool sleeping)
+{
+	struct gpio_button_data *bdata;
+	int i;
+
+	for (i = 0; i < ddata->pdata->nbuttons; i++) {
+		bdata = &ddata->data[i];
+		if (!bdata->wake_filter)
+			continue;
+		if (sleeping)
+			bdata->wake_state = gpiod_get_value_cansleep(bdata->gpiod);
+		/* The handler reads wake_state only once it sees sleeping. */
+		WRITE_ONCE(bdata->sleeping, sleeping);
 	}
 }
 
@@ -1053,10 +1147,14 @@ static int gpio_keys_suspend(struct device *dev)
 	struct input_dev *input = ddata->input;
 	int error;
 
+	gpio_keys_set_sleeping(ddata, true);
+
 	if (device_may_wakeup(dev)) {
 		error = gpio_keys_enable_wakeup(ddata);
-		if (error)
+		if (error) {
+			gpio_keys_set_sleeping(ddata, false);
 			return error;
+		}
 	} else {
 		guard(mutex)(&input->mutex);
 
@@ -1085,6 +1183,7 @@ static int gpio_keys_resume(struct device *dev)
 		}
 	}
 
+	gpio_keys_set_sleeping(ddata, false);
 	gpio_keys_report_state(ddata);
 	return 0;
 }
