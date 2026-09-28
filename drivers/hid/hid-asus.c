@@ -1511,6 +1511,23 @@ static int asus_start_multitouch(struct hid_device *hdev)
 	return 0;
 }
 
+static int __maybe_unused asus_suspend(struct hid_device *hdev, pm_message_t message)
+{
+	struct asus_drvdata *drvdata = hid_get_drvdata(hdev);
+
+	/*
+	 * The keyboard keeps its backlight lit through the i2c-hid SLEEP
+	 * command. Switch it off directly, after any queued level change, and
+	 * leave kbd_backlight_brightness for asus_resume() to restore.
+	 */
+	if (drvdata->worker && drvdata->worker->own_cdev) {
+		flush_work(&drvdata->worker->work);
+		asus_kbd_set_brightness(hdev, 0);
+	}
+
+	return 0;
+}
+
 static int __maybe_unused asus_resume(struct hid_device *hdev)
 {
 	struct asus_drvdata *drvdata = hid_get_drvdata(hdev);
@@ -1907,6 +1924,7 @@ static struct hid_driver asus_driver = {
 	.remove			= asus_remove,
 	.input_mapping          = asus_input_mapping,
 	.input_configured       = asus_input_configured,
+	.suspend		= pm_ptr(asus_suspend),
 	.reset_resume           = pm_ptr(asus_reset_resume),
 	.resume			= pm_ptr(asus_resume),
 	.event			= asus_event,
