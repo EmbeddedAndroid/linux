@@ -96,6 +96,15 @@ patternProperties:
         $ref: /schemas/types.yaml#/definitions/uint32
         enum: [0, 1, 2]
 
+      wakeup-on-state-change:
+        description:
+          Wake the system only when the switch state read after an edge differs
+          from the state it had when the system went to sleep, in the direction
+          wakeup-event-action selects. For switches whose line can pulse while
+          the system sleeps without the switch moving. Needs a GPIO that can be
+          read from interrupt context.
+        type: boolean
+
       linux,can-disable:
         description:
           Indicates that button is connected to dedicated (not shared) interrupt
@@ -129,6 +138,7 @@ patternProperties:
 
     dependencies:
       wakeup-event-action: [ wakeup-source ]
+      wakeup-on-state-change: [ wakeup-source ]
       linux,input-value: [ gpios ]
 
     unevaluatedProperties: false
