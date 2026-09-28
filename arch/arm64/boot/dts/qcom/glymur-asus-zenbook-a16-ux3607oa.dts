@@ -739,6 +739,11 @@
 	};
 };
 
+&crypto {
+	/* QCE is BROKEN; with no driver its node holds the interconnects' sync_state */
+	status = "disabled";
+};
+
 &csiphy0 {
 	vdda-0p9-supply = <&vreg_l1f_e1>;
 	vdda-1p2-supply = <&vreg_l4f_e1>;
