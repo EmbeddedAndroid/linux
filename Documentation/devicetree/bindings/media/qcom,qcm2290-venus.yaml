@@ -56,6 +56,21 @@ properties:
   opp-table:
     type: object
 
+  video-firmware:
+    type: object
+    additionalProperties: false
+
+    description:
+      The stream the video core fetches its firmware with, for the
+      operating system to map when no hypervisor does.
+
+    properties:
+      iommus:
+        maxItems: 1
+
+    required:
+      - iommus
+
 required:
   - compatible
   - power-domain-names
