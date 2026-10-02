@@ -109,6 +109,12 @@ static int pm8xxx_rtc_read_uefi_offset(struct pm8xxx_rtc *rtc_dd)
 				     &size, rtc_info);
 	efivar_unlock();
 
+	/* The firmware may create the variable only when the time is set. */
+	if (status == EFI_NOT_FOUND) {
+		rtc_dd->offset = 0;
+		return 0;
+	}
+
 	if (status != EFI_SUCCESS) {
 		dev_dbg(dev, "failed to read UEFI offset: %lu\n", status);
 		return efi_status_to_err(status);
