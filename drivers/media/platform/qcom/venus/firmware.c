@@ -118,6 +118,26 @@ static int venus_load_fw(struct venus_core *core, const char *fwname,
 		goto err_release_fw;
 	}
 
+	if (core->use_tz && core->fw.dev) {
+		if (!core->fw.pas_ctx) {
+			core->fw.pas_ctx = devm_qcom_pas_context_alloc(dev,
+								       VENUS_PAS_ID,
+								       *mem_phys,
+								       *mem_size);
+			if (IS_ERR(core->fw.pas_ctx)) {
+				ret = PTR_ERR(core->fw.pas_ctx);
+				core->fw.pas_ctx = NULL;
+				goto err_release_fw;
+			}
+			core->fw.pas_ctx->use_tzmem = true;
+		}
+
+		ret = qcom_mdt_pas_load(core->fw.pas_ctx, mdt, fwname, NULL);
+		if (ret)
+			qcom_pas_metadata_release(core->fw.pas_ctx);
+		goto err_release_fw;
+	}
+
 	mem_va = memremap(*mem_phys, *mem_size, MEMREMAP_WC);
 	if (!mem_va) {
 		dev_err(dev, "unable to map memory region %pa size %#zx\n", mem_phys, *mem_size);
@@ -164,13 +184,48 @@ static int venus_boot_no_tz(struct venus_core *core, phys_addr_t mem_phys,
 	return 0;
 }
 
-static int venus_shutdown_no_tz(struct venus_core *core)
+static void venus_unmap_fw(struct venus_core *core)
 {
 	const size_t mapped = core->fw.mapped_mem_size;
-	struct iommu_domain *iommu;
+	struct iommu_domain *iommu = core->fw.iommu_domain;
 	size_t unmapped;
+
+	if (!mapped || !iommu)
+		return;
+
+	unmapped = iommu_unmap(iommu, VENUS_FW_START_ADDR, mapped);
+	if (unmapped != mapped)
+		dev_err(core->fw.dev, "failed to unmap firmware\n");
+	else
+		core->fw.mapped_mem_size = 0;
+}
+
+static int venus_boot_pas(struct venus_core *core, phys_addr_t mem_phys,
+			  size_t mem_size)
+{
+	int ret;
+
+	ret = iommu_map(core->fw.iommu_domain, VENUS_FW_START_ADDR, mem_phys,
+			mem_size, IOMMU_READ | IOMMU_WRITE | IOMMU_PRIV,
+			GFP_KERNEL);
+	if (ret) {
+		dev_err(core->fw.dev, "could not map video firmware region\n");
+		goto out;
+	}
+	core->fw.mapped_mem_size = mem_size;
+
+	ret = qcom_pas_prepare_and_auth_reset(core->fw.pas_ctx);
+	if (ret)
+		venus_unmap_fw(core);
+out:
+	qcom_pas_metadata_release(core->fw.pas_ctx);
+
+	return ret;
+}
+
+static int venus_shutdown_no_tz(struct venus_core *core)
+{
 	u32 reg;
-	struct device *dev = core->fw.dev;
 	void __iomem *wrapper_base = core->wrapper_base;
 	void __iomem *wrapper_tz_base = core->wrapper_tz_base;
 
@@ -186,16 +241,7 @@ static int venus_shutdown_no_tz(struct venus_core *core)
 		writel(reg, wrapper_base + WRAPPER_A9SS_SW_RESET);
 	}
 
-	iommu = core->fw.iommu_domain;
-
-	if (core->fw.mapped_mem_size && iommu) {
-		unmapped = iommu_unmap(iommu, VENUS_FW_START_ADDR, mapped);
-
-		if (unmapped != mapped)
-			dev_err(dev, "failed to unmap firmware\n");
-		else
-			core->fw.mapped_mem_size = 0;
-	}
+	venus_unmap_fw(core);
 
 	return 0;
 }
@@ -238,7 +284,9 @@ int venus_boot(struct venus_core *core)
 	core->fw.mem_size = mem_size;
 	core->fw.mem_phys = mem_phys;
 
-	if (core->use_tz)
+	if (core->use_tz && core->fw.dev)
+		ret = venus_boot_pas(core, mem_phys, mem_size);
+	else if (core->use_tz)
 		ret = qcom_pas_auth_and_reset(VENUS_PAS_ID);
 	else
 		ret = venus_boot_no_tz(core, mem_phys, mem_size);
@@ -270,7 +318,7 @@ int venus_boot(struct venus_core *core)
 						     res->cp_nonpixel_start,
 						     res->cp_nonpixel_size);
 		if (ret) {
-			qcom_pas_shutdown(VENUS_PAS_ID);
+			venus_shutdown(core);
 			dev_err(dev, "set virtual address ranges fail (%d)\n",
 				ret);
 			return ret;
@@ -284,10 +332,12 @@ int venus_shutdown(struct venus_core *core)
 {
 	int ret;
 
-	if (core->use_tz)
+	if (core->use_tz) {
 		ret = qcom_pas_shutdown(VENUS_PAS_ID);
-	else
+		venus_unmap_fw(core);
+	} else {
 		ret = venus_shutdown_no_tz(core);
+	}
 
 	return ret;
 }
@@ -325,6 +375,13 @@ int venus_firmware_init(struct venus_core *core)
 		core->use_tz = true;
 		return 0;
 	}
+
+	/*
+	 * Linux manages the firmware stream. The AR50_LITE firmware windows
+	 * and reset are in the TZ wrapper, so its core still starts through
+	 * the PAS service.
+	 */
+	core->use_tz = IS_AR50_LITE(core);
 
 	memset(&info, 0, sizeof(info));
 	info.fwnode = &np->fwnode;

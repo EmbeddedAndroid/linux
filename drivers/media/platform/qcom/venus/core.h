@@ -19,6 +19,8 @@
 #include "hfi_platform.h"
 #include "hfi_helper.h"
 
+struct qcom_pas_context;
+
 #define VDBGL	"VenusLow : "
 #define VDBGM	"VenusMed : "
 #define VDBGH	"VenusHigh: "
@@ -228,6 +230,7 @@ struct venus_core {
 		size_t mapped_mem_size;
 		phys_addr_t mem_phys;
 		size_t mem_size;
+		struct qcom_pas_context *pas_ctx;
 	} fw;
 	struct mutex lock;
 	struct list_head instances;
