@@ -389,6 +389,7 @@ static void qcom_pas_tee_metadata_release(struct device *dev,
 	struct tee_shm *mdata_shm = ctx->ptr;
 
 	tee_shm_free(mdata_shm);
+	ctx->ptr = NULL;
 }
 
 static struct qcom_pas_ops qcom_pas_ops_tee = {
