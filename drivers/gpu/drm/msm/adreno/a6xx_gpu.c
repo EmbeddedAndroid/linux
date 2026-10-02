@@ -11,6 +11,7 @@
 
 #include <linux/bitfield.h>
 #include <linux/devfreq.h>
+#include <linux/firmware/qcom/qcom_pas.h>
 #include <linux/pm_domain.h>
 #include <linux/soc/qcom/llcc-qcom.h>
 
@@ -1126,13 +1127,35 @@ static int a6xx_ucode_load(struct msm_gpu *gpu)
 	return 0;
 }
 
+#define SCM_GPU_ZAP_SHADER_RESUME 0
+
+static int a6xx_zap_shader_resume(struct msm_gpu *gpu)
+{
+	struct adreno_gpu *adreno_gpu = to_adreno_gpu(gpu);
+	int ret;
+
+	/*
+	 * The A702 CP does not retain the zap shader configuration across
+	 * a power collapse, so the secure side has to program it again.
+	 */
+	if (!adreno_is_a702(adreno_gpu))
+		return 0;
+
+	ret = qcom_pas_set_remote_state(SCM_GPU_ZAP_SHADER_RESUME, GPU_PAS_ID);
+	if (ret)
+		DRM_DEV_ERROR(&gpu->pdev->dev, "zap shader resume failed: %d\n",
+			      ret);
+
+	return ret;
+}
+
 int a6xx_zap_shader_init(struct msm_gpu *gpu)
 {
 	static bool loaded;
 	int ret;
 
 	if (loaded)
-		return 0;
+		return a6xx_zap_shader_resume(gpu);
 
 	ret = adreno_zap_shader_load(gpu, GPU_PAS_ID);
 
