@@ -1045,6 +1045,8 @@
 };
 
 &pmk8350_rtc {
+	allow-set-time;
+
 	status = "okay";
 };
 
