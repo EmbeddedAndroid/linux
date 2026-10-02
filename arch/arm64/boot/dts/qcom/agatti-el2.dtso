@@ -15,3 +15,9 @@
 &gpu_zap_shader {
 	iommus = <&adreno_smmu 0x3 0x0>;
 };
+
+&venus {
+	video-firmware {
+		iommus = <&apps_smmu 0x882 0x0>;
+	};
+};
