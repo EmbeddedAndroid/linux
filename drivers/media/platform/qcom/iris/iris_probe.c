@@ -6,6 +6,8 @@
 #include <linux/clk.h>
 #include <linux/interconnect.h>
 #include <linux/module.h>
+#include <linux/of.h>
+#include <linux/platform_device.h>
 #include <linux/pm_domain.h>
 #include <linux/pm_opp.h>
 #include <linux/pm_runtime.h>
@@ -131,6 +133,44 @@ static int iris_init_resets(struct iris_core *core)
 				     core->iris_platform_data->controller_rst_tbl_size);
 }
 
+/*
+ * Without a hypervisor, the stream the video core fetches its firmware with
+ * is described by a video-firmware child node; its device maps the firmware
+ * for that stream (see iris_load_fw_to_memory()).
+ */
+static int iris_init_fw_dev(struct iris_core *core)
+{
+	struct platform_device_info info = {};
+	struct platform_device *pdev;
+	struct device_node *np;
+
+	np = of_get_child_by_name(core->dev->of_node, "video-firmware");
+	if (!np)
+		return 0;
+
+	info.fwnode = of_fwnode_handle(np);
+	info.name = np->name;
+	info.id = PLATFORM_DEVID_AUTO;
+	info.parent = core->dev;
+	info.dma_mask = core->iris_platform_data->dma_mask;
+
+	pdev = platform_device_register_full(&info);
+	of_node_put(np);
+	if (IS_ERR(pdev))
+		return PTR_ERR(pdev);
+
+	core->fw_dev = &pdev->dev;
+
+	return 0;
+}
+
+static void iris_deinit_fw_dev(struct iris_core *core)
+{
+	if (core->fw_dev)
+		platform_device_unregister(to_platform_device(core->fw_dev));
+	core->fw_dev = NULL;
+}
+
 static int iris_init_resources(struct iris_core *core)
 {
 	int ret;
@@ -207,6 +247,8 @@ static void iris_remove(struct platform_device *pdev)
 
 	v4l2_device_unregister(&core->v4l2_dev);
 
+	iris_deinit_fw_dev(core);
+
 	mutex_destroy(&core->lock);
 }
 
@@ -269,9 +311,13 @@ static int iris_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
-	ret = v4l2_device_register(dev, &core->v4l2_dev);
+	ret = iris_init_fw_dev(core);
 	if (ret)
 		return ret;
+
+	ret = v4l2_device_register(dev, &core->v4l2_dev);
+	if (ret)
+		goto err_deinit_fw_dev;
 
 	ret = iris_register_video_device(core, DECODER);
 	if (ret)
@@ -306,6 +352,8 @@ err_vdev_unreg_dec:
 	video_unregister_device(core->vdev_dec);
 err_v4l2_unreg:
 	v4l2_device_unregister(&core->v4l2_dev);
+err_deinit_fw_dev:
+	iris_deinit_fw_dev(core);
 
 	return ret;
 }
