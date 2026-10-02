@@ -113,6 +113,13 @@ properties:
         description: |
           Default name of the firmware to load to the remote processor.
 
+      iommus:
+        maxItems: 1
+        description:
+          The stream the CP fetches the zap shader with once it runs in
+          trusted mode, for the operating system to map when no hypervisor
+          does.
+
   "#cooling-cells":
     const: 2
 
