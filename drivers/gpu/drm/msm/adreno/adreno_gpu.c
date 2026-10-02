@@ -8,9 +8,12 @@
 
 #include <linux/ascii85.h>
 #include <linux/interconnect.h>
+#include <linux/iommu.h>
 #include <linux/firmware/qcom/qcom_pas.h>
 #include <linux/firmware/qcom/qcom_scm.h>
 #include <linux/kernel.h>
+#include <linux/of_device.h>
+#include <linux/of_platform.h>
 #include <linux/of_reserved_mem.h>
 #include <linux/pm_opp.h>
 #include <linux/slab.h>
@@ -27,6 +30,57 @@ MODULE_PARM_DESC(address_space_size, "Override for size of processes private GPU
 module_param(address_space_size, ullong, 0600);
 
 static bool zap_available = true;
+
+/*
+ * The CP fetches the zap shader through its own stream ID once it runs in
+ * trusted mode. Under a hypervisor that stream gets a stage-2 mapping of
+ * the zap region; with Linux at EL2 the zap-shader node names the stream,
+ * and the region is mapped 1:1 for it here.
+ */
+static int zap_shader_map_trusted(struct device *dev, struct device_node *np,
+				  phys_addr_t phys, size_t size)
+{
+	static struct iommu_domain *domain;
+	struct platform_device *pdev;
+	int ret;
+
+	if (domain || !of_property_present(np, "iommus"))
+		return 0;
+
+	pdev = of_platform_device_create(np, NULL, dev);
+	if (!pdev)
+		return -ENODEV;
+
+	ret = of_dma_configure(&pdev->dev, np, true);
+	if (ret)
+		goto err_pdev;
+
+	domain = iommu_paging_domain_alloc(&pdev->dev);
+	if (IS_ERR(domain)) {
+		ret = PTR_ERR(domain);
+		goto err_pdev;
+	}
+
+	ret = iommu_attach_device(domain, &pdev->dev);
+	if (ret)
+		goto err_domain;
+
+	ret = iommu_map(domain, phys, phys, PAGE_ALIGN(size), IOMMU_READ,
+			GFP_KERNEL);
+	if (ret)
+		goto err_detach;
+
+	return 0;
+
+err_detach:
+	iommu_detach_device(domain, &pdev->dev);
+err_domain:
+	iommu_domain_free(domain);
+err_pdev:
+	domain = NULL;
+	of_platform_device_destroy(&pdev->dev, NULL);
+	return ret;
+}
 
 static int zap_shader_load_mdt(struct msm_gpu *gpu, const char *fwname,
 		u32 pasid)
@@ -151,6 +205,12 @@ static int zap_shader_load_mdt(struct msm_gpu *gpu, const char *fwname,
 	}
 	if (ret)
 		goto out;
+
+	ret = zap_shader_map_trusted(dev, np, mem_phys, resource_size(&r));
+	if (ret) {
+		DRM_DEV_ERROR(dev, "Unable to map the zap shader: %d\n", ret);
+		goto out;
+	}
 
 	/* Send the image to the secure world */
 	ret = qcom_pas_auth_and_reset(pasid);
