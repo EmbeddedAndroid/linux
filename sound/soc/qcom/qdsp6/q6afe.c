@@ -1979,6 +1979,10 @@ static int q6afe_probe(struct apr_device *adev)
 
 	dev_set_drvdata(dev, afe);
 
+	/* Clients vote for clocks as soon as the clock controller exists */
+	if (!q6core_is_adsp_ready())
+		return dev_err_probe(dev, -EPROBE_DEFER, "DSP not ready\n");
+
 	return devm_of_platform_populate(dev);
 }
 
