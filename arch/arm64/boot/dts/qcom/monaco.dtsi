@@ -646,12 +646,12 @@
 
 	pmu-a55 {
 		compatible = "arm,cortex-a55-pmu";
-		interrupts = <GIC_PPI 7 IRQ_TYPE_LEVEL_LOW 0>;
+		interrupts = <GIC_PPI 7 IRQ_TYPE_LEVEL_LOW &ppi_cluster1>;
 	};
 
 	pmu-a78 {
 		compatible = "arm,cortex-a78-pmu";
-		interrupts = <GIC_PPI 7 IRQ_TYPE_LEVEL_LOW 0>;
+		interrupts = <GIC_PPI 7 IRQ_TYPE_LEVEL_LOW &ppi_cluster0>;
 	};
 
 	psci {
@@ -7413,6 +7413,16 @@
 			#redistributor-regions = <1>;
 			redistributor-stride = <0x0 0x20000>;
 			#address-cells = <0>;
+
+			ppi-partitions {
+				ppi_cluster0: interrupt-partition-0 {
+					affinity = <&cpu0 &cpu1 &cpu2 &cpu3>;
+				};
+
+				ppi_cluster1: interrupt-partition-1 {
+					affinity = <&cpu4 &cpu5 &cpu6 &cpu7>;
+				};
+			};
 		};
 
 		watchdog@17c10000 {
