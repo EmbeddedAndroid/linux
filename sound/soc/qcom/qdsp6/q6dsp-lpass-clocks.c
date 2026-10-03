@@ -144,6 +144,7 @@ int q6dsp_clock_dev_probe(struct platform_device *pdev)
 
 	cc->desc = desc;
 	cc->dev = dev;
+	dev_set_drvdata(dev, cc);
 	q6dsp_clks = desc->clks;
 
 	for (i = 0; i < desc->num_clks; i++) {
@@ -174,12 +175,6 @@ int q6dsp_clock_dev_probe(struct platform_device *pdev)
 			return ret;
 	}
 
-	ret = devm_of_clk_add_hw_provider(dev, q6dsp_of_clk_hw_get, cc);
-	if (ret)
-		return ret;
-
-	dev_set_drvdata(dev, cc);
-
-	return 0;
+	return devm_of_clk_add_hw_provider(dev, q6dsp_of_clk_hw_get, cc);
 }
 EXPORT_SYMBOL_GPL(q6dsp_clock_dev_probe);
