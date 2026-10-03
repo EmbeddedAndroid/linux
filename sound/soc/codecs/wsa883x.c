@@ -1567,6 +1567,11 @@ static void wsa883x_reset_assert(void *data)
 		gpiod_direction_output(wsa883x->sd_n, 1);
 }
 
+static void wsa883x_regulator_disable(void *data)
+{
+	regulator_disable(data);
+}
+
 static void wsa883x_reset_deassert(struct wsa883x_priv *wsa883x)
 {
 	if (wsa883x->sd_reset)
@@ -1614,9 +1619,13 @@ static int wsa883x_probe(struct sdw_slave *pdev,
 	if (ret)
 		return dev_err_probe(dev, ret, "Failed to enable vdd regulator\n");
 
+	ret = devm_add_action_or_reset(dev, wsa883x_regulator_disable, wsa883x->vdd);
+	if (ret)
+		return ret;
+
 	ret = wsa883x_get_reset(dev, wsa883x);
 	if (ret)
-		goto err;
+		return ret;
 
 	dev_set_drvdata(dev, wsa883x);
 	wsa883x->slave = pdev;
@@ -1646,11 +1655,9 @@ static int wsa883x_probe(struct sdw_slave *pdev,
 		return ret;
 
 	wsa883x->regmap = devm_regmap_init_sdw(pdev, &wsa883x_regmap_config);
-	if (IS_ERR(wsa883x->regmap)) {
-		ret = dev_err_probe(dev, PTR_ERR(wsa883x->regmap),
-				    "regmap_init failed\n");
-		goto err;
-	}
+	if (IS_ERR(wsa883x->regmap))
+		return dev_err_probe(dev, PTR_ERR(wsa883x->regmap),
+				     "regmap_init failed\n");
 
 	if (IS_REACHABLE(CONFIG_HWMON)) {
 		struct device *hwmon;
@@ -1670,16 +1677,10 @@ static int wsa883x_probe(struct sdw_slave *pdev,
 	pm_runtime_set_active(dev);
 	pm_runtime_enable(dev);
 
-	ret = devm_snd_soc_register_component(dev,
-					      &wsa883x_component_drv,
+	return devm_snd_soc_register_component(dev,
+					       &wsa883x_component_drv,
 					       wsa883x_dais,
 					       ARRAY_SIZE(wsa883x_dais));
-err:
-	if (ret)
-		regulator_disable(wsa883x->vdd);
-
-	return ret;
-
 }
 
 static int wsa883x_runtime_suspend(struct device *dev)
