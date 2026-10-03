@@ -1371,7 +1371,7 @@
 
 &uart7 {
 	/delete-property/ interrupts;
-	interrupts-extended = <&intc GIC_SPI 608 IRQ_TYPE_LEVEL_HIGH>,
+	interrupts-extended = <&intc GIC_SPI 608 IRQ_TYPE_LEVEL_HIGH 0>,
 			      <&tlmm 31 IRQ_TYPE_EDGE_FALLING>;
 	pinctrl-1 = <&qup_uart7_sleep_cts>,
 		    <&qup_uart7_sleep_rts>,
