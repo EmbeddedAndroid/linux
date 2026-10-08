@@ -802,21 +802,6 @@ static struct clk_branch ne_gcc_aggre_noc_usb3_sec_axi_clk = {
 	},
 };
 
-static struct clk_branch ne_gcc_ahb2phy_clk = {
-	.halt_reg = 0x30004,
-	.halt_check = BRANCH_HALT_VOTED,
-	.hwcg_reg = 0x30004,
-	.hwcg_bit = 1,
-	.clkr = {
-		.enable_reg = 0x30004,
-		.enable_mask = BIT(0),
-		.hw.init = &(const struct clk_init_data) {
-			.name = "ne_gcc_ahb2phy_clk",
-			.ops = &clk_branch2_ops,
-		},
-	},
-};
-
 static struct clk_branch ne_gcc_cnoc_usb2_axi_clk = {
 	.halt_reg = 0x31064,
 	.halt_check = BRANCH_HALT_VOTED,
@@ -1764,7 +1749,6 @@ static struct clk_regmap *ne_gcc_nord_clocks[] = {
 	[NE_GCC_AGGRE_NOC_USB2_AXI_CLK] = &ne_gcc_aggre_noc_usb2_axi_clk.clkr,
 	[NE_GCC_AGGRE_NOC_USB3_PRIM_AXI_CLK] = &ne_gcc_aggre_noc_usb3_prim_axi_clk.clkr,
 	[NE_GCC_AGGRE_NOC_USB3_SEC_AXI_CLK] = &ne_gcc_aggre_noc_usb3_sec_axi_clk.clkr,
-	[NE_GCC_AHB2PHY_CLK] = &ne_gcc_ahb2phy_clk.clkr,
 	[NE_GCC_CNOC_USB2_AXI_CLK] = &ne_gcc_cnoc_usb2_axi_clk.clkr,
 	[NE_GCC_CNOC_USB3_PRIM_AXI_CLK] = &ne_gcc_cnoc_usb3_prim_axi_clk.clkr,
 	[NE_GCC_CNOC_USB3_SEC_AXI_CLK] = &ne_gcc_cnoc_usb3_sec_axi_clk.clkr,
@@ -1906,6 +1890,7 @@ static void clk_nord_regs_configure(struct device *dev, struct regmap *regmap)
 }
 
 static const u32 ne_gcc_nord_critical_cbcrs[] = {
+	0x30004, /* NE_GCC_AHB2PHY_CLK */
 	0x34004, /* NE_GCC_GPU_2_CFG_CLK */
 };
 
