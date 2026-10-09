@@ -17,6 +17,7 @@ properties:
   compatible:
     items:
       - enum:
+          - qcom,qcs615-eud
           - qcom,sc7280-eud
       - const: qcom,eud
 
