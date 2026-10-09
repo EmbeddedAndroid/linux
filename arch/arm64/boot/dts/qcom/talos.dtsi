@@ -5048,6 +5048,29 @@
 			#interconnect-cells = <1>;
 		};
 
+		eud: eud@88e0000 {
+			compatible = "qcom,qcs615-eud", "qcom,eud";
+			reg = <0x0 0x088e0000 0x0 0x2000>,
+			      <0x0 0x088e4000 0x0 0x1000>;
+
+			interrupts-extended = <&pdc 12 IRQ_TYPE_LEVEL_HIGH>;
+
+			status = "disabled";
+
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				port@0 {
+					reg = <0>;
+
+					eud_usb: endpoint {
+						remote-endpoint = <&usb_1_dwc3_hs>;
+					};
+				};
+			};
+		};
+
 		usb_1_hsphy: phy@88e2000 {
 			compatible = "qcom,qcs615-qusb2-phy";
 			reg = <0x0 0x88e2000 0x0 0x180>;
@@ -5188,6 +5211,19 @@
 			wakeup-source;
 
 			status = "disabled";
+
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				port@0 {
+					reg = <0>;
+
+					usb_1_dwc3_hs: endpoint {
+						remote-endpoint = <&eud_usb>;
+					};
+				};
+			};
 		};
 
 		usb_2: usb@a800000 {
