@@ -106,6 +106,7 @@ static inline bool kvm_pkvm_ioctl_allowed(struct kvm *kvm, unsigned int ioctl)
 
 extern struct memblock_region kvm_nvhe_sym(hyp_memory)[];
 extern unsigned int kvm_nvhe_sym(hyp_memblock_nr);
+extern unsigned int kvm_nvhe_sym(hyp_iommu_pages);
 
 static inline unsigned long
 hyp_vmemmap_memblock_size(struct memblock_region *reg, size_t vmemmap_entry_size)
@@ -216,6 +217,15 @@ static inline unsigned long hyp_ffa_proxy_pages(void)
 
 	/* Plus a page each for the hypervisor's RX and TX mailboxes. */
 	return (2 * KVM_FFA_MBOX_NR_PAGES) + DIV_ROUND_UP(desc_max, PAGE_SIZE);
+}
+
+/*
+ * Set from the kernel command line, as the carveout is reserved before the
+ * IOMMU driver registers. Registration fails if the driver needs more.
+ */
+static inline unsigned int pkvm_iommu_pages(void)
+{
+	return kvm_nvhe_sym(hyp_iommu_pages);
 }
 
 static inline size_t pkvm_host_sve_state_size(void)

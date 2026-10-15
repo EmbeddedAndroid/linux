@@ -1815,7 +1815,8 @@ struct pkvm_iommu_ops;
 extern struct pkvm_iommu_ops *kvm_nvhe_sym(pkvm_iommu_ops);
 
 #ifndef __KVM_NVHE_HYPERVISOR__
-int __init pkvm_iommu_register_driver(struct pkvm_iommu_ops *hyp_ops);
+int __init pkvm_iommu_register_driver(struct pkvm_iommu_ops *hyp_ops,
+				      unsigned int nr_pages);
 #endif
 
 #endif /* __ARM64_KVM_HOST_H__ */

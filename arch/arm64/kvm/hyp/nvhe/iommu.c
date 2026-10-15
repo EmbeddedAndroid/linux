@@ -14,6 +14,8 @@
 /* Only one set of ops supported */
 struct pkvm_iommu_ops *pkvm_iommu_ops __ro_after_init;
 
+static struct hyp_pool iommu_pages_pool;
+
 /* Protected by host_mmu.lock */
 static bool pkvm_idmap_initialized;
 
@@ -106,7 +108,7 @@ out_unlock:
 	return ret;
 }
 
-int pkvm_iommu_init(void)
+int pkvm_iommu_init(void *pool_base, unsigned int nr_pages)
 {
 	int ret;
 
@@ -114,6 +116,11 @@ int pkvm_iommu_init(void)
 	if (!pkvm_iommu_ops || !pkvm_iommu_ops->init ||
 	    !pkvm_iommu_ops->host_stage2_idmap)
 		return 0;
+
+	ret = hyp_pool_init(&iommu_pages_pool, hyp_virt_to_pfn(pool_base),
+			    nr_pages, 0);
+	if (ret)
+		return ret;
 
 	ret = pkvm_iommu_ops->init();
 	if (ret)
@@ -131,4 +138,14 @@ int pkvm_iommu_host_stage2_idmap(phys_addr_t start, phys_addr_t end,
 		return 0;
 
 	return pkvm_iommu_ops->host_stage2_idmap(start, end, pkvm_to_iommu_prot(prot));
+}
+
+void *pkvm_iommu_alloc_pages(u8 order)
+{
+	return hyp_alloc_pages(&iommu_pages_pool, order);
+}
+
+void pkvm_iommu_free_pages(void *ptr)
+{
+	hyp_put_page(&iommu_pages_pool, ptr);
 }
