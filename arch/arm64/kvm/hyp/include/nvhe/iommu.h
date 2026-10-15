@@ -13,6 +13,13 @@ struct pkvm_iommu_ops {
 	 * with the same @prot, which must succeed.
 	 */
 	int (*host_stage2_idmap)(phys_addr_t start, phys_addr_t end, int prot);
+	/*
+	 * Emulate a host data abort on MMIO @addr
+	 * @esr has a valid instruction syndrome and @regs holds the host x0-x30,
+	 * SRT 31 is the zero register. Return true if the access was emulated,
+	 * which would skip the instruction.
+	 */
+	bool (*dabt_handler)(struct user_pt_regs *regs, u64 esr, u64 addr);
 };
 
 int pkvm_iommu_init(void *pool_base, unsigned int nr_pages);
@@ -24,5 +31,7 @@ int pkvm_iommu_host_stage2_idmap(phys_addr_t start, phys_addr_t end,
 void *pkvm_iommu_alloc_pages(u8 order);
 /* Free pages from pkvm_iommu_alloc_pages(). */
 void pkvm_iommu_free_pages(void *ptr);
+
+bool pkvm_iommu_host_dabt_handler(struct user_pt_regs *regs, u64 esr, u64 addr);
 
 #endif /* __ARM64_KVM_NVHE_IOMMU_H__ */

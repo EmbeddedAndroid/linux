@@ -149,3 +149,9 @@ void pkvm_iommu_free_pages(void *ptr)
 {
 	hyp_put_page(&iommu_pages_pool, ptr);
 }
+
+bool pkvm_iommu_host_dabt_handler(struct user_pt_regs *regs, u64 esr, u64 addr)
+{
+	return pkvm_iommu_ops && pkvm_iommu_ops->dabt_handler &&
+	       pkvm_iommu_ops->dabt_handler(regs, esr, addr);
+}
