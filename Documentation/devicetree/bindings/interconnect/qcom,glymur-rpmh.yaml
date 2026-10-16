@@ -201,6 +201,19 @@ allOf:
         compatible:
           contains:
             enum:
+              - qcom,glymur-aggre3-noc
+    then:
+      properties:
+        clocks:
+          items:
+            - description: aggre USB2 PRIM AXI clock
+            - description: aggre USB3 MP AXI clock
+
+  - if:
+      properties:
+        compatible:
+          contains:
+            enum:
               - qcom,glymur-aggre4-noc
     then:
       properties:
@@ -217,6 +230,7 @@ allOf:
           contains:
             enum:
               - qcom,glymur-aggre2-noc
+              - qcom,glymur-aggre3-noc
               - qcom,glymur-aggre4-noc
               - qcom,glymur-pcie-east-anoc
               - qcom,glymur-pcie-west-anoc
