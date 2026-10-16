@@ -3003,6 +3003,8 @@
 			reg = <0x0 0x01700000 0x0 0x1d400>;
 			qcom,bcm-voters = <&apps_bcm_voter>;
 			#interconnect-cells = <2>;
+			clocks = <&gcc GCC_AGGRE_USB2_PRIM_AXI_CLK>,
+				 <&gcc GCC_AGGRE_USB3_MP_AXI_CLK>;
 		};
 
 		aggre4_noc: interconnect@1740000 {
