@@ -680,6 +680,36 @@
 			no-map;
 		};
 
+		hyp_ac_config_mem: hyp-ac-config@d7000000 {
+			reg = <0x0 0xd7000000 0x0 0x19000>;
+			no-map;
+		};
+
+		xbl_sc_mem: xbl-sc@d7019000 {
+			reg = <0x0 0xd7019000 0x0 0x60000>;
+			no-map;
+		};
+
+		reserved-region@d7079000 {
+			reg = <0x0 0xd7079000 0x0 0x107000>;
+			no-map;
+		};
+
+		qtee_mem: qtee@d7180000 {
+			reg = <0x0 0xd7180000 0x0 0x680000>;
+			no-map;
+		};
+
+		ta_mem: ta@d7800000 {
+			reg = <0x0 0xd7800000 0x0 0x1c00000>;
+			no-map;
+		};
+
+		tags_mem: tags@d9400000 {
+			reg = <0x0 0xd9400000 0x0 0x9c0000>;
+			no-map;
+		};
+
 		smem_mem: smem@ffe00000 {
 			compatible = "qcom,smem";
 			reg = <0x0 0xffe00000 0x0 0x200000>;
