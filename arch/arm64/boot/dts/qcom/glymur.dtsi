@@ -4329,6 +4329,10 @@
 					 &mc_virt SLAVE_EBI1 QCOM_ICC_TAG_ALWAYS>;
 			interconnect-names = "gfx-mem";
 
+			gpu_zap_shader: zap-shader {
+				memory-region = <&gpu_microcode_mem>;
+			};
+
 			gpu_opp_table: opp-table {
 				compatible = "operating-points-v2-adreno",
 					     "operating-points-v2";
