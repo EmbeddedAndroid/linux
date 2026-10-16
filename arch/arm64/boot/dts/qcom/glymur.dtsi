@@ -579,8 +579,38 @@
 		#size-cells = <2>;
 		ranges;
 
+		llcc_lpi_mem: llcc-lpi@80000000 {
+			reg = <0x0 0x80000000 0x0 0x600000>;
+			no-map;
+		};
+
+		cpucp_mem: cpucp@80900000 {
+			reg = <0x0 0x80900000 0x0 0xb00000>;
+			no-map;
+		};
+
 		pdp_mem: pdp@81400000 {
 			reg = <0x0 0x81400000 0x0 0x100000>;
+			no-map;
+		};
+
+		cpucp_tags_mem: cpucp-tags@81500000 {
+			reg = <0x0 0x81500000 0x0 0x360000>;
+			no-map;
+		};
+
+		xbl_ramdump_mem: xbl-ramdump@81860000 {
+			reg = <0x0 0x81860000 0x0 0x200000>;
+			no-map;
+		};
+
+		reserved-region@81bc0000 {
+			reg = <0x0 0x81bc0000 0x0 0x40000>;
+			no-map;
+		};
+
+		aop_image_mem: aop-image@81c00000 {
+			reg = <0x0 0x81c00000 0x0 0x60000>;
 			no-map;
 		};
 
@@ -590,8 +620,53 @@
 			no-map;
 		};
 
+		reserved-region@81c80000 {
+			reg = <0x0 0x81c80000 0x0 0x15c000>;
+			no-map;
+		};
+
 		pdp_ns_shared_mem: pdp-ns-shared@81e00000 {
 			reg = <0x0 0x81e00000 0x0 0x200000>;
+			no-map;
+		};
+
+		acpi_ta_mem: acpi-ta@82000000 {
+			reg = <0x0 0x82000000 0x0 0x200000>;
+			no-map;
+		};
+
+		soccp_sdi_mem: soccp-sdi@823a0000 {
+			reg = <0x0 0x823a0000 0x0 0x140000>;
+			no-map;
+		};
+
+		tz_stat_mem: tz-stat@82700000 {
+			reg = <0x0 0x82700000 0x0 0x100000>;
+			no-map;
+		};
+
+		reserved-region@82800000 {
+			reg = <0x0 0x82800000 0x0 0x1c0000>;
+			no-map;
+		};
+
+		reserved-region@83f00000 {
+			reg = <0x0 0x83f00000 0x0 0x500000>;
+			no-map;
+		};
+
+		spu_shared_mem: spu-shared@84900000 {
+			reg = <0x0 0x84900000 0x0 0x100000>;
+			no-map;
+		};
+
+		adsp_rpc_heap_mem: adsp-rpc-heap@84a00000 {
+			reg = <0x0 0x84a00000 0x0 0x900000>;
+			no-map;
+		};
+
+		reserved-region@85370000 {
+			reg = <0x0 0x85370000 0x0 0xa20000>;
 			no-map;
 		};
 
@@ -615,6 +690,11 @@
 			no-map;
 		};
 
+		reserved-region@87d70000 {
+			reg = <0x0 0x87d70000 0x0 0x90000>;
+			no-map;
+		};
+
 		oob_nonsecure_mem: oob-nonsecure@87e00000 {
 			reg = <0x0 0x87e00000 0x0 0xc00000>;
 			no-map;
@@ -635,6 +715,11 @@
 			no-map;
 		};
 
+		reserved-region@89220000 {
+			reg = <0x0 0x89220000 0x0 0x4e0000>;
+			no-map;
+		};
+
 		cvp_mem: cvp@89700000 {
 			reg = <0x0 0x89700000 0x0 0x700000>;
 			no-map;
@@ -650,6 +735,11 @@
 			no-map;
 		};
 
+		reserved-region@8d880000 {
+			reg = <0x0 0x8d880000 0x0 0x80000>;
+			no-map;
+		};
+
 		cdsp_mem: cdsp@8d900000 {
 			reg = <0x0 0x8d900000 0x0 0x4000000>;
 			no-map;
@@ -657,6 +747,11 @@
 
 		q6_cdsp_dtb_mem: q6-cdsp-dtb@91900000 {
 			reg = <0x0 0x91900000 0x0 0x80000>;
+			no-map;
+		};
+
+		reserved-region@91980000 {
+			reg = <0x0 0x91980000 0x0 0x7e000>;
 			no-map;
 		};
 
@@ -677,6 +772,21 @@
 
 		video_mem: video@92900000 {
 			reg = <0x0 0x92900000 0x0 0xc00000>;
+			no-map;
+		};
+
+		reserved-region@93500000 {
+			reg = <0x0 0x93500000 0x0 0xa00000>;
+			no-map;
+		};
+
+		reserved-region@a2000000 {
+			reg = <0x0 0xa2000000 0x0 0x5000000>;
+			no-map;
+		};
+
+		bert_mem: bert@d6f00000 {
+			reg = <0x0 0xd6f00000 0x0 0x100000>;
 			no-map;
 		};
 
@@ -707,6 +817,21 @@
 
 		tags_mem: tags@d9400000 {
 			reg = <0x0 0xd9400000 0x0 0x9c0000>;
+			no-map;
+		};
+
+		reserved-region@f9a20000 {
+			reg = <0x0 0xf9a20000 0x0 0x2300000>;
+			no-map;
+		};
+
+		reserved-region@fc000000 {
+			reg = <0x0 0xfc000000 0x0 0x2c00000>;
+			no-map;
+		};
+
+		oob_glink_mem: oob-glink@fed80000 {
+			reg = <0x0 0xfed80000 0x0 0x160000>;
 			no-map;
 		};
 
