@@ -310,13 +310,9 @@ static int qcom_pas_start(struct rproc *rproc)
 	struct qcom_pas *pas = rproc->priv;
 	int ret;
 
-	ret = qcom_q6v5_prepare(&pas->q6v5);
-	if (ret)
-		return ret;
-
 	ret = qcom_pas_pds_enable(pas, pas->proxy_pds, pas->proxy_pd_count);
 	if (ret < 0)
-		goto disable_irqs;
+		goto out;
 
 	ret = clk_prepare_enable(pas->xo);
 	if (ret)
@@ -338,10 +334,20 @@ static int qcom_pas_start(struct rproc *rproc)
 			goto disable_cx_supply;
 	}
 
+	/*
+	 * The handover interrupt is enabled here, once all proxy resources
+	 * are held: from now on qcom_pas_handover() may release them at any
+	 * time, so the error path below leaves that to the handover when it
+	 * has happened.
+	 */
+	ret = qcom_q6v5_prepare(&pas->q6v5);
+	if (ret)
+		goto disable_px_supply;
+
 	if (pas->dtb_pas_id) {
 		ret = qcom_pas_map_carveout(rproc, pas->dtb_mem_phys, pas->dtb_mem_size);
 		if (ret)
-			goto disable_px_supply;
+			goto unprepare;
 
 		ret = qcom_pas_prepare_and_auth_reset(pas->dtb_pas_ctx);
 		if (ret) {
@@ -395,6 +401,9 @@ release_pas_metadata:
 unmap_dtb_carveout:
 	if (pas->dtb_pas_id)
 		qcom_pas_unmap_carveout(rproc, pas->dtb_mem_phys, pas->dtb_mem_size);
+unprepare:
+	if (!qcom_q6v5_unprepare(&pas->q6v5))
+		goto out;
 disable_px_supply:
 	if (pas->px_supply)
 		regulator_disable(pas->px_supply);
@@ -407,9 +416,7 @@ disable_xo_clk:
 	clk_disable_unprepare(pas->xo);
 disable_proxy_pds:
 	qcom_pas_pds_disable(pas, pas->proxy_pds, pas->proxy_pd_count);
-disable_irqs:
-	qcom_q6v5_unprepare(&pas->q6v5);
-
+out:
 	/* firmware is used to pass reference from qcom_pas_start(), drop it now */
 	pas->firmware = NULL;
 
