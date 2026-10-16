@@ -589,6 +589,10 @@
 	};
 };
 
+&gpu_zap_shader {
+	firmware-name = "qcom/glymur/gen80100_zap.mbn";
+};
+
 &i2c9 {
 	clock-frequency = <400000>;
 
