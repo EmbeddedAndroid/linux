@@ -1,0 +1,68 @@
+// SPDX-License-Identifier: BSD-3-Clause
+/*
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ *
+ * SM8650 specific modifications required to boot in EL2.
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/interrupt-controller/arm-gic.h>
+
+/* No PAS service loads the zap shader at EL2; Linux resets the GPU itself. */
+&gpu_zap_shader {
+	status = "disabled";
+};
+
+&iris {
+	/* TODO: Add video-firmware iommus to start IRIS from EL2 */
+	status = "disabled";
+};
+
+&reserved_memory {
+	#address-cells = <2>;
+	#size-cells = <2>;
+
+	/*
+	 * The rest of the hypervisor carve-out: protected by the boot firmware
+	 * and absent from the stock UEFI memory map, but reported as RAM by
+	 * other boot loaders.
+	 */
+	hyp_tail_mem: hyp@81200000 {
+		reg = <0 0x81200000 0 0x4e0000>;
+		no-map;
+	};
+
+	/* OP-TEE (BL32), in the TA area of the TZ carve-out above tz-merged */
+	optee_mem: optee@d8800000 {
+		reg = <0 0xd8800000 0 0x1e00000>;
+		no-map;
+	};
+};
+
+/* No PAS service authenticates and starts the DSPs at EL2 yet. */
+&remoteproc_adsp {
+	status = "disabled";
+};
+
+&remoteproc_cdsp {
+	status = "disabled";
+};
+
+&remoteproc_mpss {
+	status = "disabled";
+};
+
+/*
+ * The cores implement the EL2 virtual timer (PPI 12), which Linux uses when it
+ * runs at EL2 with VHE; without it Linux falls back to the EL2 physical timer.
+ */
+&{/timer} {
+	interrupt-parent = <&intc>;
+	interrupts = <GIC_PPI 13 IRQ_TYPE_LEVEL_LOW 0>,
+		     <GIC_PPI 14 IRQ_TYPE_LEVEL_LOW 0>,
+		     <GIC_PPI 11 IRQ_TYPE_LEVEL_LOW 0>,
+		     <GIC_PPI 10 IRQ_TYPE_LEVEL_LOW 0>,
+		     <GIC_PPI 12 IRQ_TYPE_LEVEL_LOW 0>;
+};
