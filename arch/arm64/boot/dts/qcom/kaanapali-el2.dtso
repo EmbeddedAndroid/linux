@@ -1,0 +1,113 @@
+// SPDX-License-Identifier: BSD-3-Clause
+/*
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ *
+ * Kaanapali specific modifications required to boot in EL2.
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/interrupt-controller/arm-gic.h>
+
+/* We can't and don't need to use zap shader in EL2 as linux can zap the gpu on it's own. */
+&gpu_zap_shader {
+	status = "disabled";
+};
+
+/*
+ * Memory the SoC memory map gives to the boot firmware, which U-Boot
+ * reports as RAM: firmware data, boot logs and crash dump areas, the
+ * protected hypervisor extended heap, the TZ carve-out (where TF-A BL31
+ * and OP-TEE run) and the LLCC LPI region of the audio DSP island.
+ */
+&{/reserved-memory} {
+	#address-cells = <2>;
+	#size-cells = <2>;
+
+	reserved@80e00000 {
+		reg = <0x0 0x80e00000 0x0 0x400000>;
+		no-map;
+	};
+
+	cpucp@81200000 {
+		reg = <0x0 0x81200000 0x0 0x100000>;
+		no-map;
+	};
+
+	dare-hyp-tags@81400000 {
+		reg = <0x0 0x81400000 0x0 0x560000>;
+		no-map;
+	};
+
+	xbl-log@81a00000 {
+		reg = <0x0 0x81a00000 0x0 0x60000>;
+		no-map;
+	};
+
+	aop@81c00000 {
+		reg = <0x0 0x81c00000 0x0 0x60000>;
+		no-map;
+	};
+
+	/* AOP config, TME crash dump and log, UEFI log */
+	aop-config@81c80000 {
+		reg = <0x0 0x81c80000 0x0 0x74000>;
+		no-map;
+	};
+
+	/* CPUCP scandump, ADSP MHI, SOCCP SDI, PMIC minidump, QUP firmware */
+	scandump@82000000 {
+		reg = <0x0 0x82000000 0x0 0x478000>;
+		no-map;
+	};
+
+	/* PVM firmware, hypervisor memory database */
+	pvm-fw@824a0000 {
+		reg = <0x0 0x824a0000 0x0 0x160000>;
+		no-map;
+	};
+
+	tz-stat@82700000 {
+		reg = <0x0 0x82700000 0x0 0x100000>;
+		no-map;
+	};
+
+	hyp-heap@c3dd0000 {
+		reg = <0x0 0xc3dd0000 0x0 0xa30000>;
+		no-map;
+	};
+
+	xbl-ramdump@d7800000 {
+		reg = <0x0 0xd7800000 0x0 0x1c0000>;
+		no-map;
+	};
+
+	global-sync@d7a00000 {
+		reg = <0x0 0xd7a00000 0x0 0x200000>;
+		no-map;
+	};
+
+	tz@d8000000 {
+		reg = <0x0 0xd8000000 0x0 0x7da0000>;
+		no-map;
+	};
+
+	llcc-lpi@ff800000 {
+		reg = <0x0 0xff800000 0x0 0x800000>;
+		no-map;
+	};
+};
+
+/*
+ * Linux at EL2 with VHE uses the EL2 virtual timer, PPI 12 (INTID 28), which
+ * Gunyah owns when Linux runs at EL1.
+ */
+&{/timer} {
+	interrupt-parent = <&intc>;
+	interrupts = <GIC_PPI 13 IRQ_TYPE_LEVEL_LOW>,
+		     <GIC_PPI 14 IRQ_TYPE_LEVEL_LOW>,
+		     <GIC_PPI 11 IRQ_TYPE_LEVEL_LOW>,
+		     <GIC_PPI 10 IRQ_TYPE_LEVEL_LOW>,
+		     <GIC_PPI 12 IRQ_TYPE_LEVEL_LOW>;
+};
