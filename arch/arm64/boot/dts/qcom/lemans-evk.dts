@@ -978,14 +978,15 @@
 	clock-frequency = <32768>;
 };
 
+/*
+ * QUP2 SE2 (spi@888000) is wired to the discrete TPM. OP-TEE owns and
+ * drives this serial engine; the normal world reaches the TPM through the
+ * OP-TEE TPM passthrough PTA (tpm_dtpm_tee), not directly over SPI. Keep
+ * the SE disabled for Linux: a second master on the same SE corrupts
+ * OP-TEE's transfers (RX FIFO underruns, unexpected-IRQ errors).
+ */
 &spi16 {
-	status = "okay";
-
-	tpm@0 {
-		compatible = "st,st33htpm-spi", "tcg,tpm_tis-spi";
-		reg = <0>;
-		spi-max-frequency = <20000000>;
-	};
+	status = "disabled";
 };
 
 &tlmm {
