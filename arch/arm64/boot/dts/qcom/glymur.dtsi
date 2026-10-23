@@ -2739,7 +2739,8 @@
 			reset-names = "phy",
 				      "common";
 
-			power-domains = <&gcc GCC_USB_0_PHY_GDSC>;
+			power-domains = <&gcc GCC_USB_0_PHY_GDSC>,
+					<&gcc GCC_USB30_PRIM_GDSC>;
 
 			#clock-cells = <1>;
 			#phy-cells = <1>;
@@ -2806,7 +2807,8 @@
 				      "com_aux",
 				      "usb3_pipe";
 
-			power-domains = <&gcc GCC_USB_1_PHY_GDSC>;
+			power-domains = <&gcc GCC_USB_1_PHY_GDSC>,
+					<&gcc GCC_USB30_SEC_GDSC>;
 
 			resets = <&gcc GCC_USB3_PHY_SEC_BCR>,
 				 <&gcc GCC_USB3PHY_PHY_SEC_BCR>;
@@ -5053,7 +5055,8 @@
 				      "com_aux",
 				      "usb3_pipe";
 
-			power-domains = <&gcc GCC_USB_2_PHY_GDSC>;
+			power-domains = <&gcc GCC_USB_2_PHY_GDSC>,
+					<&gcc GCC_USB30_TERT_GDSC>;
 
 			resets = <&gcc GCC_USB3_PHY_TERT_BCR>,
 				 <&gcc GCC_USB3PHY_PHY_TERT_BCR>;
