@@ -238,6 +238,33 @@ int qcom_pas_shutdown(u32 pas_id)
 EXPORT_SYMBOL_GPL(qcom_pas_shutdown);
 
 /**
+ * qcom_pas_mem_protect_video_var() - Set up video content protection ranges
+ * @cp_start:		content protection region start
+ * @cp_size:		content protection region size
+ * @cp_nonpixel_start:	non-pixel region start
+ * @cp_nonpixel_size:	non-pixel region size
+ *
+ * Backends that manage secure memory protection on their own do not
+ * implement this operation, in which case it is a no-op.
+ *
+ * Return: 0 on success.
+ */
+int qcom_pas_mem_protect_video_var(u32 cp_start, u32 cp_size,
+				   u32 cp_nonpixel_start, u32 cp_nonpixel_size)
+{
+	if (!ops_ptr)
+		return -ENODEV;
+
+	if (!ops_ptr->mem_protect_video_var)
+		return 0;
+
+	return ops_ptr->mem_protect_video_var(ops_ptr->dev, cp_start, cp_size,
+					      cp_nonpixel_start,
+					      cp_nonpixel_size);
+}
+EXPORT_SYMBOL_GPL(qcom_pas_mem_protect_video_var);
+
+/**
  * qcom_pas_supported() - Check if the peripheral authentication service is
  *			  supported for the given peripheral
  * @pas_id:	peripheral authentication service id
