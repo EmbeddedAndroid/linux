@@ -981,6 +981,15 @@ static bool qcom_scm_pas_supported(struct device *dev, u32 pas_id)
 	return ret ? false : !!res.result[0];
 }
 
+static int qcom_scm_pas_mem_protect_video_var(struct device *dev, u32 cp_start,
+					      u32 cp_size, u32 cp_nonpixel_start,
+					      u32 cp_nonpixel_size)
+{
+	return qcom_scm_mem_protect_video_var(cp_start, cp_size,
+					      cp_nonpixel_start,
+					      cp_nonpixel_size);
+}
+
 static struct qcom_pas_ops qcom_pas_ops_scm = {
 	.drv_name		= "qcom_scm",
 	.supported		= qcom_scm_pas_supported,
@@ -991,6 +1000,7 @@ static struct qcom_pas_ops qcom_pas_ops_scm = {
 	.prepare_and_auth_reset	= qcom_scm_pas_prepare_and_auth_reset,
 	.set_remote_state	= qcom_scm_pas_set_remote_state,
 	.shutdown		= qcom_scm_pas_shutdown,
+	.mem_protect_video_var	= qcom_scm_pas_mem_protect_video_var,
 	.metadata_release	= qcom_scm_pas_metadata_release,
 };
 
