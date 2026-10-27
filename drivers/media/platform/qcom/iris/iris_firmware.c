@@ -5,7 +5,6 @@
 
 #include <linux/firmware.h>
 #include <linux/firmware/qcom/qcom_pas.h>
-#include <linux/firmware/qcom/qcom_scm.h>
 #include <linux/of_address.h>
 #include <linux/of_reserved_mem.h>
 #include <linux/soc/qcom/mdt_loader.h>
@@ -241,12 +240,12 @@ int iris_fw_load(struct iris_core *core)
 
 	for (i = 0; i < core->iris_platform_data->tz_cp_config_data_size; i++) {
 		cp_config = &core->iris_platform_data->tz_cp_config_data[i];
-		ret = qcom_scm_mem_protect_video_var(cp_config->cp_start,
+		ret = qcom_pas_mem_protect_video_var(cp_config->cp_start,
 						     cp_config->cp_size,
 						     cp_config->cp_nonpixel_start,
 						     cp_config->cp_nonpixel_size);
 		if (ret) {
-			dev_err(core->dev, "qcom_scm_mem_protect_video_var failed: %d\n", ret);
+			dev_err(core->dev, "qcom_pas_mem_protect_video_var failed: %d\n", ret);
 			qcom_pas_shutdown(IRIS_PAS_ID);
 			return ret;
 		}
