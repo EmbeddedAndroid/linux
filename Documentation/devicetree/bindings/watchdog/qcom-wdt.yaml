@@ -17,6 +17,7 @@ properties:
     oneOf:
       - items:
           - enum:
+              - qcom,apss-wdt-eliza
               - qcom,apss-wdt-glymur
               - qcom,apss-wdt-hawi
               - qcom,kpss-wdt-ipq4019
