@@ -1,0 +1,66 @@
+// SPDX-License-Identifier: BSD-3-Clause
+/*
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ *
+ * Eliza specific modifications required to boot in EL2.
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/interrupt-controller/arm-gic.h>
+
+/*
+ * XBL leaves the non-secure APSS watchdog running. Gunyah services it when
+ * Linux runs at EL1; without it the kernel must.
+ */
+&apss_watchdog {
+	status = "okay";
+};
+
+&gpu_zap_shader {
+	status = "disabled";
+};
+
+&remoteproc_adsp {
+	iommus = <&apps_smmu 0x1000 0x0>;
+};
+
+&remoteproc_cdsp {
+	iommus = <&apps_smmu 0x0c00 0x0>;
+};
+
+/*
+ * Tag storage of the hypervisor and TZ regions ("DARE tags" in the boot
+ * firmware's memory map), which the firmware protects and Gunyah keeps out
+ * of the HLOS VM: the hypervisor tags in the hole between cpucp and
+ * xbl-dtlog, and the TZ tags after tz-merged. A Linux access takes an
+ * SError.
+ */
+&{/reserved-memory} {
+	#address-cells = <2>;
+	#size-cells = <2>;
+
+	dare-hyp-tags@81300000 {
+		reg = <0x0 0x81300000 0x0 0x660000>;
+		no-map;
+	};
+
+	dare-tz-tags@d8600000 {
+		reg = <0x0 0xd8600000 0x0 0x3200000>;
+		no-map;
+	};
+};
+
+/*
+ * Linux at EL2 with VHE uses the EL2 virtual timer, PPI 12 (INTID 28), which
+ * Gunyah owns when Linux runs at EL1.
+ */
+&{/timer} {
+	interrupt-parent = <&intc>;
+	interrupts = <GIC_PPI 13 IRQ_TYPE_LEVEL_LOW>,
+		     <GIC_PPI 14 IRQ_TYPE_LEVEL_LOW>,
+		     <GIC_PPI 11 IRQ_TYPE_LEVEL_LOW>,
+		     <GIC_PPI 10 IRQ_TYPE_LEVEL_LOW>,
+		     <GIC_PPI 12 IRQ_TYPE_LEVEL_LOW>;
+};
