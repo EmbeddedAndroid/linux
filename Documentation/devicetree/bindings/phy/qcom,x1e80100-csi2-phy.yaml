@@ -17,6 +17,7 @@ description:
 properties:
   compatible:
     oneOf:
+      - const: qcom,eliza-csi2-phy
       - const: qcom,kaanapali-csi2-phy
       - const: qcom,x1e80100-csi2-phy
       - items:
@@ -52,13 +53,13 @@ properties:
   power-domains:
     items:
       - description: Titan Top GDSC - Titan ISP Block, Global Distributed Switch Controller.
-      - description: MMCX voltage rail
+      - description: MMCX voltage rail, or CX on SoCs without MMCX
       - description: MXC or MXA voltage rail
 
   power-domain-names:
     items:
       - const: top
-      - const: mmcx
+      - enum: [ cx, mmcx ]
       - const: mx
 
   vdda-0p9-supply:
@@ -151,6 +152,27 @@ required:
   - vdda-0p9-supply
   - vdda-1p2-supply
   - ports
+
+allOf:
+  - if:
+      properties:
+        compatible:
+          contains:
+            const: qcom,eliza-csi2-phy
+    then:
+      properties:
+        power-domain-names:
+          items:
+            - const: top
+            - const: cx
+            - const: mx
+    else:
+      properties:
+        power-domain-names:
+          items:
+            - const: top
+            - const: mmcx
+            - const: mx
 
 additionalProperties: false
 
