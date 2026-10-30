@@ -739,7 +739,8 @@
 			clock-names = "m-ahb",
 				      "s-ahb";
 
-			iommus = <&apps_smmu 0x423 0x0>;
+			iommus = <&apps_smmu 0x420 0x0>,
+				 <&apps_smmu 0x423 0x0>;
 
 			#address-cells = <2>;
 			#size-cells = <2>;
