@@ -7554,10 +7554,12 @@ static const struct camss_resources eliza_resources = {
 	.csiphy_res = csiphy_res_eliza,
 	.tpg_res = tpg_res_eliza,
 	.csid_res = csid_res_eliza,
+	.vfe_res = vfe_res_eliza,
 	.icc_res = icc_res_eliza,
 	.csiphy_num = ARRAY_SIZE(csiphy_res_eliza),
 	.tpg_num = ARRAY_SIZE(tpg_res_eliza),
 	.csid_num = ARRAY_SIZE(csid_res_eliza),
+	.vfe_num = ARRAY_SIZE(vfe_res_eliza),
 	.icc_path_num = ARRAY_SIZE(icc_res_eliza),
 };
 

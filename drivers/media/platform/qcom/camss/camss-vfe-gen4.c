@@ -43,6 +43,17 @@ static const struct vfe_gen4_hw_info vfe_980_hw_info = {
 	.has_wm_cgc_override = true,
 };
 
+/* TFE 970 has the TFE 980 bus layout but no PDAF_3 and RDI4 write clients */
+static const struct vfe_gen4_hw_info vfe_970_hw_info = {
+	.bus_reg_base = 0x800,
+	.bus_reg_base_lite = 0x200,
+	.test_bus_ctrl_offset = 0x128,
+	.rdi_wm_offset = 0x14,
+	.rdi_wm_offset_lite = 0x0,
+	.addr_shift = 8,
+	.has_wm_cgc_override = true,
+};
+
 static const struct vfe_gen4_hw_info vfe_1080_hw_info = {
 	.bus_reg_base = 0x1000,
 	.bus_reg_base_lite = 0x800,
@@ -59,6 +70,8 @@ vfe_gen4_get_hw_info(struct vfe_device *vfe)
 	switch (vfe->camss->res->version) {
 	case CAMSS_NORD:
 		return &vfe_900_hw_info;
+	case CAMSS_ELIZA:
+		return &vfe_970_hw_info;
 	case CAMSS_8750:
 		return &vfe_980_hw_info;
 	default:
