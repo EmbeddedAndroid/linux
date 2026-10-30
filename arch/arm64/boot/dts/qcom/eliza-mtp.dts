@@ -485,6 +485,10 @@
 	vdd3-supply = <&vreg_l17b>;
 };
 
+&qupv3_2 {
+	firmware-name = "qcom/eliza/qupv3fw.elf";
+};
+
 &remoteproc_adsp {
 	firmware-name = "qcom/eliza/adsp.mbn",
 			"qcom/eliza/adsp_dtb.mbn";
