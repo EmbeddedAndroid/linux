@@ -2474,6 +2474,102 @@
 			};
 		};
 
+		lpass_rxmacro: codec@6ac0000 {
+			compatible = "qcom,eliza-lpass-rx-macro",
+				     "qcom,sm8550-lpass-rx-macro";
+			reg = <0x0 0x06ac0000 0x0 0x1000>;
+
+			clocks = <&q6prmcc LPASS_CLK_ID_RX_CORE_TX_MCLK
+					   LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
+				 <&q6prmcc LPASS_HW_MACRO_VOTE
+					   LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
+				 <&q6prmcc LPASS_HW_DCODEC_VOTE
+					   LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
+				 <&lpass_vamacro>;
+			clock-names = "mclk",
+				      "macro",
+				      "dcodec",
+				      "fsgen";
+
+			#clock-cells = <0>;
+			clock-output-names = "mclk";
+			#sound-dai-cells = <1>;
+		};
+
+		swr1: soundwire@6ad0000 {
+			compatible = "qcom,soundwire-v2.1.0",
+				     "qcom,soundwire-v2.0.0";
+			reg = <0x0 0x06ad0000 0x0 0x10000>;
+			interrupts = <GIC_SPI 155 IRQ_TYPE_LEVEL_HIGH>;
+
+			clocks = <&lpass_rxmacro>;
+			clock-names = "iface";
+
+			label = "RX";
+
+			pinctrl-0 = <&rx_swr_active>;
+			pinctrl-names = "default";
+
+			qcom,din-ports = <1>;
+			qcom,dout-ports = <11>;
+
+			qcom,ports-sinterval =
+				/bits/ 16 <0x03 0x3f 0x1f 0x07 0x00 0x18f
+					   0xff 0xff 0x31 0xff 0xff 0xff>;
+			qcom,ports-offset1 =
+				/bits/ 8 <0x00 0x00 0x0b 0x01 0x00 0x00
+					  0xff 0xff 0x00 0xff 0xff 0xff>;
+			qcom,ports-offset2 =
+				/bits/ 8 <0x00 0x00 0x0b 0x00 0x00 0x00
+					  0xff 0xff 0x00 0xff 0xff 0xff>;
+			qcom,ports-hstart =
+				/bits/ 8 <0xff 0x03 0xff 0xff 0xff 0x08
+					  0xff 0xff 0x00 0xff 0xff 0xff>;
+			qcom,ports-hstop =
+				/bits/ 8 <0xff 0x06 0xff 0xff 0xff 0x08
+					  0xff 0xff 0x0f 0xff 0xff 0xff>;
+			qcom,ports-word-length =
+				/bits/ 8 <0x01 0x07 0x04 0xff 0xff 0x0f
+					  0xff 0xff 0x18 0xff 0xff 0xff>;
+			qcom,ports-block-pack-mode =
+				/bits/ 8 <0xff 0x00 0x01 0xff 0xff 0x00
+					  0xff 0xff 0x01 0xff 0xff 0xff>;
+			qcom,ports-block-group-count =
+				/bits/ 8 <0xff 0xff 0xff 0xff 0x00 0x00
+					  0xff 0xff 0x00 0xff 0xff 0xff>;
+			qcom,ports-lane-control =
+				/bits/ 8 <0x01 0x00 0x00 0x00 0x00 0x00
+					  0xff 0xff 0x01 0xff 0xff 0xff>;
+
+			#address-cells = <2>;
+			#size-cells = <0>;
+			#sound-dai-cells = <1>;
+
+			status = "disabled";
+		};
+
+		lpass_txmacro: codec@6ae0000 {
+			compatible = "qcom,eliza-lpass-tx-macro",
+				     "qcom,sm8550-lpass-tx-macro";
+			reg = <0x0 0x06ae0000 0x0 0x1000>;
+
+			clocks = <&q6prmcc LPASS_CLK_ID_TX_CORE_MCLK
+					   LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
+				 <&q6prmcc LPASS_HW_MACRO_VOTE
+					   LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
+				 <&q6prmcc LPASS_HW_DCODEC_VOTE
+					   LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
+				 <&lpass_vamacro>;
+			clock-names = "mclk",
+				      "macro",
+				      "dcodec",
+				      "fsgen";
+
+			#clock-cells = <0>;
+			clock-output-names = "mclk";
+			#sound-dai-cells = <1>;
+		};
+
 		lpass_wsamacro: codec@6b00000 {
 			compatible = "qcom,eliza-lpass-wsa-macro",
 				     "qcom,sm8550-lpass-wsa-macro";
@@ -2557,6 +2653,52 @@
 			reg = <0x0 0x07420000 0x0 0x44080>;
 			qcom,bcm-voters = <&apps_bcm_voter>;
 			#interconnect-cells = <2>;
+		};
+
+		swr2: soundwire@7630000 {
+			compatible = "qcom,soundwire-v2.1.0",
+				     "qcom,soundwire-v2.0.0";
+			reg = <0x0 0x07630000 0x0 0x10000>;
+			interrupts = <GIC_SPI 721 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 520 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "core",
+					  "wakeup";
+
+			clocks = <&lpass_txmacro>;
+			clock-names = "iface";
+
+			label = "TX";
+
+			pinctrl-0 = <&tx_swr_active>;
+			pinctrl-names = "default";
+
+			qcom,din-ports = <4>;
+			qcom,dout-ports = <0>;
+
+			qcom,ports-sinterval-low =
+				/bits/ 8 <0x01 0x01 0x03 0x03>;
+			qcom,ports-offset1 =
+				/bits/ 8 <0x00 0x00 0x01 0x01>;
+			qcom,ports-offset2 =
+				/bits/ 8 <0x00 0x00 0x00 0x00>;
+			qcom,ports-hstart =
+				/bits/ 8 <0xff 0xff 0xff 0xff>;
+			qcom,ports-hstop =
+				/bits/ 8 <0xff 0xff 0xff 0xff>;
+			qcom,ports-word-length =
+				/bits/ 8 <0xff 0xff 0xff 0xff>;
+			qcom,ports-block-pack-mode =
+				/bits/ 8 <0xff 0xff 0xff 0xff>;
+			qcom,ports-block-group-count =
+				/bits/ 8 <0xff 0xff 0xff 0xff>;
+			qcom,ports-lane-control =
+				/bits/ 8 <0x01 0x02 0x00 0x00>;
+
+			#address-cells = <2>;
+			#size-cells = <0>;
+			#sound-dai-cells = <1>;
+
+			status = "disabled";
 		};
 
 		lpass_vamacro: codec@7660000 {
@@ -2654,6 +2796,42 @@
 					function = "dmic4_data";
 					drive-strength = <8>;
 					input-enable;
+				};
+			};
+
+			rx_swr_active: rx-swr-active-state {
+				clk-pins {
+					pins = "gpio3";
+					function = "swr_rx_clk";
+					drive-strength = <2>;
+					slew-rate = <1>;
+					bias-disable;
+				};
+
+				data-pins {
+					pins = "gpio4", "gpio5";
+					function = "swr_rx_data";
+					drive-strength = <2>;
+					slew-rate = <1>;
+					bias-bus-hold;
+				};
+			};
+
+			tx_swr_active: tx-swr-active-state {
+				clk-pins {
+					pins = "gpio0";
+					function = "swr_tx_clk";
+					drive-strength = <2>;
+					slew-rate = <1>;
+					bias-disable;
+				};
+
+				data-pins {
+					pins = "gpio1", "gpio2", "gpio14";
+					function = "swr_tx_data";
+					drive-strength = <2>;
+					slew-rate = <1>;
+					bias-bus-hold;
 				};
 			};
 
