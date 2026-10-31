@@ -23,7 +23,8 @@
 };
 
 &remoteproc_adsp {
-	iommus = <&apps_smmu 0x1000 0x0>;
+	iommus = <&apps_smmu 0x1000 0x0>,
+		 <&apps_smmu 0x100c 0x0>;
 };
 
 &remoteproc_cdsp {
