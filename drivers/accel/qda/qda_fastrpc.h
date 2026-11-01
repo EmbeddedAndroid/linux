@@ -10,6 +10,7 @@
 #include <linux/completion.h>
 #include <linux/kref.h>
 #include <linux/types.h>
+#include <linux/workqueue.h>
 
 struct qda_dev;
 
@@ -29,6 +30,43 @@ struct qda_dev;
 #define QDA_FASTRPC_CTXID_MAX		(QDA_FASTRPC_CTXID_MASK >> 8)
 
 /**
+ * struct qda_fastrpc_msg - FastRPC wire message for remote invocations
+ *
+ * Sent to the remote processor via RPMsg. This is the exact layout
+ * the DSP expects; do not reorder or add fields without DSP firmware
+ * coordination.
+ */
+struct qda_fastrpc_msg {
+	/** @remote_session_id: Session identifier on the remote processor */
+	int remote_session_id;
+	/** @tid: Thread ID of the invoking thread */
+	int tid;
+	/** @ctx: Context identifier for matching request/response */
+	u64 ctx;
+	/** @handle: Handle of the remote method to invoke */
+	u32 handle;
+	/** @sc: Scalars value encoding in/out buffer counts */
+	u32 sc;
+	/** @addr: Physical address of the message payload buffer */
+	u64 addr;
+	/** @size: Size of the message payload in bytes */
+	u64 size;
+} __packed;
+
+/**
+ * struct qda_msg - FastRPC message with kernel-internal bookkeeping
+ */
+struct qda_msg {
+	/**
+	 * @fastrpc: Wire-format message sent to the DSP via RPMsg.
+	 * Must be the first member.
+	 */
+	struct qda_fastrpc_msg fastrpc;
+	/** @fastrpc_ctx: Back-pointer to the owning invocation context */
+	struct qda_fastrpc_invoke_ctx *fastrpc_ctx;
+};
+
+/**
  * struct qda_fastrpc_invoke_ctx - One invocation in flight
  */
 struct qda_fastrpc_invoke_ctx {
@@ -46,6 +84,12 @@ struct qda_fastrpc_invoke_ctx {
 	 * handler.
 	 */
 	struct kref refcount;
+	/**
+	 * @put_work: Drops the response callback's reference from process
+	 * context, since the callback runs in atomic context and the final
+	 * put frees DMA memory.
+	 */
+	struct work_struct put_work;
 };
 
 struct qda_fastrpc_invoke_ctx *qda_fastrpc_context_alloc(struct qda_dev *qdev);
