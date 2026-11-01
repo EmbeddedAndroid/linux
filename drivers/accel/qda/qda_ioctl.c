@@ -110,6 +110,8 @@ static int qda_fastrpc_invoke(u32 type, void *data, struct qda_session *session)
 	if (err)
 		goto out_put;
 
+	qda_fastrpc_return_result(ctx, data);
+
 	/*
 	 * The session only changes once the DSP has accepted the request, so a
 	 * failed create leaves the previous process, if any, as it was. The
@@ -170,6 +172,29 @@ int qda_session_init_create(struct qda_session *session, struct qda_init_create_
 int qda_release_dsp_process(struct qda_dev *qdev, struct qda_session *session)
 {
 	return qda_fastrpc_invoke(QDA_FASTRPC_RMID_INIT_RELEASE, NULL, session);
+}
+
+/**
+ * qda_ioctl_mmap() - Map a buffer into the DSP's address space
+ * @dev: DRM device structure
+ * @data: User-space data (struct drm_qda_mem_map)
+ * @file_priv: DRM file private data
+ *
+ * Return: 0 on success, negative error code on failure
+ */
+int qda_ioctl_mmap(struct drm_device *dev, void *data, struct drm_file *file_priv)
+{
+	struct drm_qda_mem_map *map_req = data;
+
+	switch (map_req->request) {
+	case QDA_REQUEST_MMAP:
+		return qda_fastrpc_invoke(QDA_FASTRPC_RMID_INIT_MMAP, data, file_priv->driver_priv);
+	case QDA_REQUEST_MEM_MAP:
+		return qda_fastrpc_invoke(QDA_FASTRPC_RMID_INIT_MEM_MAP, data,
+					  file_priv->driver_priv);
+	default:
+		return -EINVAL;
+	}
 }
 
 /**

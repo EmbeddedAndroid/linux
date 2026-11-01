@@ -17,6 +17,7 @@ extern "C" {
 #define DRM_QDA_GEM_MMAP_OFFSET		0x02
 #define DRM_QDA_REMOTE_INVOKE		0x03
 #define DRM_QDA_REMOTE_SESSION_CREATE	0x04
+#define DRM_QDA_REMOTE_MMAP		0x05
 
 #define DRM_IOCTL_QDA_QUERY		DRM_IOWR(DRM_COMMAND_BASE + DRM_QDA_QUERY, \
 					 struct drm_qda_query)
@@ -29,6 +30,12 @@ extern "C" {
 #define DRM_IOCTL_QDA_REMOTE_SESSION_CREATE					\
 	DRM_IOWR(DRM_COMMAND_BASE + DRM_QDA_REMOTE_SESSION_CREATE,		\
 		 struct drm_qda_init_create)
+#define DRM_IOCTL_QDA_REMOTE_MMAP	DRM_IOWR(DRM_COMMAND_BASE + DRM_QDA_REMOTE_MMAP, \
+					 struct drm_qda_mem_map)
+
+/* Request types for drm_qda_mem_map.request */
+#define QDA_REQUEST_MMAP	1	/* Map a whole buffer */
+#define QDA_REQUEST_MEM_MAP	2	/* Map a region of a buffer, with attributes */
 
 /* Query type definitions for drm_qda_query */
 #define QDA_QUERY_DSP_NAME		1
@@ -135,6 +142,35 @@ struct drm_qda_init_create {
 	__u32 attrs;
 	__u32 siglen;
 	__u64 file;
+};
+
+/**
+ * struct drm_qda_mem_map - Parameters for mapping a buffer into the DSP
+ * @request: QDA_REQUEST_MMAP or QDA_REQUEST_MEM_MAP
+ * @flags: Mapping flags for the DSP (cache attributes, permissions)
+ * @handle: Handle of the buffer to map
+ * @attrs: Mapping attributes (QDA_REQUEST_MEM_MAP)
+ * @offset: Offset within the buffer (QDA_REQUEST_MEM_MAP), at most INT_MAX
+ * @dsp_handle: Identifier the DSP tracks the buffer by (QDA_REQUEST_MEM_MAP)
+ * @vaddrin: Address the DSP should map the buffer at, if it can (input)
+ * @size: Length of the region to map in bytes, or 0 for the whole buffer
+ * @vaddrout: Address the DSP mapped the buffer at (output)
+ *
+ * Makes a buffer visible to the DSP of this file ahead of the calls that use
+ * it. QDA_REQUEST_MMAP maps a whole buffer and uses @handle, @flags,
+ * @vaddrin, @size and @vaddrout. QDA_REQUEST_MEM_MAP maps a region of it with
+ * caller-chosen attributes and uses every field.
+ */
+struct drm_qda_mem_map {
+	__u32 request;
+	__u32 flags;
+	__u32 handle;
+	__u32 attrs;
+	__u32 offset;
+	__s32 dsp_handle;
+	__u64 vaddrin;
+	__u64 size;
+	__u64 vaddrout;
 };
 
 #if defined(__cplusplus)
