@@ -198,6 +198,7 @@ const struct qda_legacy_ops qda_legacy_ops_table = {
 	.session_destroy = legacy_session_destroy,
 	.init_create = legacy_init_create,
 	.attach = qda_session_attach,
+	.set_option = qda_session_set_option,
 	.release = legacy_release,
 	.mmap = legacy_mmap,
 	.mem_map = legacy_mem_map,

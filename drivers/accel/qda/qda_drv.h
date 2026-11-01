@@ -72,6 +72,12 @@ struct qda_session {
 	 */
 	struct qda_gem_obj *init_mem_gem_obj;
 	/**
+	 * @poll_mode: Poll for completion of invocations on dynamically loaded
+	 * modules in a user PD. Set through the set-option ioctl, which can run
+	 * concurrently with invocations on the same file.
+	 */
+	bool poll_mode;
+	/**
 	 * @msg_buf_pool: Invoke header buffers this session is done with,
 	 * kept for its later invocations to reuse.
 	 */
@@ -146,6 +152,8 @@ struct qda_dev {
 	struct mutex remote_heap_lock;
 	/** @audio_init_mem: True once the DSP has been given the remote heap */
 	bool audio_init_mem;
+	/** @poll_mode_supported: Sessions may opt in to invocation completion polling */
+	bool poll_mode_supported;
 };
 
 /**

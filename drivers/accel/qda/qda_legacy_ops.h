@@ -36,6 +36,8 @@ struct qda_legacy_ops {
 	/** @attach: Attach the session to a DSP-resident protection domain */
 	int (*attach)(struct qda_session *session, u32 pd_type, const char __user *name,
 		      u32 namelen);
+	/** @set_option: Set a per-session option */
+	int (*set_option)(struct qda_session *session, u32 request_id, u32 value);
 	/** @release: Release the session's DSP process, if it has one */
 	int (*release)(struct qda_session *session);
 	/** @mmap: Map a buffer into the DSP's address space */

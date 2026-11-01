@@ -463,6 +463,34 @@ static long qda_shim_mem_unmap(struct qda_shim_file *sf, void __user *argp)
 	return 0;
 }
 
+/*
+ * The legacy request IDs and values match the accel ones, but they are
+ * translated rather than passed through, so the two ABIs stay independent.
+ */
+static long qda_shim_set_option(struct qda_shim_file *sf, void __user *argp)
+{
+	struct fastrpc_ioctl_set_option args;
+	int i;
+
+	if (copy_from_user(&args, argp, sizeof(args)))
+		return -EFAULT;
+
+	for (i = 0; i < ARRAY_SIZE(args.reserved); i++)
+		if (args.reserved[i])
+			return -EINVAL;
+
+	if (args.request_id != FASTRPC_POLL_MODE)
+		return -EINVAL;
+
+	if (args.value != FASTRPC_POLL_MODE_ENABLE &&
+	    args.value != FASTRPC_POLL_MODE_DISABLE)
+		return -EINVAL;
+
+	return qda_legacy_ops_table.set_option(sf->session, QDA_SET_OPTION_POLL_MODE,
+					       args.value == FASTRPC_POLL_MODE_ENABLE ?
+					       QDA_POLL_MODE_ENABLE : QDA_POLL_MODE_DISABLE);
+}
+
 static long qda_shim_get_dsp_info(struct qda_shim_file *sf, void __user *argp)
 {
 	struct fastrpc_ioctl_capability args;
@@ -570,6 +598,8 @@ static long qda_shim_dispatch(struct qda_shim_file *sf, unsigned int cmd, void _
 		return qda_shim_invoke(sf, argp);
 	case FASTRPC_IOCTL_GET_DSP_INFO:
 		return qda_shim_get_dsp_info(sf, argp);
+	case FASTRPC_IOCTL_SET_OPTION:
+		return qda_shim_set_option(sf, argp);
 	default:
 		/*
 		 * Includes FASTRPC_IOCTL_FREE_DMA_BUFF, which the driver this
