@@ -16,3 +16,5 @@ qda-y := \
 	qda_prime.o \
 	qda_rpmsg.o \
 	qda_soc.o
+
+obj-$(CONFIG_DRM_ACCEL_QDA_FASTRPC_SHIM) += qda_fastrpc_shim.o

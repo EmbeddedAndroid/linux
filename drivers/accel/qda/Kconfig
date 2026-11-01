@@ -26,3 +26,19 @@ config DRM_ACCEL_QDA
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called qda.
+
+config DRM_ACCEL_QDA_FASTRPC_SHIM
+	tristate "Qualcomm DSP accelerator legacy FastRPC compatibility shim"
+	depends on DRM_ACCEL_QDA
+	default DRM_ACCEL_QDA
+	help
+	  Exposes a /dev/fastrpc-<dsp> character device per DSP domain, serving
+	  the ioctl interface of the FastRPC driver in drivers/misc/ on top of
+	  the QDA driver, so that existing FastRPC user space keeps working.
+
+	  This is a compatibility layer for user space that has not moved to
+	  the native interface in include/uapi/drm/qda_accel.h; new users
+	  should use that instead.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called qda_fastrpc_shim.
