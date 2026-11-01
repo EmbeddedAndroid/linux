@@ -121,7 +121,8 @@ static int qda_fastrpc_invoke(u32 type, void *data, struct qda_session *session)
 	if (type == QDA_FASTRPC_RMID_INIT_CREATE) {
 		qda_session_set_init_mem(session, ctx->init_mem_gem_obj);
 		WRITE_ONCE(session->pd, QDA_USER_PD);
-	} else if (type == QDA_FASTRPC_RMID_INIT_ATTACH) {
+	} else if (type == QDA_FASTRPC_RMID_INIT_ATTACH ||
+		   type == QDA_FASTRPC_RMID_INIT_CREATE_STATIC) {
 		WRITE_ONCE(session->pd, ctx->pd);
 	}
 
@@ -176,6 +177,54 @@ int qda_release_dsp_process(struct qda_dev *qdev, struct qda_session *session)
 	return qda_fastrpc_invoke(QDA_FASTRPC_RMID_INIT_RELEASE, NULL, session);
 }
 
+/*
+ * The Audio PD keeps the remote heap across daemon restarts, so only the first
+ * attach on a device hands it to the DSP. The lock is held across the attach
+ * so that a concurrent one cannot skip the heap while the first is still in
+ * flight, and the flag is set only once the DSP has accepted it.
+ */
+static int qda_attach_audio_pd(struct qda_session *session, struct drm_qda_remote_attach *args)
+{
+	struct qda_dev *qdev = session->qda_dev;
+	struct qda_static_pd_args sargs = {};
+	char *name;
+	int err;
+
+	if (strcmp(qdev->dsp_name, "adsp") || !qdev->remote_heap_size)
+		return -ENODEV;
+
+	if (!args->namelen || args->namelen > QDA_FASTRPC_INIT_NAMELEN_MAX)
+		return -EINVAL;
+
+	name = memdup_user(u64_to_user_ptr(args->name), args->namelen);
+	if (IS_ERR(name))
+		return PTR_ERR(name);
+
+	if (name[args->namelen - 1]) {
+		err = -EINVAL;
+		goto out_free;
+	}
+
+	sargs.name = name;
+	sargs.namelen = args->namelen;
+
+	scoped_guard(mutex, &qdev->remote_heap_lock) {
+		if (!qdev->audio_init_mem) {
+			sargs.heap.addr = qdev->remote_heap_addr;
+			sargs.heap.size = qdev->remote_heap_size;
+		}
+
+		err = qda_fastrpc_invoke(QDA_FASTRPC_RMID_INIT_CREATE_STATIC, &sargs, session);
+		if (!err && sargs.heap.size)
+			qdev->audio_init_mem = true;
+	}
+
+out_free:
+	kfree(name);
+
+	return err;
+}
+
 /**
  * qda_ioctl_attach() - Attach to a DSP-resident protection domain
  * @dev: DRM device structure
@@ -190,24 +239,23 @@ int qda_ioctl_attach(struct drm_device *dev, void *data, struct drm_file *file_p
 	struct qda_session *session = file_priv->driver_priv;
 	int pd;
 
-	if (args->pad)
-		return -EINVAL;
-
-	switch (args->pd_type) {
-	case QDA_ATTACH_ROOT_PD:
-		pd = QDA_ROOT_PD;
-		break;
-	case QDA_ATTACH_SENSORS_PD:
-		pd = QDA_SENSORS_PD;
-		break;
-	default:
-		return -EINVAL;
-	}
-
 	if (READ_ONCE(session->init_mem_gem_obj))
 		return -EBUSY;
 
-	return qda_fastrpc_invoke(QDA_FASTRPC_RMID_INIT_ATTACH, &pd, session);
+	switch (args->pd_type) {
+	case QDA_ATTACH_ROOT_PD:
+	case QDA_ATTACH_SENSORS_PD:
+		if (args->name || args->namelen)
+			return -EINVAL;
+
+		pd = args->pd_type == QDA_ATTACH_ROOT_PD ? QDA_ROOT_PD : QDA_SENSORS_PD;
+
+		return qda_fastrpc_invoke(QDA_FASTRPC_RMID_INIT_ATTACH, &pd, session);
+	case QDA_ATTACH_AUDIO_PD:
+		return qda_attach_audio_pd(session, args);
+	default:
+		return -EINVAL;
+	}
 }
 
 /**

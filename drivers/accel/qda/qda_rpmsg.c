@@ -4,7 +4,9 @@
 #include <linux/completion.h>
 #include <linux/module.h>
 #include <linux/of.h>
+#include <linux/of_reserved_mem.h>
 #include <linux/rpmsg.h>
+#include <linux/string.h>
 #include <linux/wait.h>
 #include <drm/drm_print.h>
 
@@ -145,6 +147,81 @@ out_exit:
 	return ret;
 }
 
+static int qda_init_vmperms(struct qda_dev *qdev)
+{
+	u32 vmids[QDA_MAX_VMIDS];
+	int vmcount, i;
+
+	vmcount = of_property_read_variable_u32_array(qdev->dev->of_node, "qcom,vmids",
+						      vmids, 0, QDA_MAX_VMIDS);
+	if (vmcount == -EINVAL || vmcount == -ENODATA)
+		return 0;
+	if (vmcount < 0)
+		return vmcount;
+
+	if (!qcom_scm_is_available())
+		return -EPROBE_DEFER;
+
+	for (i = 0; i < vmcount; i++) {
+		qdev->vmperms[i].vmid = vmids[i];
+		qdev->vmperms[i].perm = QCOM_SCM_PERM_RWX;
+	}
+	qdev->vmcount = vmcount;
+
+	return 0;
+}
+
+/*
+ * The region is optional: without it an Audio PD attach is refused. It is
+ * recorded only once it has been assigned, so teardown hands back exactly
+ * what was handed over.
+ */
+static int qda_init_remote_heap(struct qda_dev *qdev)
+{
+	u64 src_perms = BIT(QCOM_SCM_VMID_HLOS);
+	struct resource res;
+	int ret;
+
+	if (strcmp(qdev->dsp_name, "adsp") && strcmp(qdev->dsp_name, "sdsp"))
+		return 0;
+
+	if (of_reserved_mem_region_to_resource(qdev->dev->of_node, 0, &res))
+		return 0;
+
+	if (qdev->vmcount) {
+		ret = qcom_scm_assign_mem(res.start, resource_size(&res), &src_perms,
+					  qdev->vmperms, qdev->vmcount);
+		if (ret)
+			return ret;
+	}
+
+	qdev->remote_heap_addr = res.start;
+	qdev->remote_heap_size = resource_size(&res);
+
+	return 0;
+}
+
+static void qda_deinit_remote_heap(struct qda_dev *qdev)
+{
+	struct qcom_scm_vmperm dst_perms = {
+		.vmid = QCOM_SCM_VMID_HLOS,
+		.perm = QCOM_SCM_PERM_RWX,
+	};
+	u64 src_perms = 0;
+	int ret, i;
+
+	if (!qdev->remote_heap_size || !qdev->vmcount)
+		return;
+
+	for (i = 0; i < qdev->vmcount; i++)
+		src_perms |= BIT(qdev->vmperms[i].vmid);
+
+	ret = qcom_scm_assign_mem(qdev->remote_heap_addr, qdev->remote_heap_size,
+				  &src_perms, &dst_perms, 1);
+	if (ret)
+		dev_err(qdev->dev, "Failed to assign remote heap back to HLOS: %d\n", ret);
+}
+
 static void qda_rpmsg_remove(struct rpmsg_device *rpdev)
 {
 	struct qda_dev *qdev = dev_get_drvdata(&rpdev->dev);
@@ -163,6 +240,7 @@ static void qda_rpmsg_remove(struct rpmsg_device *rpdev)
 	qda_fastrpc_flush_pending(qdev);
 	qda_cb_unpopulate(qdev);
 	qda_deinit_device(qdev);
+	qda_deinit_remote_heap(qdev);
 }
 
 static int qda_count_cb_nodes(struct device_node *parent_node)
@@ -195,9 +273,19 @@ static int qda_rpmsg_probe(struct rpmsg_device *rpdev)
 		return ret;
 	}
 
-	ret = qda_init_device(qdev, qda_count_cb_nodes(rpdev->dev.of_node));
+	mutex_init(&qdev->remote_heap_lock);
+
+	ret = qda_init_vmperms(qdev);
 	if (ret)
 		return ret;
+
+	ret = qda_init_remote_heap(qdev);
+	if (ret)
+		return ret;
+
+	ret = qda_init_device(qdev, qda_count_cb_nodes(rpdev->dev.of_node));
+	if (ret)
+		goto err_deinit_remote_heap;
 
 	ret = qda_cb_populate(qdev, rpdev->dev.of_node);
 	if (ret)
@@ -213,6 +301,8 @@ err_unpopulate:
 	qda_cb_unpopulate(qdev);
 err_deinit:
 	qda_deinit_device(qdev);
+err_deinit_remote_heap:
+	qda_deinit_remote_heap(qdev);
 	return ret;
 }
 

@@ -50,6 +50,7 @@ struct qda_session;
 #define QDA_FASTRPC_RMID_INIT_MUNMAP		5
 #define QDA_FASTRPC_RMID_INIT_CREATE		6
 #define QDA_FASTRPC_RMID_INIT_CREATE_ATTR	7
+#define QDA_FASTRPC_RMID_INIT_CREATE_STATIC	8
 #define QDA_FASTRPC_RMID_INIT_MEM_MAP		10
 #define QDA_FASTRPC_RMID_INIT_MEM_UNMAP		11
 #define QDA_FASTRPC_RMID_INVOKE_DYNAMIC		0xFFFFFFFFU
@@ -64,6 +65,9 @@ struct qda_session;
 
 /* Largest ELF image a process may be created from */
 #define QDA_FASTRPC_INIT_FILELEN_MAX	(4 * 1024 * 1024)
+
+/* Longest static PD name, including the NUL */
+#define QDA_FASTRPC_INIT_NAMELEN_MAX	128
 
 /* Idle invoke header buffers a session keeps for reuse */
 #define QDA_MSG_BUF_POOL_MAX		8
@@ -153,6 +157,20 @@ struct qda_fastrpc_create_process_inbuf {
 	u32 attrs;
 	/** @siglen: Length of the signature data in bytes */
 	u32 siglen;
+};
+
+/**
+ * struct qda_fastrpc_create_static_inbuf - Input buffer for attaching to a static PD
+ *
+ * Layout the DSP expects; do not reorder.
+ */
+struct qda_fastrpc_create_static_inbuf {
+	/** @remote_session_id: Session the attach belongs to */
+	int remote_session_id;
+	/** @namelen: Length of the static PD name including the NUL */
+	u32 namelen;
+	/** @pageslen: Number of remote heap descriptors that follow the name (0 or 1) */
+	u32 pageslen;
 };
 
 /**
@@ -377,6 +395,18 @@ struct qda_mem_map_args {
 	 * the length of the call.
 	 */
 	struct drm_gem_object *obj;
+};
+
+/**
+ * struct qda_static_pd_args - Kernel-side arguments for attaching to a static PD
+ */
+struct qda_static_pd_args {
+	/** @name: Kernel copy of the NUL-terminated PD name */
+	const char *name;
+	/** @namelen: Length of @name including the NUL */
+	u32 namelen;
+	/** @heap: Remote heap to hand the DSP, or zero size if it already has it */
+	struct qda_phy_page heap;
 };
 
 struct qda_fastrpc_invoke_ctx *qda_fastrpc_context_alloc(struct qda_dev *qdev);
