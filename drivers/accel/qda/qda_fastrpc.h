@@ -46,9 +46,11 @@ struct qda_session;
 /* Methods of the initialisation handle */
 #define QDA_FASTRPC_RMID_INIT_RELEASE		1
 #define QDA_FASTRPC_RMID_INIT_MMAP		4
+#define QDA_FASTRPC_RMID_INIT_MUNMAP		5
 #define QDA_FASTRPC_RMID_INIT_CREATE		6
 #define QDA_FASTRPC_RMID_INIT_CREATE_ATTR	7
 #define QDA_FASTRPC_RMID_INIT_MEM_MAP		10
+#define QDA_FASTRPC_RMID_INIT_MEM_UNMAP		11
 #define QDA_FASTRPC_RMID_INVOKE_DYNAMIC		0xFFFFFFFFU
 
 /* Handle the initialisation methods are addressed to */
@@ -195,6 +197,36 @@ struct qda_fastrpc_mem_map_req_msg {
 struct qda_fastrpc_map_rsp_msg {
 	/** @vaddrout: Address the DSP mapped the buffer at */
 	u64 vaddrout;
+};
+
+/**
+ * struct qda_fastrpc_munmap_req_msg - Request to remove a plain mapping
+ *
+ * Layout the DSP expects; do not reorder.
+ */
+struct qda_fastrpc_munmap_req_msg {
+	/** @remote_session_id: Session the mapping belongs to */
+	s32 remote_session_id;
+	/** @vaddr: Address the mapping was made at */
+	u64 vaddr;
+	/** @size: Length of the mapping in bytes */
+	u64 size;
+};
+
+/**
+ * struct qda_fastrpc_mem_unmap_req_msg - Request to remove an attribute-based mapping
+ *
+ * Layout the DSP expects; do not reorder.
+ */
+struct qda_fastrpc_mem_unmap_req_msg {
+	/** @remote_session_id: Session the mapping belongs to */
+	s32 remote_session_id;
+	/** @handle: Identifier the DSP tracks the buffer by */
+	s32 handle;
+	/** @vaddrin: Address the mapping was made at */
+	u64 vaddrin;
+	/** @len: Length of the mapping in bytes */
+	u64 len;
 };
 
 /**

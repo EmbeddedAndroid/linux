@@ -18,6 +18,7 @@ extern "C" {
 #define DRM_QDA_REMOTE_INVOKE		0x03
 #define DRM_QDA_REMOTE_SESSION_CREATE	0x04
 #define DRM_QDA_REMOTE_MMAP		0x05
+#define DRM_QDA_REMOTE_MUNMAP		0x06
 
 #define DRM_IOCTL_QDA_QUERY		DRM_IOWR(DRM_COMMAND_BASE + DRM_QDA_QUERY, \
 					 struct drm_qda_query)
@@ -32,10 +33,16 @@ extern "C" {
 		 struct drm_qda_init_create)
 #define DRM_IOCTL_QDA_REMOTE_MMAP	DRM_IOWR(DRM_COMMAND_BASE + DRM_QDA_REMOTE_MMAP, \
 					 struct drm_qda_mem_map)
+#define DRM_IOCTL_QDA_REMOTE_MUNMAP	DRM_IOWR(DRM_COMMAND_BASE + DRM_QDA_REMOTE_MUNMAP, \
+					 struct drm_qda_mem_unmap)
 
 /* Request types for drm_qda_mem_map.request */
 #define QDA_REQUEST_MMAP	1	/* Map a whole buffer */
 #define QDA_REQUEST_MEM_MAP	2	/* Map a region of a buffer, with attributes */
+
+/* Request types for drm_qda_mem_unmap.request */
+#define QDA_REQUEST_MUNMAP	1
+#define QDA_REQUEST_MEM_UNMAP	2
 
 /* Query type definitions for drm_qda_query */
 #define QDA_QUERY_DSP_NAME		1
@@ -171,6 +178,29 @@ struct drm_qda_mem_map {
 	__u64 vaddrin;
 	__u64 size;
 	__u64 vaddrout;
+};
+
+/**
+ * struct drm_qda_mem_unmap - Parameters for removing a DSP mapping
+ * @request: QDA_REQUEST_MUNMAP or QDA_REQUEST_MEM_UNMAP
+ * @dsp_handle: Identifier the DSP tracks the buffer by (QDA_REQUEST_MEM_UNMAP)
+ * @vaddr: Address the mapping was made at (QDA_REQUEST_MEM_UNMAP)
+ * @vaddrout: Address the mapping was made at (QDA_REQUEST_MUNMAP)
+ * @size: Length of the mapping in bytes
+ *
+ * Removes a mapping made with DRM_IOCTL_QDA_REMOTE_MMAP, named by the address
+ * that call returned in drm_qda_mem_map.vaddrout. The request must match the
+ * one the mapping was made with: QDA_REQUEST_MUNMAP uses @vaddrout and @size,
+ * QDA_REQUEST_MEM_UNMAP uses @dsp_handle, @vaddr and @size. The buffer is not
+ * affected, so its handle must stay open for as long as the DSP uses the
+ * mapping.
+ */
+struct drm_qda_mem_unmap {
+	__u32 request;
+	__s32 dsp_handle;
+	__u64 vaddr;
+	__u64 vaddrout;
+	__u64 size;
 };
 
 #if defined(__cplusplus)
