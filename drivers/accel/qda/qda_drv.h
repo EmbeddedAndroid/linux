@@ -8,6 +8,7 @@
 
 #include <linux/device.h>
 #include <linux/list.h>
+#include <linux/mutex.h>
 #include <linux/rpmsg.h>
 #include <linux/types.h>
 #include <drm/drm_device.h>
@@ -50,6 +51,15 @@ struct qda_dev {
 	struct list_head cb_devs;
 	/** @iommu_mgr: Registry of this device's context banks */
 	struct qda_memory_manager *iommu_mgr;
+	/** @import_lock: Serialises PRIME imports, protects @importing_session */
+	struct mutex import_lock;
+	/**
+	 * @importing_session: Session currently importing a buffer. Set only
+	 * while @import_lock is held, to pass the session down to the
+	 * .gem_prime_import callback, which the DRM core does not hand the
+	 * calling file to.
+	 */
+	struct qda_session *importing_session;
 	/** @soc_data: Per-SoC DSP integration parameters */
 	const struct qda_soc_data *soc_data;
 	/** @dsp_name: Name of the DSP domain (e.g. "cdsp", "adsp") */

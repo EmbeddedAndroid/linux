@@ -3,6 +3,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/slab.h>
 #include <drm/drm_gem.h>
+#include <drm/drm_prime.h>
 #include "qda_drv.h"
 #include "qda_gem.h"
 #include "qda_memory_dma.h"
@@ -12,7 +13,13 @@ static void qda_gem_free_object(struct drm_gem_object *gem_obj)
 {
 	struct qda_gem_obj *qda_gem_obj = to_qda_gem_obj(gem_obj);
 
-	if (qda_gem_obj->virt)
+	/*
+	 * An imported buffer only holds a mapping of memory the exporter owns,
+	 * so hand the mapping back rather than freeing anything.
+	 */
+	if (drm_gem_is_imported(gem_obj))
+		drm_prime_gem_destroy(gem_obj, qda_gem_obj->sgt);
+	else if (qda_gem_obj->virt)
 		qda_memory_manager_free(qda_gem_obj);
 
 	drm_gem_object_release(gem_obj);
@@ -23,6 +30,10 @@ static int qda_gem_mmap_obj(struct drm_gem_object *gem_obj, struct vm_area_struc
 {
 	struct qda_gem_obj *qda_gem_obj = to_qda_gem_obj(gem_obj);
 	int ret;
+
+	/* Imported buffers have to be mapped through the exporter */
+	if (drm_gem_is_imported(gem_obj))
+		return -EINVAL;
 
 	/* The fake offset only identifies the object, it does not index into it */
 	vma->vm_pgoff = 0;
@@ -36,8 +47,35 @@ static int qda_gem_mmap_obj(struct drm_gem_object *gem_obj, struct vm_area_struc
 	return 0;
 }
 
-static const struct drm_gem_object_funcs qda_gem_object_funcs = {
+/*
+ * Lets another context bank map this buffer when a session imports the
+ * dma-buf this object was exported as: see qda_gem_prime_import().
+ */
+static struct sg_table *qda_gem_get_sg_table(struct drm_gem_object *gem_obj)
+{
+	struct qda_gem_obj *qda_gem_obj = to_qda_gem_obj(gem_obj);
+	struct sg_table *sgt;
+	int ret;
+
+	if (drm_gem_is_imported(gem_obj))
+		return ERR_PTR(-EOPNOTSUPP);
+
+	sgt = kzalloc_obj(*sgt);
+	if (!sgt)
+		return ERR_PTR(-ENOMEM);
+
+	ret = qda_dma_get_sgtable(qda_gem_obj, sgt);
+	if (ret) {
+		kfree(sgt);
+		return ERR_PTR(ret);
+	}
+
+	return sgt;
+}
+
+const struct drm_gem_object_funcs qda_gem_object_funcs = {
 	.free = qda_gem_free_object,
+	.get_sg_table = qda_gem_get_sg_table,
 	.mmap = qda_gem_mmap_obj,
 };
 

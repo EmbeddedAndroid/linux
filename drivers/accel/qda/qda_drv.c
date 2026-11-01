@@ -12,6 +12,7 @@
 
 #include "qda_drv.h"
 #include "qda_ioctl.h"
+#include "qda_prime.h"
 
 static struct qda_session *qda_session_alloc(struct qda_dev *qdev)
 {
@@ -69,6 +70,9 @@ static const struct drm_driver qda_drm_driver = {
 	.postclose = qda_postclose,
 	.ioctls = qda_ioctls,
 	.num_ioctls = ARRAY_SIZE(qda_ioctls),
+	.gem_prime_import = qda_gem_prime_import,
+	.gem_prime_import_sg_table = qda_gem_prime_import_sg_table,
+	.prime_fd_to_handle = qda_prime_fd_to_handle,
 	.name = QDA_DRIVER_NAME,
 	.desc = "Qualcomm DSP Accelerator Driver",
 };
@@ -82,6 +86,7 @@ struct qda_dev *qda_alloc_device(struct device *dev)
 		return ERR_CAST(qdev);
 
 	INIT_LIST_HEAD(&qdev->cb_devs);
+	mutex_init(&qdev->import_lock);
 
 	return qdev;
 }
@@ -104,6 +109,7 @@ int qda_init_device(struct qda_dev *qdev, int num_cbs)
 void qda_deinit_device(struct qda_dev *qdev)
 {
 	qda_memory_manager_exit(qdev->iommu_mgr);
+	mutex_destroy(&qdev->import_lock);
 }
 
 int qda_register_device(struct qda_dev *qdev)
