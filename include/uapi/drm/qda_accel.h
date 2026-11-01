@@ -210,22 +210,31 @@ struct drm_qda_mem_unmap {
 /* Protection domains for drm_qda_remote_attach.pd_type */
 #define QDA_ATTACH_ROOT_PD	1
 #define QDA_ATTACH_SENSORS_PD	2
+#define QDA_ATTACH_AUDIO_PD	3
 
 /**
  * struct drm_qda_remote_attach - Parameters for attaching to a DSP protection domain
- * @pd_type: QDA_ATTACH_ROOT_PD or QDA_ATTACH_SENSORS_PD
- * @pad: Must be zero
+ * @pd_type: QDA_ATTACH_ROOT_PD, QDA_ATTACH_SENSORS_PD or QDA_ATTACH_AUDIO_PD
+ * @namelen: Length of the name in bytes including the NUL terminator
+ *           (QDA_ATTACH_AUDIO_PD only, otherwise must be zero)
+ * @name: User pointer to the NUL-terminated name of the static PD to attach
+ *        to (QDA_ATTACH_AUDIO_PD only, otherwise must be zero)
  *
  * Binds this file to a protection domain that already exists on the DSP,
  * instead of creating one with DRM_IOCTL_QDA_REMOTE_SESSION_CREATE. Every
  * later request on the file is directed at it. Fails with EBUSY if a process
  * has already been created on the file.
  *
+ * For QDA_ATTACH_AUDIO_PD, the first successful attach on a device also
+ * hands the DSP the remote heap reserved for it in the device tree; later
+ * attaches reuse that heap.
+ *
  * Requires CAP_SYS_ADMIN.
  */
 struct drm_qda_remote_attach {
 	__u32 pd_type;
-	__u32 pad;
+	__u32 namelen;
+	__u64 name;
 };
 
 #if defined(__cplusplus)

@@ -9,6 +9,7 @@ config DRM_ACCEL_QDA
 	depends on ARCH_QCOM || COMPILE_TEST
 	depends on RPMSG
 	select AUXILIARY_BUS
+	select QCOM_SCM
 	help
 	  Enables the DRM-based accelerator driver for Qualcomm's Hexagon DSPs.
 	  This driver provides a standardized interface for offloading computational

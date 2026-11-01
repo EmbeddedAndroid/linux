@@ -9,6 +9,7 @@
 #include <linux/atomic.h>
 #include <linux/auxiliary_bus.h>
 #include <linux/device.h>
+#include <linux/firmware/qcom/qcom_scm.h>
 #include <linux/kref.h>
 #include <linux/list.h>
 #include <linux/mutex.h>
@@ -30,6 +31,9 @@
  * "qda.fastrpc", which that module lists in its id_table.
  */
 #define QDA_LEGACY_AUXDEV_NAME "fastrpc"
+
+/* Upper bound on the "qcom,vmids" DT property */
+#define QDA_MAX_VMIDS	16
 
 /**
  * struct qda_session - One user of a DSP
@@ -118,6 +122,21 @@ struct qda_dev {
 	 * to, or NULL if it could not be created
 	 */
 	struct auxiliary_device *legacy_auxdev;
+	/** @vmperms: VMs the remote heap is shared with, from qcom,vmids */
+	struct qcom_scm_vmperm vmperms[QDA_MAX_VMIDS];
+	/** @vmcount: Number of valid entries in @vmperms */
+	int vmcount;
+	/** @remote_heap_addr: Physical base of the reserved region, or 0 */
+	phys_addr_t remote_heap_addr;
+	/** @remote_heap_size: Size of the reserved region, or 0 */
+	u64 remote_heap_size;
+	/**
+	 * @remote_heap_lock: Held across an Audio PD attach, so the heap is
+	 * handed to the DSP by exactly one of them. Protects @audio_init_mem.
+	 */
+	struct mutex remote_heap_lock;
+	/** @audio_init_mem: True once the DSP has been given the remote heap */
+	bool audio_init_mem;
 };
 
 /**

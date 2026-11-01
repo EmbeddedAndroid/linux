@@ -931,6 +931,56 @@ out_put:
 }
 
 /*
+ * INIT_CREATE_STATIC packed layout:
+ *   [0] inbuf	sizeof(qda_fastrpc_create_static_inbuf)	IN
+ *   [1] name	namelen, including the NUL		IN
+ *   [2] heap	sizeof(qda_phy_page)			IN
+ *
+ * The heap descriptor is always present; its size is zero, and so pageslen,
+ * when the DSP already has the remote heap.
+ */
+static int qda_fastrpc_prepare_args_create_static(struct qda_fastrpc_invoke_ctx *ctx, void *argp)
+{
+	struct qda_static_pd_args *sargs = argp;
+	struct qda_fastrpc_create_static_inbuf *inbuf;
+	struct qda_gem_obj *kernel_gem;
+	u8 *gv;
+	int err;
+
+	const size_t off_inbuf = 0;
+	const size_t off_name = off_inbuf + sizeof(*inbuf);
+	const size_t off_heap = ALIGN(off_name + sargs->namelen, sizeof(u64));
+	const size_t total_size = off_heap + sizeof(struct qda_phy_page);
+
+	ctx->sc = QDA_FASTRPC_SCALARS(QDA_FASTRPC_RMID_INIT_CREATE_STATIC, 3, 0);
+	ctx->handle = QDA_FASTRPC_INIT_HANDLE;
+
+	err = alloc_kernel_args(ctx, 3);
+	if (err)
+		return err;
+
+	kernel_gem = alloc_kernel_gem(ctx, total_size);
+	if (IS_ERR(kernel_gem))
+		return PTR_ERR(kernel_gem);
+	gv = kernel_gem->virt;
+
+	inbuf = (struct qda_fastrpc_create_static_inbuf *)(gv + off_inbuf);
+	inbuf->remote_session_id = ctx->session->remote_session_id;
+	inbuf->namelen = sargs->namelen;
+	inbuf->pageslen = sargs->heap.size ? 1 : 0;
+
+	memcpy(gv + off_name, sargs->name, sargs->namelen);
+	memcpy(gv + off_heap, &sargs->heap, sizeof(sargs->heap));
+
+	assign_kernel_gem_arg(ctx, 0, kernel_gem, gv + off_inbuf, sizeof(*inbuf));
+	assign_kernel_gem_arg(ctx, 1, kernel_gem, gv + off_name, sargs->namelen);
+	assign_kernel_gem_arg(ctx, 2, kernel_gem, gv + off_heap, sizeof(struct qda_phy_page));
+	drm_gem_object_put(&kernel_gem->base);
+
+	return 0;
+}
+
+/*
  * Find the buffer a mapping request names and describe it to the DSP. The
  * buffer is held by the context until the request is done, so that closing its
  * handle meanwhile cannot free memory the DSP is being told to map. The
@@ -1222,6 +1272,10 @@ int qda_fastrpc_prepare_args(struct qda_fastrpc_invoke_ctx *ctx,
 		/* The new process is in the user PD, and so is the request creating it */
 		ctx->pd = QDA_USER_PD;
 		err = qda_fastrpc_prepare_args_init_create(ctx, argp);
+		break;
+	case QDA_FASTRPC_RMID_INIT_CREATE_STATIC:
+		ctx->pd = QDA_USER_PD;
+		err = qda_fastrpc_prepare_args_create_static(ctx, argp);
 		break;
 	case QDA_FASTRPC_RMID_INIT_MMAP:
 		err = qda_fastrpc_prepare_args_map(ctx, argp);
