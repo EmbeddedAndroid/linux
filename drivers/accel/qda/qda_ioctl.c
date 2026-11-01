@@ -27,6 +27,9 @@ int qda_ioctl_query(struct drm_device *dev, void *data, struct drm_file *file_pr
 	case QDA_QUERY_DSP_NAME:
 		strscpy(args->dsp_name, qdev->dsp_name, sizeof(args->dsp_name));
 		return 0;
+	case QDA_QUERY_DSP_CAPABILITIES:
+		return qda_get_dsp_capability(qdev, file_priv->driver_priv,
+					      args->cap.attribute_id, &args->cap.capability);
 	default:
 		return -EINVAL;
 	}
@@ -163,6 +166,45 @@ int qda_ioctl_init_create(struct drm_device *dev, void *data, struct drm_file *f
 int qda_session_init_create(struct qda_session *session, struct qda_init_create_args *create)
 {
 	return qda_fastrpc_invoke(QDA_FASTRPC_RMID_INIT_CREATE, create, session);
+}
+
+/**
+ * qda_get_dsp_capability() - Read one DSP capability attribute
+ * @qdev: Device whose DSP to query
+ * @session: Session the query is issued on if the cache is still empty
+ * @attribute_id: Attribute to read
+ * @capability: Receives the value of the attribute
+ *
+ * The attributes are fetched from the DSP once per device and served from the
+ * cache afterwards, to every session. The cache is only written by a query
+ * that succeeded.
+ *
+ * Return: 0 on success, negative error code on failure
+ */
+int qda_get_dsp_capability(struct qda_dev *qdev, struct qda_session *session,
+			   u32 attribute_id, u32 *capability)
+{
+	int err;
+
+	if (attribute_id >= QDA_MAX_DSP_ATTRIBUTES)
+		return -EOVERFLOW;
+
+	guard(mutex)(&qdev->attr_lock);
+
+	if (!qdev->valid_attributes) {
+		err = qda_fastrpc_invoke(QDA_FASTRPC_TYPE_GET_DSP_INFO, qdev->dsp_attributes,
+					 session);
+		if (err == (int)QDA_FASTRPC_DSP_UNSUPPORTED_API)
+			return -EOPNOTSUPP;
+		if (err)
+			return err;
+
+		qdev->valid_attributes = true;
+	}
+
+	*capability = qdev->dsp_attributes[attribute_id];
+
+	return 0;
 }
 
 /**

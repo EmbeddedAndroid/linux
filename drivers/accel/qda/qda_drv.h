@@ -35,6 +35,9 @@
 /* Upper bound on the "qcom,vmids" DT property */
 #define QDA_MAX_VMIDS	16
 
+/* Size of the cached DSP attribute array; index 0 is reserved */
+#define QDA_MAX_DSP_ATTRIBUTES	256
+
 /**
  * struct qda_session - One user of a DSP
  *
@@ -122,6 +125,12 @@ struct qda_dev {
 	 * to, or NULL if it could not be created
 	 */
 	struct auxiliary_device *legacy_auxdev;
+	/** @attr_lock: Serialises the DSP capability query and protects the cache below */
+	struct mutex attr_lock;
+	/** @valid_attributes: True once @dsp_attributes has been queried from the DSP */
+	bool valid_attributes;
+	/** @dsp_attributes: Cached DSP capability attributes */
+	u32 dsp_attributes[QDA_MAX_DSP_ATTRIBUTES];
 	/** @vmperms: VMs the remote heap is shared with, from qcom,vmids */
 	struct qcom_scm_vmperm vmperms[QDA_MAX_VMIDS];
 	/** @vmcount: Number of valid entries in @vmperms */
