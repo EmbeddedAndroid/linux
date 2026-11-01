@@ -11,6 +11,7 @@
 struct dma_buf;
 struct drm_gem_object;
 struct qda_dev;
+struct qda_legacy_invoke_arg;
 struct qda_session;
 
 /**
@@ -34,6 +35,9 @@ struct qda_legacy_ops {
 	/** @import_dmabuf: Map a DMA-BUF into a session's context bank */
 	struct drm_gem_object *(*import_dmabuf)(struct qda_session *session,
 						struct dma_buf *dmabuf);
+	/** @invoke: Run a method on the DSP; takes ownership of each @args[i].obj */
+	int (*invoke)(struct qda_session *session, u32 handle, u32 sc,
+		      struct qda_legacy_invoke_arg *args);
 };
 
 extern const struct qda_legacy_ops qda_legacy_ops_table;

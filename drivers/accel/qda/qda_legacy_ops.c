@@ -8,6 +8,7 @@
 #include <drm/drm_gem.h>
 #include <drm/drm_prime.h>
 #include "qda_drv.h"
+#include "qda_fastrpc.h"
 #include "qda_gem.h"
 #include "qda_legacy_ops.h"
 #include "qda_prime.h"
@@ -71,10 +72,17 @@ static struct drm_gem_object *legacy_import_dmabuf(struct qda_session *session,
 	return qda_prime_import_dmabuf(&session->qda_dev->drm_dev, session, dmabuf);
 }
 
+static int legacy_invoke(struct qda_session *session, u32 handle, u32 sc,
+			 struct qda_legacy_invoke_arg *args)
+{
+	return qda_fastrpc_invoke_legacy(session->qda_dev, session, handle, sc, args);
+}
+
 const struct qda_legacy_ops qda_legacy_ops_table = {
 	.session_create = legacy_session_create,
 	.session_destroy = legacy_session_destroy,
 	.alloc_dmabuf = legacy_alloc_dmabuf,
 	.import_dmabuf = legacy_import_dmabuf,
+	.invoke = legacy_invoke,
 };
 EXPORT_SYMBOL_FOR_MODULES(qda_legacy_ops_table, "qda_fastrpc_shim");

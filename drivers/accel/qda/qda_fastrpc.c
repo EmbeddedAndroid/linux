@@ -55,6 +55,22 @@ static void setup_pages_from_gem_obj(struct qda_gem_obj *qda_gem_obj,
 	pages->size = qda_gem_obj->size;
 }
 
+static int calculate_vma_offset(u64 user_ptr, u64 *offset)
+{
+	struct vm_area_struct *vma;
+	int ret = -EFAULT;
+
+	mmap_read_lock(current->mm);
+	vma = find_vma(current->mm, user_ptr);
+	if (vma && vma->vm_start <= user_ptr) {
+		*offset = (user_ptr & PAGE_MASK) - vma->vm_start;
+		ret = 0;
+	}
+	mmap_read_unlock(current->mm);
+
+	return ret;
+}
+
 static u64 calculate_page_aligned_size(u64 addr, u64 len)
 {
 	u64 pg_start = (addr & PAGE_MASK) >> PAGE_SHIFT;
@@ -286,22 +302,44 @@ struct qda_fastrpc_invoke_ctx *qda_fastrpc_context_alloc(struct qda_dev *qdev)
 }
 
 /*
- * Resolve the address of an in/out buffer argument. The buffer is named by a
- * GEM handle, looked up in the calling session's own handle table, so a
- * session cannot name another's buffer. The offset and length come from user
- * space and are checked against the buffer's real size: a region described as
- * larger than its buffer would let the DSP read and write past the end of it,
- * into whatever else is mapped in the same context bank.
+ * Resolve the address of an in/out buffer argument. The buffer is either a
+ * GEM object the legacy shim already resolved into ctx->gem_objs[i], or a GEM
+ * handle looked up in the calling session's own handle table. For a handle,
+ * the offset and length come from user space and are checked against the
+ * buffer's real size: a region described as larger than its buffer would let
+ * the DSP read and write past the end of it, into whatever else is mapped in
+ * the same context bank.
  */
 static int process_msg_buffer(struct qda_fastrpc_invoke_ctx *ctx, int i,
 			      union qda_remote_arg *rpra,
 			      struct qda_phy_page *pages)
 {
 	u64 len = ctx->args[i].length;
-	struct qda_gem_obj *qda_gem_obj;
 	struct drm_gem_object *gem_obj;
+	struct qda_gem_obj *qda_gem_obj;
 	u64 unaligned_addr;
+	u64 vma_offset = 0;
 	int err;
+
+	if (ctx->gem_objs[i]) {
+		/*
+		 * The legacy ABI predates GEM handles, so the offset field
+		 * holds an address in the caller's own mapping of the buffer,
+		 * or 0 if it has none, meaning the start of the buffer.
+		 */
+		qda_gem_obj = to_qda_gem_obj(ctx->gem_objs[i]);
+		if (ctx->args[i].offset) {
+			err = calculate_vma_offset(ctx->args[i].offset, &vma_offset);
+			if (err)
+				return err;
+		}
+
+		rpra[i].buf.addr = ctx->args[i].offset;
+		pages[i].addr = qda_gem_obj->dma_addr + vma_offset;
+		pages[i].size = calculate_page_aligned_size(ctx->args[i].offset, len);
+
+		return 0;
+	}
 
 	if (!ctx->args[i].handle)
 		return -EINVAL;
@@ -549,6 +587,105 @@ int qda_fastrpc_invoke_common(struct qda_dev *qdev, struct qda_fastrpc_invoke_ct
 	qda_fastrpc_cleanup_handlelist(ctx);
 
 	return 0;
+}
+
+/**
+ * qda_fastrpc_invoke_legacy() - Perform a dynamic invocation on behalf of the legacy shim
+ * @qdev: Device to invoke on
+ * @session: Legacy session (no backing drm_file)
+ * @handle: Remote handle to invoke on the DSP
+ * @sc: FastRPC scalars value encoding the number of in/out buffers
+ * @legacy_args: Kernel-side argument array, one entry per QDA_REMOTE_SCALARS_LENGTH(sc)
+ *
+ * Unlike the accel UAPI path, the argument descriptors and any backing GEM
+ * objects already live in kernel memory: the shim has already resolved
+ * every fd-backed argument via its own import path, since a legacy session
+ * has no GEM handle table to resolve a handle-based argument against.
+ * Ownership of each @legacy_args[i].obj reference transfers to this function,
+ * on failure as well as on success.
+ *
+ * Return: 0 on success, negative error code on failure
+ */
+int qda_fastrpc_invoke_legacy(struct qda_dev *qdev, struct qda_session *session,
+			      u32 handle, u32 sc, struct qda_legacy_invoke_arg *legacy_args)
+{
+	struct qda_fastrpc_invoke_ctx *ctx;
+	struct drm_qda_fastrpc_invoke_args *args;
+	u32 nscalars;
+	int err;
+	int i;
+
+	nscalars = QDA_REMOTE_SCALARS_LENGTH(sc);
+
+	/*
+	 * An fd naming a buffer another session exported resolves to the
+	 * original object, still mapped in that session's context bank, so
+	 * the same check as for a handle applies.
+	 */
+	for (i = 0; i < nscalars; ++i) {
+		if (legacy_args[i].obj &&
+		    to_qda_gem_obj(legacy_args[i].obj)->iommu_dev != session->assigned_iommu_dev) {
+			err = -EACCES;
+			goto err_put_legacy_objs;
+		}
+	}
+
+	ctx = qda_fastrpc_context_alloc(qdev);
+	if (IS_ERR(ctx)) {
+		err = PTR_ERR(ctx);
+		goto err_put_legacy_objs;
+	}
+
+	/* Dropped by qda_fastrpc_context_free(), as for the accel UAPI path */
+	qda_session_get(session);
+	ctx->session = session;
+	ctx->handle = handle;
+	ctx->sc = sc;
+
+	ctx->nbufs = QDA_REMOTE_SCALARS_INBUFS(sc) + QDA_REMOTE_SCALARS_OUTBUFS(sc);
+	if (nscalars) {
+		args = kzalloc_objs(*args, nscalars);
+		if (!args) {
+			err = -ENOMEM;
+			goto err_put_legacy_objs_ctx;
+		}
+
+		ctx->gem_objs = kzalloc_objs(*ctx->gem_objs, nscalars);
+		if (!ctx->gem_objs) {
+			kfree(args);
+			err = -ENOMEM;
+			goto err_put_legacy_objs_ctx;
+		}
+
+		for (i = 0; i < nscalars; ++i) {
+			args[i].offset = legacy_args[i].ptr;
+			args[i].length = legacy_args[i].length;
+			/* process_dma_handle() skips handle args whose handle is 0 */
+			args[i].handle = (i >= ctx->nbufs && legacy_args[i].obj) ?
+					 (u32)legacy_args[i].fd : 0;
+			ctx->gem_objs[i] = legacy_args[i].obj;
+		}
+
+		ctx->args = args;
+	}
+
+	ctx->nscalars = nscalars;
+
+	err = qda_fastrpc_invoke_common(qdev, ctx);
+
+	kref_put(&ctx->refcount, qda_fastrpc_context_free);
+
+	return err;
+
+err_put_legacy_objs_ctx:
+	kref_put(&ctx->refcount, qda_fastrpc_context_free);
+err_put_legacy_objs:
+	/* The context never took the objects, so release them here */
+	for (i = 0; i < nscalars; ++i)
+		if (legacy_args[i].obj)
+			drm_gem_object_put(legacy_args[i].obj);
+
+	return err;
 }
 
 /*

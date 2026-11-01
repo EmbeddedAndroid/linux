@@ -198,6 +198,23 @@ struct qda_fastrpc_invoke_ctx {
 	struct work_struct put_work;
 };
 
+/**
+ * struct qda_legacy_invoke_arg - Kernel-side invoke argument for the legacy shim
+ *
+ * Built by the FastRPC compatibility shim from a legacy fastrpc_invoke_args
+ * entry; @obj is NULL for an argument with no backing fd.
+ */
+struct qda_legacy_invoke_arg {
+	/** @ptr: Argument pointer (user virtual address) */
+	u64 ptr;
+	/** @length: Length of the argument data in bytes */
+	u64 length;
+	/** @obj: Pre-resolved GEM object for an fd-backed argument, or NULL */
+	struct drm_gem_object *obj;
+	/** @fd: Legacy fd, forwarded as the DSP-visible handle for handle arguments */
+	s32 fd;
+};
+
 struct qda_fastrpc_invoke_ctx *qda_fastrpc_context_alloc(struct qda_dev *qdev);
 void qda_fastrpc_context_free(struct kref *ref);
 void qda_fastrpc_cleanup_handlelist(struct qda_fastrpc_invoke_ctx *ctx);
@@ -207,5 +224,7 @@ int qda_fastrpc_prepare_args(struct qda_fastrpc_invoke_ctx *ctx,
 int qda_fastrpc_invoke_pack(struct qda_fastrpc_invoke_ctx *ctx, struct qda_msg *msg);
 int qda_fastrpc_invoke_common(struct qda_dev *qdev, struct qda_fastrpc_invoke_ctx *ctx);
 void qda_fastrpc_flush_pending(struct qda_dev *qdev);
+int qda_fastrpc_invoke_legacy(struct qda_dev *qdev, struct qda_session *session,
+			      u32 handle, u32 sc, struct qda_legacy_invoke_arg *legacy_args);
 
 #endif /* __QDA_FASTRPC_H__ */
