@@ -638,6 +638,13 @@ void qda_fastrpc_return_result(struct qda_fastrpc_invoke_ctx *ctx, void *argp)
 	int idx;
 
 	switch (ctx->type) {
+	case QDA_FASTRPC_TYPE_GET_DSP_INFO:
+		/* @argp is the attribute array; entry 0 is reserved */
+		((u32 *)argp)[0] = 0;
+		memcpy((u32 *)argp + 1,
+		       (u8 *)to_qda_gem_obj(ctx->gem_objs[1])->virt + ctx->args[1].offset,
+		       ctx->args[1].length);
+		return;
 	case QDA_FASTRPC_RMID_INIT_MMAP:
 		idx = 2;
 		break;
@@ -981,6 +988,43 @@ static int qda_fastrpc_prepare_args_create_static(struct qda_fastrpc_invoke_ctx 
 }
 
 /*
+ * DSP capability query packed layout:
+ *   [0] count	sizeof(u32), the capacity of the array below	IN
+ *   [1] attrs	(QDA_MAX_DSP_ATTRIBUTES - 1) * sizeof(u32)	OUT
+ *
+ * Index 0 of the cached array is reserved, so only the rest is exchanged.
+ */
+static int qda_fastrpc_prepare_args_get_dsp_info(struct qda_fastrpc_invoke_ctx *ctx)
+{
+	const u32 attr_count = QDA_MAX_DSP_ATTRIBUTES - 1;
+	struct qda_gem_obj *kernel_gem;
+	int err;
+
+	const size_t off_attrs = sizeof(u32);
+	const size_t total_size = off_attrs + attr_count * sizeof(u32);
+
+	ctx->sc = QDA_FASTRPC_SCALARS(0, 1, 1);
+	ctx->handle = QDA_FASTRPC_DSP_UTILITIES_HANDLE;
+
+	err = alloc_kernel_args(ctx, 2);
+	if (err)
+		return err;
+
+	kernel_gem = alloc_kernel_gem(ctx, total_size);
+	if (IS_ERR(kernel_gem))
+		return PTR_ERR(kernel_gem);
+
+	*(u32 *)kernel_gem->virt = attr_count;
+
+	assign_kernel_gem_arg(ctx, 0, kernel_gem, kernel_gem->virt, sizeof(u32));
+	assign_kernel_gem_arg(ctx, 1, kernel_gem, (u8 *)kernel_gem->virt + off_attrs,
+			      attr_count * sizeof(u32));
+	drm_gem_object_put(&kernel_gem->base);
+
+	return 0;
+}
+
+/*
  * Find the buffer a mapping request names and describe it to the DSP. The
  * buffer is held by the context until the request is done, so that closing its
  * handle meanwhile cannot free memory the DSP is being told to map. The
@@ -1276,6 +1320,9 @@ int qda_fastrpc_prepare_args(struct qda_fastrpc_invoke_ctx *ctx,
 	case QDA_FASTRPC_RMID_INIT_CREATE_STATIC:
 		ctx->pd = QDA_USER_PD;
 		err = qda_fastrpc_prepare_args_create_static(ctx, argp);
+		break;
+	case QDA_FASTRPC_TYPE_GET_DSP_INFO:
+		err = qda_fastrpc_prepare_args_get_dsp_info(ctx);
 		break;
 	case QDA_FASTRPC_RMID_INIT_MMAP:
 		err = qda_fastrpc_prepare_args_map(ctx, argp);

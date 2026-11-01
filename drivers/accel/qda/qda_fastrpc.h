@@ -55,8 +55,20 @@ struct qda_session;
 #define QDA_FASTRPC_RMID_INIT_MEM_UNMAP		11
 #define QDA_FASTRPC_RMID_INVOKE_DYNAMIC		0xFFFFFFFFU
 
+/*
+ * ctx->type tag for the DSP capability query. Not a wire method ID: the query
+ * is addressed by QDA_FASTRPC_DSP_UTILITIES_HANDLE, method 0.
+ */
+#define QDA_FASTRPC_TYPE_GET_DSP_INFO		0xFFFFFFFEU
+
 /* Handle the initialisation methods are addressed to */
 #define QDA_FASTRPC_INIT_HANDLE		0x1
+
+/* Handle of the DSP's utility calls, which include the capability query */
+#define QDA_FASTRPC_DSP_UTILITIES_HANDLE	0x2
+
+/* Status the DSP returns when it does not support the capability query */
+#define QDA_FASTRPC_DSP_UNSUPPORTED_API		0x80000414U
 
 /* Protection domains a request can be directed at */
 #define QDA_ROOT_PD			0
