@@ -5,18 +5,18 @@
 #include <linux/rpmsg.h>
 #include <drm/drm_print.h>
 
+#include "qda_cb.h"
 #include "qda_drv.h"
+#include "qda_soc.h"
 
 /*
  * Both compatibles the binding defines are matched here. The glymur, hawi,
  * maili and nord nodes name "qcom,kaanapali-fastrpc" as their fallback
- * compatible and so are matched by that entry. Per-SoC DSP parameters are
- * attached as match data by a later patch, once there is something that
- * consumes them.
+ * compatible and so are matched by that entry.
  */
 static const struct of_device_id qda_rpmsg_of_match[] = {
-	{ .compatible = "qcom,kaanapali-fastrpc" },
-	{ .compatible = "qcom,fastrpc" },
+	{ .compatible = "qcom,kaanapali-fastrpc", .data = &kaanapali_soc_data },
+	{ .compatible = "qcom,fastrpc", .data = &default_soc_data },
 	{ }
 };
 MODULE_DEVICE_TABLE(of, qda_rpmsg_of_match);
@@ -58,6 +58,7 @@ static void qda_rpmsg_remove(struct rpmsg_device *rpdev)
 	 */
 	drm_dev_unplug(&qdev->drm_dev);
 	qdev->rpdev = NULL;
+	qda_cb_unpopulate(qdev);
 }
 
 static int qda_rpmsg_probe(struct rpmsg_device *rpdev)
@@ -69,13 +70,25 @@ static int qda_rpmsg_probe(struct rpmsg_device *rpdev)
 	if (IS_ERR(qdev))
 		return PTR_ERR(qdev);
 
+	qdev->soc_data = of_device_get_match_data(&rpdev->dev);
+	if (!qdev->soc_data)
+		return -ENODEV;
+
 	ret = of_property_read_string(rpdev->dev.of_node, "label", &qdev->dsp_name);
 	if (ret) {
 		dev_err(&rpdev->dev, "Missing 'label' property in DT node: %d\n", ret);
 		return ret;
 	}
 
-	return qda_register_device(qdev);
+	ret = qda_cb_populate(qdev, rpdev->dev.of_node);
+	if (ret)
+		return ret;
+
+	ret = qda_register_device(qdev);
+	if (ret)
+		qda_cb_unpopulate(qdev);
+
+	return ret;
 }
 
 static struct rpmsg_driver qda_rpmsg_driver = {
