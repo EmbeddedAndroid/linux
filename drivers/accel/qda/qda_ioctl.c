@@ -185,13 +185,56 @@ int qda_release_dsp_process(struct qda_dev *qdev, struct qda_session *session)
 int qda_ioctl_mmap(struct drm_device *dev, void *data, struct drm_file *file_priv)
 {
 	struct drm_qda_mem_map *map_req = data;
+	struct qda_mem_map_args args = {
+		.map = *map_req,
+	};
+	int err;
 
-	switch (map_req->request) {
+	err = qda_session_mem_map(file_priv->driver_priv, &args);
+	if (err)
+		return err;
+
+	map_req->vaddrout = args.map.vaddrout;
+
+	return 0;
+}
+
+/**
+ * qda_session_mem_map() - Map a buffer into the DSP's address space
+ * @session: Session to map for
+ * @args: Mapping parameters; @args->map.vaddrout is filled in on success
+ *
+ * For sessions with no handle table to name the buffer by, such as those of
+ * the legacy shim, which supply @args->obj.
+ *
+ * Return: 0 on success, negative error code on failure
+ */
+int qda_session_mem_map(struct qda_session *session, struct qda_mem_map_args *args)
+{
+	switch (args->map.request) {
 	case QDA_REQUEST_MMAP:
-		return qda_fastrpc_invoke(QDA_FASTRPC_RMID_INIT_MMAP, data, file_priv->driver_priv);
+		return qda_fastrpc_invoke(QDA_FASTRPC_RMID_INIT_MMAP, args, session);
 	case QDA_REQUEST_MEM_MAP:
-		return qda_fastrpc_invoke(QDA_FASTRPC_RMID_INIT_MEM_MAP, data,
-					  file_priv->driver_priv);
+		return qda_fastrpc_invoke(QDA_FASTRPC_RMID_INIT_MEM_MAP, args, session);
+	default:
+		return -EINVAL;
+	}
+}
+
+/**
+ * qda_session_mem_unmap() - Remove a buffer's mapping from the DSP's address space
+ * @session: Session the mapping belongs to
+ * @unmap: Which mapping to remove
+ *
+ * Return: 0 on success, negative error code on failure
+ */
+int qda_session_mem_unmap(struct qda_session *session, struct drm_qda_mem_unmap *unmap)
+{
+	switch (unmap->request) {
+	case QDA_REQUEST_MUNMAP:
+		return qda_fastrpc_invoke(QDA_FASTRPC_RMID_INIT_MUNMAP, unmap, session);
+	case QDA_REQUEST_MEM_UNMAP:
+		return qda_fastrpc_invoke(QDA_FASTRPC_RMID_INIT_MEM_UNMAP, unmap, session);
 	default:
 		return -EINVAL;
 	}
@@ -207,18 +250,7 @@ int qda_ioctl_mmap(struct drm_device *dev, void *data, struct drm_file *file_pri
  */
 int qda_ioctl_munmap(struct drm_device *dev, void *data, struct drm_file *file_priv)
 {
-	struct drm_qda_mem_unmap *unmap_req = data;
-
-	switch (unmap_req->request) {
-	case QDA_REQUEST_MUNMAP:
-		return qda_fastrpc_invoke(QDA_FASTRPC_RMID_INIT_MUNMAP, data,
-					  file_priv->driver_priv);
-	case QDA_REQUEST_MEM_UNMAP:
-		return qda_fastrpc_invoke(QDA_FASTRPC_RMID_INIT_MEM_UNMAP, data,
-					  file_priv->driver_priv);
-	default:
-		return -EINVAL;
-	}
+	return qda_session_mem_unmap(file_priv->driver_priv, data);
 }
 
 /**

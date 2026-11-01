@@ -8,7 +8,9 @@
 #include <linux/file.h>
 #include <linux/fs.h>
 #include <linux/limits.h>
+#include <linux/list.h>
 #include <linux/miscdevice.h>
+#include <linux/mutex.h>
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/slab.h>
@@ -21,9 +23,29 @@
 #include "qda_fastrpc.h"
 #include "qda_legacy_ops.h"
 
+/*
+ * A buffer the DSP has mapped for an open file. A legacy session has no
+ * handle table, so this is what keeps the buffer alive for as long as the
+ * mapping lasts, the job a GEM handle does for the accel UAPI.
+ *
+ * Plain mappings are found by the address map returned, which is all
+ * MUNMAP carries. Attribute-based ones are found by the fd, which doubles
+ * as the identifier the DSP tracks the buffer by.
+ */
+struct qda_shim_mapping {
+	struct list_head node;
+	u64 key;
+	u64 vaddr;
+	u64 size;
+	struct drm_gem_object *obj;
+};
+
 /* State of one open /dev/fastrpc-* file */
 struct qda_shim_file {
 	struct qda_session *session;
+	struct mutex maps_lock;
+	struct list_head mmap_list;
+	struct list_head mem_map_list;
 	/* Opened through the /dev/fastrpc-<dsp>-secure node */
 	bool secure_node;
 	/* Properties of the qda_shim_dev this file was opened on */
@@ -79,6 +101,83 @@ static struct drm_gem_object *shim_import_fd(struct qda_session *session, s32 fd
 	return obj;
 }
 
+/* Takes ownership of @obj on success; on failure the caller still owns it */
+static struct qda_shim_mapping *shim_mapping_add(struct qda_shim_file *sf,
+						 struct list_head *list, u64 key, u64 vaddr,
+						 u64 size, struct drm_gem_object *obj)
+{
+	struct qda_shim_mapping *m, *new;
+
+	new = kzalloc_obj(*new);
+	if (!new)
+		return ERR_PTR(-ENOMEM);
+
+	new->key = key;
+	new->vaddr = vaddr;
+	new->size = size;
+	new->obj = obj;
+
+	guard(mutex)(&sf->maps_lock);
+
+	list_for_each_entry(m, list, node) {
+		if (m->key == key) {
+			kfree(new);
+			return ERR_PTR(-EEXIST);
+		}
+	}
+	list_add_tail(&new->node, list);
+
+	return new;
+}
+
+static struct qda_shim_mapping *shim_mapping_detach(struct qda_shim_file *sf,
+						    struct list_head *list, u64 key, u64 vaddr)
+{
+	struct qda_shim_mapping *m;
+
+	guard(mutex)(&sf->maps_lock);
+
+	list_for_each_entry(m, list, node) {
+		if (m->key == key && m->vaddr == vaddr) {
+			list_del(&m->node);
+			return m;
+		}
+	}
+
+	return NULL;
+}
+
+static void shim_mapping_attach(struct qda_shim_file *sf, struct list_head *list,
+				struct qda_shim_mapping *m)
+{
+	guard(mutex)(&sf->maps_lock);
+	list_add_tail(&m->node, list);
+}
+
+static void shim_mapping_free(struct qda_shim_mapping *m)
+{
+	drm_gem_object_put(m->obj);
+	kfree(m);
+}
+
+/* The DSP unmap comes first: the buffer must outlive the DSP's use of it */
+static void shim_mappings_release(struct qda_shim_file *sf)
+{
+	struct qda_shim_mapping *m, *tmp;
+
+	list_for_each_entry_safe(m, tmp, &sf->mmap_list, node) {
+		list_del(&m->node);
+		qda_legacy_ops_table.munmap(sf->session, m->vaddr, m->size);
+		shim_mapping_free(m);
+	}
+
+	list_for_each_entry_safe(m, tmp, &sf->mem_map_list, node) {
+		list_del(&m->node);
+		qda_legacy_ops_table.mem_unmap(sf->session, m->key, m->vaddr, m->size);
+		shim_mapping_free(m);
+	}
+}
+
 static int qda_shim_open(struct inode *inode, struct file *file)
 {
 	struct qda_shim_node *snode = container_of(file->private_data, struct qda_shim_node,
@@ -97,6 +196,9 @@ static int qda_shim_open(struct inode *inode, struct file *file)
 		return err;
 	}
 
+	mutex_init(&sf->maps_lock);
+	INIT_LIST_HEAD(&sf->mmap_list);
+	INIT_LIST_HEAD(&sf->mem_map_list);
 	sf->secure_node = snode->secure;
 	sf->secure_channel = snode->sdev->secure_channel;
 	sf->unsigned_support = snode->sdev->unsigned_support;
@@ -110,8 +212,10 @@ static int qda_shim_release(struct inode *inode, struct file *file)
 {
 	struct qda_shim_file *sf = file->private_data;
 
+	shim_mappings_release(sf);
 	qda_legacy_ops_table.release(sf->session);
 	qda_legacy_ops_table.session_destroy(sf->session);
+	mutex_destroy(&sf->maps_lock);
 	kfree(sf);
 
 	return 0;
@@ -191,6 +295,156 @@ static long qda_shim_init_create(struct qda_shim_file *sf, void __user *argp)
 	return err;
 }
 
+static long qda_shim_mmap(struct qda_shim_file *sf, void __user *argp)
+{
+	struct qda_shim_mapping *m;
+	struct fastrpc_req_mmap args;
+	struct drm_gem_object *obj;
+	int err;
+
+	if (copy_from_user(&args, argp, sizeof(args)))
+		return -EFAULT;
+
+	obj = shim_import_fd(sf->session, args.fd);
+	if (IS_ERR(obj))
+		return PTR_ERR(obj);
+	if (!obj)
+		return -EINVAL;
+
+	err = qda_legacy_ops_table.mmap(sf->session, obj, args.vaddrin, args.size, args.flags,
+					&args.vaddrout);
+	if (err) {
+		drm_gem_object_put(obj);
+		return err;
+	}
+
+	m = shim_mapping_add(sf, &sf->mmap_list, args.vaddrout, args.vaddrout, args.size, obj);
+	if (IS_ERR(m)) {
+		err = PTR_ERR(m);
+		goto err_unmap;
+	}
+
+	if (copy_to_user(argp, &args, sizeof(args))) {
+		m = shim_mapping_detach(sf, &sf->mmap_list, args.vaddrout, args.vaddrout);
+		if (m) {
+			qda_legacy_ops_table.munmap(sf->session, m->vaddr, m->size);
+			shim_mapping_free(m);
+		}
+		return -EFAULT;
+	}
+
+	return 0;
+
+err_unmap:
+	qda_legacy_ops_table.munmap(sf->session, args.vaddrout, args.size);
+	drm_gem_object_put(obj);
+
+	return err;
+}
+
+static long qda_shim_munmap(struct qda_shim_file *sf, void __user *argp)
+{
+	struct fastrpc_req_munmap args;
+	struct qda_shim_mapping *m;
+	int err;
+
+	if (copy_from_user(&args, argp, sizeof(args)))
+		return -EFAULT;
+
+	m = shim_mapping_detach(sf, &sf->mmap_list, args.vaddrout, args.vaddrout);
+	if (!m)
+		return -ENOENT;
+
+	if (m->size != args.size) {
+		shim_mapping_attach(sf, &sf->mmap_list, m);
+		return -EINVAL;
+	}
+
+	err = qda_legacy_ops_table.munmap(sf->session, m->vaddr, m->size);
+	if (err) {
+		shim_mapping_attach(sf, &sf->mmap_list, m);
+		return err;
+	}
+
+	shim_mapping_free(m);
+
+	return 0;
+}
+
+static long qda_shim_mem_map(struct qda_shim_file *sf, void __user *argp)
+{
+	struct qda_shim_mapping *m;
+	struct fastrpc_mem_map args;
+	struct drm_gem_object *obj;
+	int err;
+
+	if (copy_from_user(&args, argp, sizeof(args)))
+		return -EFAULT;
+
+	if (args.offset < 0)
+		return -EINVAL;
+
+	obj = shim_import_fd(sf->session, args.fd);
+	if (IS_ERR(obj))
+		return PTR_ERR(obj);
+	if (!obj)
+		return -EINVAL;
+
+	/* Reserved before the DSP is asked, so the same fd cannot be mapped twice */
+	m = shim_mapping_add(sf, &sf->mem_map_list, args.fd, 0, args.length, obj);
+	if (IS_ERR(m)) {
+		drm_gem_object_put(obj);
+		return PTR_ERR(m);
+	}
+
+	err = qda_legacy_ops_table.mem_map(sf->session, obj, args.flags, args.attrs, args.offset,
+					   args.vaddrin, args.length, args.fd, &args.vaddrout);
+	if (err) {
+		m = shim_mapping_detach(sf, &sf->mem_map_list, args.fd, 0);
+		if (m)
+			shim_mapping_free(m);
+		return err;
+	}
+
+	scoped_guard(mutex, &sf->maps_lock)
+		m->vaddr = args.vaddrout;
+
+	if (copy_to_user(argp, &args, sizeof(args))) {
+		m = shim_mapping_detach(sf, &sf->mem_map_list, args.fd, args.vaddrout);
+		if (m) {
+			qda_legacy_ops_table.mem_unmap(sf->session, m->key, m->vaddr, m->size);
+			shim_mapping_free(m);
+		}
+		return -EFAULT;
+	}
+
+	return 0;
+}
+
+static long qda_shim_mem_unmap(struct qda_shim_file *sf, void __user *argp)
+{
+	struct fastrpc_mem_unmap args;
+	struct qda_shim_mapping *m;
+	int err;
+
+	if (copy_from_user(&args, argp, sizeof(args)))
+		return -EFAULT;
+
+	m = shim_mapping_detach(sf, &sf->mem_map_list, args.fd, args.vaddr);
+	if (!m)
+		return -ENOENT;
+
+	err = qda_legacy_ops_table.mem_unmap(sf->session, m->key, m->vaddr, m->size);
+	if (err) {
+		shim_mapping_attach(sf, &sf->mem_map_list, m);
+		return err;
+	}
+
+	shim_mapping_free(m);
+
+	return 0;
+}
+
 static long qda_shim_invoke(struct qda_shim_file *sf, void __user *argp)
 {
 	struct qda_legacy_invoke_arg *largs;
@@ -262,6 +516,14 @@ static long qda_shim_dispatch(struct qda_shim_file *sf, unsigned int cmd, void _
 		return qda_shim_alloc_dma_buf(sf, argp);
 	case FASTRPC_IOCTL_INIT_CREATE:
 		return qda_shim_init_create(sf, argp);
+	case FASTRPC_IOCTL_MMAP:
+		return qda_shim_mmap(sf, argp);
+	case FASTRPC_IOCTL_MUNMAP:
+		return qda_shim_munmap(sf, argp);
+	case FASTRPC_IOCTL_MEM_MAP:
+		return qda_shim_mem_map(sf, argp);
+	case FASTRPC_IOCTL_MEM_UNMAP:
+		return qda_shim_mem_unmap(sf, argp);
 	case FASTRPC_IOCTL_INVOKE:
 		return qda_shim_invoke(sf, argp);
 	default:

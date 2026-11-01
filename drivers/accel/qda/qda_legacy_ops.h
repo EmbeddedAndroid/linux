@@ -35,6 +35,17 @@ struct qda_legacy_ops {
 			   u32 filelen, u32 attrs, u32 siglen);
 	/** @release: Release the session's DSP process, if it has one */
 	int (*release)(struct qda_session *session);
+	/** @mmap: Map a buffer into the DSP's address space */
+	int (*mmap)(struct qda_session *session, struct drm_gem_object *obj, u64 vaddrin,
+		    u64 size, u32 flags, u64 *vaddrout);
+	/** @mem_map: Map a region of a buffer with explicit SMMU attributes */
+	int (*mem_map)(struct qda_session *session, struct drm_gem_object *obj, u32 flags,
+		       u32 attrs, u32 offset, u64 vaddrin, u64 size, s32 dsp_handle,
+		       u64 *vaddrout);
+	/** @munmap: Undo a mapping made with @mmap */
+	int (*munmap)(struct qda_session *session, u64 vaddrout, u64 size);
+	/** @mem_unmap: Undo a mapping made with @mem_map */
+	int (*mem_unmap)(struct qda_session *session, s32 dsp_handle, u64 vaddr, u64 size);
 	/** @alloc_dmabuf: Allocate a buffer and export it as a DMA-BUF */
 	struct dma_buf *(*alloc_dmabuf)(struct qda_session *session, u64 size);
 	/** @import_dmabuf: Map a DMA-BUF into a session's context bank */
