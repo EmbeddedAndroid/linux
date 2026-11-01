@@ -1073,6 +1073,73 @@ out_put:
 }
 
 /*
+ * INIT_MUNMAP packed layout:
+ *   [0] req	sizeof(qda_fastrpc_munmap_req_msg)	IN
+ */
+static int qda_fastrpc_prepare_args_munmap(struct qda_fastrpc_invoke_ctx *ctx, void *argp)
+{
+	struct drm_qda_mem_unmap *uargs = argp;
+	struct qda_fastrpc_munmap_req_msg *req;
+	struct qda_gem_obj *kernel_gem;
+	int err;
+
+	ctx->sc = QDA_FASTRPC_SCALARS(QDA_FASTRPC_RMID_INIT_MUNMAP, 1, 0);
+	ctx->handle = QDA_FASTRPC_INIT_HANDLE;
+
+	err = alloc_kernel_args(ctx, 1);
+	if (err)
+		return err;
+
+	kernel_gem = alloc_kernel_gem(ctx, sizeof(*req));
+	if (IS_ERR(kernel_gem))
+		return PTR_ERR(kernel_gem);
+
+	req = kernel_gem->virt;
+	req->remote_session_id = ctx->session->remote_session_id;
+	req->vaddr = uargs->vaddrout;
+	req->size = uargs->size;
+
+	assign_kernel_gem_arg(ctx, 0, kernel_gem, req, sizeof(*req));
+	drm_gem_object_put(&kernel_gem->base);
+
+	return 0;
+}
+
+/*
+ * INIT_MEM_UNMAP packed layout:
+ *   [0] req	sizeof(qda_fastrpc_mem_unmap_req_msg)	IN
+ */
+static int qda_fastrpc_prepare_args_mem_unmap(struct qda_fastrpc_invoke_ctx *ctx, void *argp)
+{
+	struct drm_qda_mem_unmap *uargs = argp;
+	struct qda_fastrpc_mem_unmap_req_msg *req;
+	struct qda_gem_obj *kernel_gem;
+	int err;
+
+	ctx->sc = QDA_FASTRPC_SCALARS(QDA_FASTRPC_RMID_INIT_MEM_UNMAP, 1, 0);
+	ctx->handle = QDA_FASTRPC_INIT_HANDLE;
+
+	err = alloc_kernel_args(ctx, 1);
+	if (err)
+		return err;
+
+	kernel_gem = alloc_kernel_gem(ctx, sizeof(*req));
+	if (IS_ERR(kernel_gem))
+		return PTR_ERR(kernel_gem);
+
+	req = kernel_gem->virt;
+	req->remote_session_id = ctx->session->remote_session_id;
+	req->handle = uargs->dsp_handle;
+	req->vaddrin = uargs->vaddr;
+	req->len = uargs->size;
+
+	assign_kernel_gem_arg(ctx, 0, kernel_gem, req, sizeof(*req));
+	drm_gem_object_put(&kernel_gem->base);
+
+	return 0;
+}
+
+/*
  * INVOKE_DYNAMIC: the argument descriptors are supplied by user space, which
  * is also responsible for having imported every buffer to a GEM handle.
  */
@@ -1140,6 +1207,12 @@ int qda_fastrpc_prepare_args(struct qda_fastrpc_invoke_ctx *ctx,
 		break;
 	case QDA_FASTRPC_RMID_INIT_MEM_MAP:
 		err = qda_fastrpc_prepare_args_mem_map(ctx, argp);
+		break;
+	case QDA_FASTRPC_RMID_INIT_MUNMAP:
+		err = qda_fastrpc_prepare_args_munmap(ctx, argp);
+		break;
+	case QDA_FASTRPC_RMID_INIT_MEM_UNMAP:
+		err = qda_fastrpc_prepare_args_mem_unmap(ctx, argp);
 		break;
 	case QDA_FASTRPC_RMID_INVOKE_DYNAMIC:
 		err = qda_fastrpc_prepare_args_invoke(ctx, argp);
