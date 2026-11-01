@@ -178,6 +178,28 @@ int qcom_snd_apply_dai_tdm_slots(struct snd_soc_pcm_runtime *rtd)
 }
 EXPORT_SYMBOL_GPL(qcom_snd_apply_dai_tdm_slots);
 
+/*
+ * The DAI names that snd_soc_of_get_dlc() returns belong to the DAIs and are
+ * freed when their component's device unbinds. The DAI providers of these
+ * cards (LPASS macros, SoundWire controllers, the DSP DAIs) unbind on every
+ * ADSP restart while the card waits to be bound again, so keep a copy.
+ */
+static int qcom_snd_copy_dai_names(struct device *dev,
+				   struct snd_soc_dai_link_component *dlc, int num)
+{
+	int i;
+
+	for (i = 0; i < num; i++) {
+		if (!dlc[i].dai_name)
+			continue;
+		dlc[i].dai_name = devm_kstrdup_const(dev, dlc[i].dai_name, GFP_KERNEL);
+		if (!dlc[i].dai_name)
+			return -ENOMEM;
+	}
+
+	return 0;
+}
+
 int qcom_snd_parse_of(struct snd_soc_card *card)
 {
 	struct device *dev = card->dev;
@@ -269,6 +291,10 @@ int qcom_snd_parse_of(struct snd_soc_card *card)
 			return ret;
 		}
 
+		ret = qcom_snd_copy_dai_names(dev, link->cpus, link->num_cpus);
+		if (ret)
+			return ret;
+
 		link->id = args.args[0];
 
 		if (link->id >= LPASS_MAX_PORT) {
@@ -295,6 +321,10 @@ int qcom_snd_parse_of(struct snd_soc_card *card)
 					      "%s: codec dai not found\n", link->name);
 				return ret;
 			}
+
+			ret = qcom_snd_copy_dai_names(dev, link->codecs, link->num_codecs);
+			if (ret)
+				return ret;
 
 			if (platform) {
 				/* DPCM backend */
