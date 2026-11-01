@@ -261,6 +261,23 @@ struct qda_legacy_invoke_arg {
 	s32 fd;
 };
 
+/**
+ * struct qda_init_create_args - Kernel-side arguments for creating a DSP process
+ *
+ * Wraps the UAPI arguments so that a caller with no handle table, such as the
+ * legacy shim, can pass the ELF image as an already imported buffer.
+ */
+struct qda_init_create_args {
+	/** @init: Creation parameters; @init.file must be zero */
+	struct drm_qda_init_create init;
+	/**
+	 * @elf_obj: Buffer holding the ELF image, mapped in the session's
+	 * context bank, or NULL if @init.filehandle names it. Borrowed: the
+	 * caller keeps its reference for the length of the call.
+	 */
+	struct drm_gem_object *elf_obj;
+};
+
 struct qda_fastrpc_invoke_ctx *qda_fastrpc_context_alloc(struct qda_dev *qdev);
 void qda_fastrpc_context_free(struct kref *ref);
 void qda_fastrpc_cleanup_handlelist(struct qda_fastrpc_invoke_ctx *ctx);

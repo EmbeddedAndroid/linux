@@ -758,6 +758,27 @@ err_put_legacy_objs:
 }
 
 /*
+ * Use the ELF buffer the caller imported itself as argument 2. It is checked
+ * as a buffer named by handle would be: it must be mapped in this session's
+ * context bank, and the image must fit in it, as the DSP would otherwise read
+ * past the end of the buffer.
+ */
+static int qda_fastrpc_use_elf_obj(struct qda_fastrpc_invoke_ctx *ctx,
+				   struct drm_gem_object *obj, u32 filelen)
+{
+	if (to_qda_gem_obj(obj)->iommu_dev != ctx->session->assigned_iommu_dev)
+		return -EACCES;
+
+	if (filelen > to_qda_gem_obj(obj)->size)
+		return -EINVAL;
+
+	drm_gem_object_get(obj);
+	ctx->gem_objs[2] = obj;
+
+	return 0;
+}
+
+/*
  * INIT_RELEASE packed layout:
  *   [0] remote_session_id	sizeof(int)	IN
  */
@@ -796,7 +817,8 @@ static int qda_fastrpc_prepare_args_release_process(struct qda_fastrpc_invoke_ct
  */
 static int qda_fastrpc_prepare_args_init_create(struct qda_fastrpc_invoke_ctx *ctx, void *argp)
 {
-	struct drm_qda_init_create *init = argp;
+	struct qda_init_create_args *create = argp;
+	struct drm_qda_init_create *init = &create->init;
 	struct qda_fastrpc_create_process_inbuf *inbuf;
 	struct qda_dev *qdev = ctx->qdev;
 	struct drm_gem_object *gem_obj;
@@ -853,12 +875,19 @@ static int qda_fastrpc_prepare_args_init_create(struct qda_fastrpc_invoke_ctx *c
 	assign_kernel_gem_arg(ctx, 1, kernel_gem, gv + off_comm, inbuf->namelen);
 	/* The image starts at the beginning of the buffer the caller named */
 	ctx->args[2].length = init->filelen;
-	ctx->args[2].handle = init->filehandle;
+	if (create->elf_obj) {
+		err = qda_fastrpc_use_elf_obj(ctx, create->elf_obj, init->filelen);
+		if (err)
+			goto out_put;
+	} else {
+		ctx->args[2].handle = init->filehandle;
+	}
 	assign_kernel_gem_arg(ctx, 3, kernel_gem, gv + off_pages, sizeof(struct qda_phy_page));
 
+out_put:
 	drm_gem_object_put(&kernel_gem->base);
 
-	return 0;
+	return err;
 }
 
 /*
