@@ -819,15 +819,15 @@ static int qda_fastrpc_use_elf_obj(struct qda_fastrpc_invoke_ctx *ctx,
 }
 
 /*
- * INIT_RELEASE packed layout:
+ * INIT_RELEASE and INIT_ATTACH packed layout:
  *   [0] remote_session_id	sizeof(int)	IN
  */
-static int qda_fastrpc_prepare_args_release_process(struct qda_fastrpc_invoke_ctx *ctx)
+static int qda_fastrpc_prepare_args_session(struct qda_fastrpc_invoke_ctx *ctx, u32 rmid)
 {
 	struct qda_gem_obj *kernel_gem;
 	int err;
 
-	ctx->sc = QDA_FASTRPC_SCALARS(QDA_FASTRPC_RMID_INIT_RELEASE, 1, 0);
+	ctx->sc = QDA_FASTRPC_SCALARS(rmid, 1, 0);
 	ctx->handle = QDA_FASTRPC_INIT_HANDLE;
 
 	err = alloc_kernel_args(ctx, 1);
@@ -1211,7 +1211,12 @@ int qda_fastrpc_prepare_args(struct qda_fastrpc_invoke_ctx *ctx,
 
 	switch (ctx->type) {
 	case QDA_FASTRPC_RMID_INIT_RELEASE:
-		err = qda_fastrpc_prepare_args_release_process(ctx);
+		err = qda_fastrpc_prepare_args_session(ctx, QDA_FASTRPC_RMID_INIT_RELEASE);
+		break;
+	case QDA_FASTRPC_RMID_INIT_ATTACH:
+		/* The DSP tells the domains apart by the one the request is directed at */
+		ctx->pd = *(int *)argp;
+		err = qda_fastrpc_prepare_args_session(ctx, QDA_FASTRPC_RMID_INIT_ATTACH);
 		break;
 	case QDA_FASTRPC_RMID_INIT_CREATE:
 		/* The new process is in the user PD, and so is the request creating it */
