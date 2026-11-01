@@ -67,6 +67,9 @@
 #define SWRM_INTERRUPT_STATUS_CLK_STOP_FINISHED_V2		BIT(14)
 #define SWRM_INTERRUPT_STATUS_EXT_CLK_STOP_WAKEUP		BIT(16)
 #define SWRM_INTERRUPT_STATUS_CMD_IGNORED_AND_EXEC_CONTINUED	BIT(19)
+#define SWRM_INTERRUPT_STATUS_SLAVE_STATUS_CHANGE \
+	(SWRM_INTERRUPT_STATUS_NEW_SLAVE_ATTACHED | \
+	 SWRM_INTERRUPT_STATUS_CHANGE_ENUM_SLAVE_STATUS)
 #define SWRM_INTERRUPT_MAX					17
 #define SWRM_V1_3_INTERRUPT_MASK_ADDR				0x204
 #define SWRM_V1_3_INTERRUPT_CLEAR				0x208
@@ -200,6 +203,7 @@ struct qcom_swrm_ctrl {
 #endif
 	struct completion broadcast;
 	struct completion enumeration;
+	struct work_struct status_work;
 	/* Port alloc/free lock */
 	struct mutex port_lock;
 	struct clk *hclk;
@@ -1613,6 +1617,27 @@ static int swrm_reg_show(struct seq_file *s_file, void *data)
 DEFINE_SHOW_ATTRIBUTE(swrm_reg);
 #endif
 
+/*
+ * Handles a peripheral status change found when leaving clock stop, outside
+ * the controller's runtime resume: the SoundWire core resumes peripherals
+ * while handling it, and they need this controller resumed.
+ */
+static void qcom_swrm_status_work(struct work_struct *work)
+{
+	struct qcom_swrm_ctrl *ctrl = container_of(work, struct qcom_swrm_ctrl,
+						   status_work);
+
+	if (pm_runtime_resume_and_get(ctrl->dev) < 0)
+		return;
+
+	qcom_swrm_get_device_status(ctrl);
+	qcom_swrm_enumerate(&ctrl->bus);
+	sdw_handle_slave_status(&ctrl->bus, ctrl->status);
+
+	pm_runtime_mark_last_busy(ctrl->dev);
+	pm_runtime_put_autosuspend(ctrl->dev);
+}
+
 static int qcom_swrm_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -1682,6 +1707,7 @@ static int qcom_swrm_probe(struct platform_device *pdev)
 	mutex_init(&ctrl->port_lock);
 	init_completion(&ctrl->broadcast);
 	init_completion(&ctrl->enumeration);
+	INIT_WORK(&ctrl->status_work, qcom_swrm_status_work);
 
 	ctrl->bus.ops = &qcom_swrm_ops;
 	ctrl->bus.port_ops = &qcom_swrm_port_ops;
@@ -1790,6 +1816,7 @@ static void qcom_swrm_remove(struct platform_device *pdev)
 	suspended = pm_runtime_status_suspended(dev);
 
 	devm_free_irq(dev, ctrl->irq, ctrl);
+	cancel_work_sync(&ctrl->status_work);
 	if (ctrl->wake_irq > 0)
 		devm_free_irq(dev, ctrl->wake_irq, ctrl);
 
@@ -1799,10 +1826,20 @@ static void qcom_swrm_remove(struct platform_device *pdev)
 	pm_runtime_set_suspended(dev);
 }
 
+static void swrm_write_intr_mask(struct qcom_swrm_ctrl *ctrl)
+{
+	if (ctrl->version < SWRM_VERSION_2_0_0)
+		ctrl->reg_write(ctrl, ctrl->reg_layout[SWRM_REG_INTERRUPT_MASK_ADDR],
+				ctrl->intr_mask);
+	ctrl->reg_write(ctrl, ctrl->reg_layout[SWRM_REG_INTERRUPT_CPU_EN],
+			ctrl->intr_mask);
+}
+
 static int __maybe_unused swrm_runtime_resume(struct device *dev)
 {
 	struct qcom_swrm_ctrl *ctrl = dev_get_drvdata(dev);
 	bool wake_irq_disabled = false;
+	u32 val;
 	int ret;
 
 	if (ctrl->wake_irq > 0) {
@@ -1857,12 +1894,7 @@ static int __maybe_unused swrm_runtime_resume(struct device *dev)
 			SWRM_INTERRUPT_STATUS_MASTER_CLASH_DET);
 
 		ctrl->intr_mask |= SWRM_INTERRUPT_STATUS_MASTER_CLASH_DET;
-		if (ctrl->version < SWRM_VERSION_2_0_0)
-			ctrl->reg_write(ctrl,
-					ctrl->reg_layout[SWRM_REG_INTERRUPT_MASK_ADDR],
-					ctrl->intr_mask);
-		ctrl->reg_write(ctrl, ctrl->reg_layout[SWRM_REG_INTERRUPT_CPU_EN],
-				ctrl->intr_mask);
+		swrm_write_intr_mask(ctrl);
 
 		usleep_range(100, 105);
 		if (!swrm_wait_for_frame_gen_enabled(ctrl))
@@ -1871,6 +1903,21 @@ static int __maybe_unused swrm_runtime_resume(struct device *dev)
 		ret = sdw_bus_exit_clk_stop(&ctrl->bus);
 		if (ret < 0)
 			dev_err(ctrl->dev, "bus failed to exit clock stop %d\n", ret);
+
+		/*
+		 * While the clock restarts, the peripheral status can read as
+		 * "not present" and raise a status change: acting on it would
+		 * detach peripherals that never left the bus. Handle the status
+		 * once the bus is out of clock stop.
+		 */
+		ctrl->reg_write(ctrl, ctrl->reg_layout[SWRM_REG_INTERRUPT_CLEAR],
+				SWRM_INTERRUPT_STATUS_SLAVE_STATUS_CHANGE);
+		ctrl->intr_mask |= SWRM_INTERRUPT_STATUS_SLAVE_STATUS_CHANGE;
+		swrm_write_intr_mask(ctrl);
+
+		ctrl->reg_read(ctrl, SWRM_MCP_SLV_STATUS, &val);
+		if (val != ctrl->slave_status)
+			schedule_work(&ctrl->status_work);
 	}
 
 	return 0;
@@ -1883,25 +1930,24 @@ static int __maybe_unused swrm_runtime_suspend(struct device *dev)
 
 	swrm_wait_for_wr_fifo_done(ctrl);
 	if (!ctrl->clock_stop_not_supported) {
-		/* Mask bus clash interrupt */
-		ctrl->intr_mask &= ~SWRM_INTERRUPT_STATUS_MASTER_CLASH_DET;
-		if (ctrl->version < SWRM_VERSION_2_0_0)
-			ctrl->reg_write(ctrl,
-					ctrl->reg_layout[SWRM_REG_INTERRUPT_MASK_ADDR],
-					ctrl->intr_mask);
-		ctrl->reg_write(ctrl, ctrl->reg_layout[SWRM_REG_INTERRUPT_CPU_EN],
-				ctrl->intr_mask);
+		/*
+		 * Mask bus clash and peripheral status interrupts: they are
+		 * handled again once the clock runs, see swrm_runtime_resume().
+		 */
+		ctrl->intr_mask &= ~(SWRM_INTERRUPT_STATUS_MASTER_CLASH_DET |
+				     SWRM_INTERRUPT_STATUS_SLAVE_STATUS_CHANGE);
+		swrm_write_intr_mask(ctrl);
 		/* Prepare slaves for clock stop */
 		ret = sdw_bus_prep_clk_stop(&ctrl->bus);
 		if (ret < 0 && ret != -ENODATA) {
 			dev_err(dev, "prepare clock stop failed %d", ret);
-			return ret;
+			goto err_unmask;
 		}
 
 		ret = sdw_bus_clk_stop(&ctrl->bus);
 		if (ret < 0 && ret != -ENODATA) {
 			dev_err(dev, "bus clock stop failed %d", ret);
-			return ret;
+			goto err_unmask;
 		}
 	}
 
@@ -1916,6 +1962,12 @@ static int __maybe_unused swrm_runtime_suspend(struct device *dev)
 	}
 
 	return 0;
+
+err_unmask:
+	ctrl->intr_mask |= SWRM_INTERRUPT_STATUS_MASTER_CLASH_DET |
+			   SWRM_INTERRUPT_STATUS_SLAVE_STATUS_CHANGE;
+	swrm_write_intr_mask(ctrl);
+	return ret;
 }
 
 static const struct dev_pm_ops swrm_dev_pm_ops = {
