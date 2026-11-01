@@ -5,11 +5,13 @@
 #include "qda_soc.h"
 
 const struct qda_soc_data kaanapali_soc_data = {
+	.sid_pos = 56,
 	.dma_addr_bits_cdsp = 34,
 	.dma_addr_bits_default = 32,
 };
 
 const struct qda_soc_data default_soc_data = {
+	.sid_pos = 32,
 	.dma_addr_bits_cdsp = 32,
 	.dma_addr_bits_default = 32,
 };

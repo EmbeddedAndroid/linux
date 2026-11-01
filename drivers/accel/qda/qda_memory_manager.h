@@ -13,6 +13,7 @@
 #include <linux/types.h>
 
 struct qda_dev;
+struct qda_gem_obj;
 struct qda_session;
 
 /**
@@ -31,6 +32,8 @@ struct qda_iommu_device {
 	struct device *dev;
 	/** @qdev: Back-pointer to the parent QDA device */
 	struct qda_dev *qdev;
+	/** @sid: Stream ID the DSP identifies this context bank by */
+	u32 sid;
 	/** @assigned_session: Session owning this device, or NULL if free */
 	struct qda_session *assigned_session;
 	/** @ref: Reference count controlling when the object is freed */
@@ -65,5 +68,10 @@ void qda_memory_manager_unregister_device(struct qda_memory_manager *mem_mgr,
 int qda_memory_manager_assign_device(struct qda_memory_manager *mem_mgr,
 				     struct qda_session *session);
 void qda_memory_manager_release_device(struct qda_iommu_device *iommu_dev);
+
+int qda_memory_manager_alloc(struct qda_memory_manager *mem_mgr,
+			     struct qda_gem_obj *gem_obj,
+			     struct qda_session *session);
+void qda_memory_manager_free(struct qda_gem_obj *gem_obj);
 
 #endif /* __QDA_MEMORY_MANAGER_H__ */
