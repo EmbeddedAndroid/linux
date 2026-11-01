@@ -121,6 +121,8 @@ static int qda_fastrpc_invoke(u32 type, void *data, struct qda_session *session)
 	if (type == QDA_FASTRPC_RMID_INIT_CREATE) {
 		qda_session_set_init_mem(session, ctx->init_mem_gem_obj);
 		WRITE_ONCE(session->pd, QDA_USER_PD);
+	} else if (type == QDA_FASTRPC_RMID_INIT_ATTACH) {
+		WRITE_ONCE(session->pd, ctx->pd);
 	}
 
 out_put:
@@ -172,6 +174,40 @@ int qda_session_init_create(struct qda_session *session, struct qda_init_create_
 int qda_release_dsp_process(struct qda_dev *qdev, struct qda_session *session)
 {
 	return qda_fastrpc_invoke(QDA_FASTRPC_RMID_INIT_RELEASE, NULL, session);
+}
+
+/**
+ * qda_ioctl_attach() - Attach to a DSP-resident protection domain
+ * @dev: DRM device structure
+ * @data: User-space data (struct drm_qda_remote_attach)
+ * @file_priv: DRM file private data
+ *
+ * Return: 0 on success, negative error code on failure
+ */
+int qda_ioctl_attach(struct drm_device *dev, void *data, struct drm_file *file_priv)
+{
+	struct drm_qda_remote_attach *args = data;
+	struct qda_session *session = file_priv->driver_priv;
+	int pd;
+
+	if (args->pad)
+		return -EINVAL;
+
+	switch (args->pd_type) {
+	case QDA_ATTACH_ROOT_PD:
+		pd = QDA_ROOT_PD;
+		break;
+	case QDA_ATTACH_SENSORS_PD:
+		pd = QDA_SENSORS_PD;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	if (READ_ONCE(session->init_mem_gem_obj))
+		return -EBUSY;
+
+	return qda_fastrpc_invoke(QDA_FASTRPC_RMID_INIT_ATTACH, &pd, session);
 }
 
 /**

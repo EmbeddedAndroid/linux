@@ -19,6 +19,7 @@ extern "C" {
 #define DRM_QDA_REMOTE_SESSION_CREATE	0x04
 #define DRM_QDA_REMOTE_MMAP		0x05
 #define DRM_QDA_REMOTE_MUNMAP		0x06
+#define DRM_QDA_REMOTE_SESSION_ATTACH	0x07
 
 #define DRM_IOCTL_QDA_QUERY		DRM_IOWR(DRM_COMMAND_BASE + DRM_QDA_QUERY, \
 					 struct drm_qda_query)
@@ -35,6 +36,9 @@ extern "C" {
 					 struct drm_qda_mem_map)
 #define DRM_IOCTL_QDA_REMOTE_MUNMAP	DRM_IOWR(DRM_COMMAND_BASE + DRM_QDA_REMOTE_MUNMAP, \
 					 struct drm_qda_mem_unmap)
+#define DRM_IOCTL_QDA_REMOTE_SESSION_ATTACH					\
+	DRM_IOW(DRM_COMMAND_BASE + DRM_QDA_REMOTE_SESSION_ATTACH,		\
+		struct drm_qda_remote_attach)
 
 /* Request types for drm_qda_mem_map.request */
 #define QDA_REQUEST_MMAP	1	/* Map a whole buffer */
@@ -201,6 +205,27 @@ struct drm_qda_mem_unmap {
 	__u64 vaddr;
 	__u64 vaddrout;
 	__u64 size;
+};
+
+/* Protection domains for drm_qda_remote_attach.pd_type */
+#define QDA_ATTACH_ROOT_PD	1
+#define QDA_ATTACH_SENSORS_PD	2
+
+/**
+ * struct drm_qda_remote_attach - Parameters for attaching to a DSP protection domain
+ * @pd_type: QDA_ATTACH_ROOT_PD or QDA_ATTACH_SENSORS_PD
+ * @pad: Must be zero
+ *
+ * Binds this file to a protection domain that already exists on the DSP,
+ * instead of creating one with DRM_IOCTL_QDA_REMOTE_SESSION_CREATE. Every
+ * later request on the file is directed at it. Fails with EBUSY if a process
+ * has already been created on the file.
+ *
+ * Requires CAP_SYS_ADMIN.
+ */
+struct drm_qda_remote_attach {
+	__u32 pd_type;
+	__u32 pad;
 };
 
 #if defined(__cplusplus)

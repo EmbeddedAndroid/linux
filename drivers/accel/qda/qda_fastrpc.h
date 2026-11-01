@@ -44,6 +44,7 @@ struct qda_session;
 #define QDA_FASTRPC_MAX_CRCLIST		64	/* CRC list entries */
 
 /* Methods of the initialisation handle */
+#define QDA_FASTRPC_RMID_INIT_ATTACH		0
 #define QDA_FASTRPC_RMID_INIT_RELEASE		1
 #define QDA_FASTRPC_RMID_INIT_MMAP		4
 #define QDA_FASTRPC_RMID_INIT_MUNMAP		5
@@ -59,6 +60,7 @@ struct qda_session;
 /* Protection domains a request can be directed at */
 #define QDA_ROOT_PD			0
 #define QDA_USER_PD			1
+#define QDA_SENSORS_PD			2
 
 /* Largest ELF image a process may be created from */
 #define QDA_FASTRPC_INIT_FILELEN_MAX	(4 * 1024 * 1024)
