@@ -100,6 +100,8 @@ struct qda_dev *qda_alloc_device(struct device *dev)
 
 	INIT_LIST_HEAD(&qdev->cb_devs);
 	mutex_init(&qdev->import_lock);
+	xa_init_flags(&qdev->ctx_xa, XA_FLAGS_ALLOC1);
+	atomic64_set(&qdev->ctx_seq, 0);
 
 	return qdev;
 }
@@ -122,6 +124,7 @@ int qda_init_device(struct qda_dev *qdev, int num_cbs)
 void qda_deinit_device(struct qda_dev *qdev)
 {
 	qda_memory_manager_exit(qdev->iommu_mgr);
+	xa_destroy(&qdev->ctx_xa);
 	mutex_destroy(&qdev->import_lock);
 }
 

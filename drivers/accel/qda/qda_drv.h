@@ -6,12 +6,14 @@
 #ifndef __QDA_DRV_H__
 #define __QDA_DRV_H__
 
+#include <linux/atomic.h>
 #include <linux/auxiliary_bus.h>
 #include <linux/device.h>
 #include <linux/list.h>
 #include <linux/mutex.h>
 #include <linux/rpmsg.h>
 #include <linux/types.h>
+#include <linux/xarray.h>
 #include <drm/drm_device.h>
 #include <drm/drm_drv.h>
 #include <drm/drm_file.h>
@@ -75,6 +77,10 @@ struct qda_dev {
 	 * calling file to.
 	 */
 	struct qda_session *importing_session;
+	/** @ctx_xa: Invocations in flight, keyed by context ID */
+	struct xarray ctx_xa;
+	/** @ctx_seq: Distinguishes invocations that reuse a context ID */
+	atomic64_t ctx_seq;
 	/** @soc_data: Per-SoC DSP integration parameters */
 	const struct qda_soc_data *soc_data;
 	/** @dsp_name: Name of the DSP domain (e.g. "cdsp", "adsp") */
