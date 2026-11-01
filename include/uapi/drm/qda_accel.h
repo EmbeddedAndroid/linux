@@ -16,6 +16,7 @@ extern "C" {
 #define DRM_QDA_GEM_CREATE		0x01
 #define DRM_QDA_GEM_MMAP_OFFSET		0x02
 #define DRM_QDA_REMOTE_INVOKE		0x03
+#define DRM_QDA_REMOTE_SESSION_CREATE	0x04
 
 #define DRM_IOCTL_QDA_QUERY		DRM_IOWR(DRM_COMMAND_BASE + DRM_QDA_QUERY, \
 					 struct drm_qda_query)
@@ -25,6 +26,9 @@ extern "C" {
 					 struct drm_qda_gem_mmap_offset)
 #define DRM_IOCTL_QDA_REMOTE_INVOKE	DRM_IOWR(DRM_COMMAND_BASE + DRM_QDA_REMOTE_INVOKE, \
 					 struct drm_qda_invoke_args)
+#define DRM_IOCTL_QDA_REMOTE_SESSION_CREATE					\
+	DRM_IOWR(DRM_COMMAND_BASE + DRM_QDA_REMOTE_SESSION_CREATE,		\
+		 struct drm_qda_init_create)
 
 /* Query type definitions for drm_qda_query */
 #define QDA_QUERY_DSP_NAME		1
@@ -107,6 +111,30 @@ struct drm_qda_invoke_args {
 	__u32 handle;
 	__u32 sc;
 	__u64 args;
+};
+
+/* Process attribute flags for drm_qda_init_create.attrs */
+#define QDA_INIT_ATTR_UNSIGNED_MODULE	(1U << 3)
+
+/**
+ * struct drm_qda_init_create - DSP process creation parameters
+ * @filelen: Length of the ELF image in bytes
+ * @filehandle: Handle of the buffer holding the ELF image
+ * @attrs: Process attribute flags
+ * @siglen: Length of the signature data in bytes
+ * @file: Reserved, must be zero
+ *
+ * Creates a process on the DSP for this file to run in. Without
+ * QDA_INIT_ATTR_UNSIGNED_MODULE in @attrs the process is created signed, which
+ * requires CAP_SYS_ADMIN. Creating a process again on the same file replaces
+ * the first.
+ */
+struct drm_qda_init_create {
+	__u32 filelen;
+	__u32 filehandle;
+	__u32 attrs;
+	__u32 siglen;
+	__u64 file;
 };
 
 #if defined(__cplusplus)

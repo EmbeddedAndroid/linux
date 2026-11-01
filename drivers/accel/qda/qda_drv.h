@@ -56,6 +56,14 @@ struct qda_session {
 	struct qda_iommu_device *assigned_iommu_dev;
 	/** @remote_session_id: Identifies this session to the DSP */
 	int remote_session_id;
+	/** @pd: Protection domain this session's requests are directed at */
+	int pd;
+	/**
+	 * @init_mem_gem_obj: Memory the DSP loaded this session's process
+	 * into, held for as long as the process runs. Swapped with xchg(), as
+	 * ioctls on one file can run concurrently.
+	 */
+	struct qda_gem_obj *init_mem_gem_obj;
 	/**
 	 * @msg_buf_pool: Invoke header buffers this session is done with,
 	 * kept for its later invocations to reuse.
@@ -136,5 +144,8 @@ void qda_unregister_device(struct qda_dev *qdev);
 struct qda_session *qda_session_alloc(struct qda_dev *qdev);
 void qda_session_get(struct qda_session *session);
 void qda_session_put(struct qda_session *session);
+
+/* DSP process management */
+int qda_release_dsp_process(struct qda_dev *qdev, struct qda_session *session);
 
 #endif /* __QDA_DRV_H__ */

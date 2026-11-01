@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 #include <linux/bitfield.h>
+#include <linux/capability.h>
 #include <linux/dma-mapping.h>
 #include <linux/mm.h>
+#include <linux/sched.h>
 #include <linux/slab.h>
+#include <linux/string.h>
 #include <linux/uaccess.h>
 #include <drm/drm_gem.h>
 #include <drm/drm_print.h>
@@ -245,6 +248,9 @@ void qda_fastrpc_context_free(struct kref *ref)
 	if (ctx->msg_gem_obj)
 		qda_session_msg_buf_put(ctx->session, &ctx->msg_gem_obj->base);
 
+	if (ctx->init_mem_gem_obj)
+		drm_gem_object_put(&ctx->init_mem_gem_obj->base);
+
 	if (ctx->session)
 		qda_session_put(ctx->session);
 
@@ -302,9 +308,53 @@ struct qda_fastrpc_invoke_ctx *qda_fastrpc_context_alloc(struct qda_dev *qdev)
 }
 
 /*
+ * Allocate one DMA-coherent object to hold every buffer the driver builds for
+ * one of its own requests, so they cost a single page rather than one each.
+ * The memory is cleared, so output slots start out clean.
+ */
+static struct qda_gem_obj *alloc_kernel_gem(struct qda_fastrpc_invoke_ctx *ctx, size_t size)
+{
+	struct qda_dev *qdev = ctx->qdev;
+	struct drm_gem_object *gem_obj;
+
+	gem_obj = qda_gem_create_object(&qdev->drm_dev, qdev->iommu_mgr, size, ctx->session);
+	if (IS_ERR(gem_obj))
+		return ERR_CAST(gem_obj);
+
+	memset(to_qda_gem_obj(gem_obj)->virt, 0, to_qda_gem_obj(gem_obj)->size);
+
+	return to_qda_gem_obj(gem_obj);
+}
+
+/* The context releases whatever has been allocated here if a later step fails */
+static int alloc_kernel_args(struct qda_fastrpc_invoke_ctx *ctx, u32 nargs)
+{
+	ctx->args = kzalloc_objs(*ctx->args, nargs);
+	if (!ctx->args)
+		return -ENOMEM;
+
+	ctx->gem_objs = kzalloc_objs(*ctx->gem_objs, nargs);
+	if (!ctx->gem_objs)
+		return -ENOMEM;
+
+	return 0;
+}
+
+/* Describe the region at @ptr in @kernel_gem as argument @idx, taking a reference on it */
+static void assign_kernel_gem_arg(struct qda_fastrpc_invoke_ctx *ctx, int idx,
+				  struct qda_gem_obj *kernel_gem, void *ptr, size_t len)
+{
+	ctx->args[idx].offset = (u8 *)ptr - (u8 *)kernel_gem->virt;
+	ctx->args[idx].length = len;
+	drm_gem_object_get(&kernel_gem->base);
+	ctx->gem_objs[idx] = &kernel_gem->base;
+}
+
+/*
  * Resolve the address of an in/out buffer argument. The buffer is either a
- * GEM object the legacy shim already resolved into ctx->gem_objs[i], or a GEM
- * handle looked up in the calling session's own handle table. For a handle,
+ * GEM object already resolved into ctx->gem_objs[i], by the legacy shim or by
+ * the driver for its own requests, or a GEM handle looked up in the calling
+ * session's own handle table. For a handle,
  * the offset and length come from user space and are checked against the
  * buffer's real size: a region described as larger than its buffer would let
  * the DSP read and write past the end of it, into whatever else is mapped in
@@ -321,7 +371,7 @@ static int process_msg_buffer(struct qda_fastrpc_invoke_ctx *ctx, int i,
 	u64 vma_offset = 0;
 	int err;
 
-	if (ctx->gem_objs[i]) {
+	if (ctx->gem_objs[i] && ctx->legacy) {
 		/*
 		 * The legacy ABI predates GEM handles, so the offset field
 		 * holds an address in the caller's own mapping of the buffer,
@@ -337,6 +387,17 @@ static int process_msg_buffer(struct qda_fastrpc_invoke_ctx *ctx, int i,
 		rpra[i].buf.addr = ctx->args[i].offset;
 		pages[i].addr = qda_gem_obj->dma_addr + vma_offset;
 		pages[i].size = calculate_page_aligned_size(ctx->args[i].offset, len);
+
+		return 0;
+	}
+
+	if (ctx->gem_objs[i]) {
+		/* Built by the driver, so the offset is a byte offset into the buffer */
+		qda_gem_obj = to_qda_gem_obj(ctx->gem_objs[i]);
+		unaligned_addr = qda_gem_obj->dma_addr + ctx->args[i].offset;
+		rpra[i].buf.addr = unaligned_addr;
+		pages[i].addr = unaligned_addr & PAGE_MASK;
+		pages[i].size = calculate_page_aligned_size(unaligned_addr, len);
 
 		return 0;
 	}
@@ -511,9 +572,14 @@ int qda_fastrpc_invoke_pack(struct qda_fastrpc_invoke_ctx *ctx, struct qda_msg *
 	/* Ensure the payload is visible to the DSP before the doorbell */
 	dma_wmb();
 
-	msg->fastrpc.remote_session_id = ctx->session->remote_session_id;
+	/* The session has no process yet to identify while one is being created */
+	if (ctx->handle == QDA_FASTRPC_INIT_HANDLE)
+		msg->fastrpc.remote_session_id = 0;
+	else
+		msg->fastrpc.remote_session_id = ctx->session->remote_session_id;
+
 	msg->fastrpc.tid = current->pid;
-	msg->fastrpc.ctx = ctx->ctxid | QDA_USER_PD;
+	msg->fastrpc.ctx = ctx->ctxid | ctx->pd;
 	msg->fastrpc.handle = ctx->handle;
 	msg->fastrpc.sc = ctx->sc;
 	msg->fastrpc.addr = msg->phys;
@@ -639,6 +705,9 @@ int qda_fastrpc_invoke_legacy(struct qda_dev *qdev, struct qda_session *session,
 	/* Dropped by qda_fastrpc_context_free(), as for the accel UAPI path */
 	qda_session_get(session);
 	ctx->session = session;
+	ctx->type = QDA_FASTRPC_RMID_INVOKE_DYNAMIC;
+	ctx->legacy = true;
+	ctx->pd = READ_ONCE(session->pd);
 	ctx->handle = handle;
 	ctx->sc = sc;
 
@@ -686,6 +755,110 @@ err_put_legacy_objs:
 			drm_gem_object_put(legacy_args[i].obj);
 
 	return err;
+}
+
+/*
+ * INIT_RELEASE packed layout:
+ *   [0] remote_session_id	sizeof(int)	IN
+ */
+static int qda_fastrpc_prepare_args_release_process(struct qda_fastrpc_invoke_ctx *ctx)
+{
+	struct qda_gem_obj *kernel_gem;
+	int err;
+
+	ctx->sc = QDA_FASTRPC_SCALARS(QDA_FASTRPC_RMID_INIT_RELEASE, 1, 0);
+	ctx->handle = QDA_FASTRPC_INIT_HANDLE;
+
+	err = alloc_kernel_args(ctx, 1);
+	if (err)
+		return err;
+
+	kernel_gem = alloc_kernel_gem(ctx, sizeof(int));
+	if (IS_ERR(kernel_gem))
+		return PTR_ERR(kernel_gem);
+
+	*(int *)kernel_gem->virt = ctx->session->remote_session_id;
+	assign_kernel_gem_arg(ctx, 0, kernel_gem, kernel_gem->virt, sizeof(int));
+	drm_gem_object_put(&kernel_gem->base);
+
+	return 0;
+}
+
+/*
+ * INIT_CREATE / INIT_CREATE_ATTR packed layout:
+ *   [0] inbuf	sizeof(qda_fastrpc_create_process_inbuf)	IN
+ *   [1] comm	TASK_COMM_LEN					IN
+ *   [2] ELF	buffer named by the caller's handle, not packed	IN
+ *   [3] pages	sizeof(qda_phy_page), the process image memory	IN
+ *
+ * The attributes and signature length travel in @inbuf. The _ATTR method is
+ * used when any attribute is set, as in drivers/misc/fastrpc.c.
+ */
+static int qda_fastrpc_prepare_args_init_create(struct qda_fastrpc_invoke_ctx *ctx, void *argp)
+{
+	struct drm_qda_init_create *init = argp;
+	struct qda_fastrpc_create_process_inbuf *inbuf;
+	struct qda_dev *qdev = ctx->qdev;
+	struct drm_gem_object *gem_obj;
+	struct qda_gem_obj *kernel_gem;
+	u8 *gv;
+	int err;
+
+	const size_t off_inbuf = 0;
+	const size_t off_comm = off_inbuf + sizeof(*inbuf);
+	const size_t off_pages = off_comm + TASK_COMM_LEN;
+	const size_t total_size = off_pages + sizeof(struct qda_phy_page);
+
+	if (init->file || init->filelen > QDA_FASTRPC_INIT_FILELEN_MAX)
+		return -EINVAL;
+
+	/* A signed process runs with the DSP's trust in the signature */
+	if (!(init->attrs & QDA_INIT_ATTR_UNSIGNED_MODULE) && !capable(CAP_SYS_ADMIN))
+		return -EPERM;
+
+	/* The DSP loads the image into this memory and keeps using it while the process runs */
+	gem_obj = qda_gem_create_object(&qdev->drm_dev, qdev->iommu_mgr,
+					QDA_FASTRPC_INIT_FILELEN_MAX, ctx->session);
+	if (IS_ERR(gem_obj))
+		return PTR_ERR(gem_obj);
+
+	ctx->init_mem_gem_obj = to_qda_gem_obj(gem_obj);
+
+	ctx->sc = init->attrs ? QDA_FASTRPC_SCALARS(QDA_FASTRPC_RMID_INIT_CREATE_ATTR, 4, 0)
+			      : QDA_FASTRPC_SCALARS(QDA_FASTRPC_RMID_INIT_CREATE, 4, 0);
+	ctx->handle = QDA_FASTRPC_INIT_HANDLE;
+
+	err = alloc_kernel_args(ctx, 4);
+	if (err)
+		return err;
+
+	kernel_gem = alloc_kernel_gem(ctx, total_size);
+	if (IS_ERR(kernel_gem))
+		return PTR_ERR(kernel_gem);
+	gv = kernel_gem->virt;
+
+	inbuf = (struct qda_fastrpc_create_process_inbuf *)(gv + off_inbuf);
+	inbuf->remote_session_id = ctx->session->remote_session_id;
+	inbuf->filelen = init->filelen;
+	inbuf->pageslen = 1;
+	inbuf->attrs = init->attrs;
+	inbuf->siglen = init->siglen;
+
+	strscpy(gv + off_comm, current->comm, TASK_COMM_LEN);
+	inbuf->namelen = strlen(gv + off_comm) + 1;
+
+	setup_pages_from_gem_obj(ctx->init_mem_gem_obj, (struct qda_phy_page *)(gv + off_pages));
+
+	assign_kernel_gem_arg(ctx, 0, kernel_gem, inbuf, sizeof(*inbuf));
+	assign_kernel_gem_arg(ctx, 1, kernel_gem, gv + off_comm, inbuf->namelen);
+	/* The image starts at the beginning of the buffer the caller named */
+	ctx->args[2].length = init->filelen;
+	ctx->args[2].handle = init->filehandle;
+	assign_kernel_gem_arg(ctx, 3, kernel_gem, gv + off_pages, sizeof(struct qda_phy_page));
+
+	drm_gem_object_put(&kernel_gem->base);
+
+	return 0;
 }
 
 /*
@@ -740,8 +913,23 @@ int qda_fastrpc_prepare_args(struct qda_fastrpc_invoke_ctx *ctx,
 	 */
 	qda_session_get(session);
 	ctx->session = session;
+	ctx->pd = READ_ONCE(session->pd);
 
-	err = qda_fastrpc_prepare_args_invoke(ctx, argp);
+	switch (ctx->type) {
+	case QDA_FASTRPC_RMID_INIT_RELEASE:
+		err = qda_fastrpc_prepare_args_release_process(ctx);
+		break;
+	case QDA_FASTRPC_RMID_INIT_CREATE:
+		/* The new process is in the user PD, and so is the request creating it */
+		ctx->pd = QDA_USER_PD;
+		err = qda_fastrpc_prepare_args_init_create(ctx, argp);
+		break;
+	case QDA_FASTRPC_RMID_INVOKE_DYNAMIC:
+		err = qda_fastrpc_prepare_args_invoke(ctx, argp);
+		break;
+	default:
+		return -EINVAL;
+	}
 	if (err)
 		return err;
 
