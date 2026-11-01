@@ -33,7 +33,7 @@ static void legacy_session_destroy(struct qda_session *session)
 {
 	struct drm_device *drm_dev = &session->qda_dev->drm_dev;
 
-	qda_session_free(session);
+	qda_session_put(session);
 	drm_dev_put(drm_dev);
 }
 

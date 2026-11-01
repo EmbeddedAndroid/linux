@@ -9,6 +9,7 @@
 #include <linux/atomic.h>
 #include <linux/auxiliary_bus.h>
 #include <linux/device.h>
+#include <linux/kref.h>
 #include <linux/list.h>
 #include <linux/mutex.h>
 #include <linux/rpmsg.h>
@@ -37,6 +38,10 @@
  * FastRPC compatibility shim, one per open /dev/fastrpc-* file with no DRM
  * file behind it at all. The core is keyed on this rather than on struct
  * drm_file so that it can serve both.
+ *
+ * Reference counted because an invocation outlives the caller that issued it
+ * when the DSP has not answered yet, and keeps using the session it belongs
+ * to after the file it was opened on is closed.
  */
 struct qda_session {
 	/** @qda_dev: Back-pointer to device structure */
@@ -49,6 +54,19 @@ struct qda_session {
 	struct drm_file *file;
 	/** @assigned_iommu_dev: Context bank owned by this session, or NULL */
 	struct qda_iommu_device *assigned_iommu_dev;
+	/** @remote_session_id: Identifies this session to the DSP */
+	int remote_session_id;
+	/**
+	 * @msg_buf_pool: Invoke header buffers this session is done with,
+	 * kept for its later invocations to reuse.
+	 */
+	struct list_head msg_buf_pool;
+	/** @msg_buf_pool_count: Number of entries in @msg_buf_pool */
+	int msg_buf_pool_count;
+	/** @msg_buf_pool_lock: Protects @msg_buf_pool and @msg_buf_pool_count */
+	struct mutex msg_buf_pool_lock;
+	/** @ref: Dropped by the owner of the session and by every invocation */
+	struct kref ref;
 };
 
 /**
@@ -81,6 +99,8 @@ struct qda_dev {
 	struct xarray ctx_xa;
 	/** @ctx_seq: Distinguishes invocations that reuse a context ID */
 	atomic64_t ctx_seq;
+	/** @session_id_seq: Hands out the session IDs the DSP is told */
+	atomic_t session_id_seq;
 	/** @soc_data: Per-SoC DSP integration parameters */
 	const struct qda_soc_data *soc_data;
 	/** @dsp_name: Name of the DSP domain (e.g. "cdsp", "adsp") */
@@ -114,6 +134,7 @@ void qda_unregister_device(struct qda_dev *qdev);
 
 /* Sessions, shared with the legacy shim */
 struct qda_session *qda_session_alloc(struct qda_dev *qdev);
-void qda_session_free(struct qda_session *session);
+void qda_session_get(struct qda_session *session);
+void qda_session_put(struct qda_session *session);
 
 #endif /* __QDA_DRV_H__ */

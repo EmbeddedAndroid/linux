@@ -12,12 +12,15 @@
 #include <drm/qda_accel.h>
 
 #include "qda_drv.h"
+#include "qda_fastrpc.h"
 #include "qda_ioctl.h"
 #include "qda_prime.h"
 
 /**
  * qda_session_alloc() - Create a session on a device
  * @qdev: Device to create the session on
+ *
+ * The caller holds the initial reference and drops it with qda_session_put().
  *
  * Return: The new session, or ERR_PTR on failure
  */
@@ -30,6 +33,14 @@ struct qda_session *qda_session_alloc(struct qda_dev *qdev)
 		return ERR_PTR(-ENOMEM);
 
 	session->qda_dev = qdev;
+	/*
+	 * Wraps after 2^31 sessions on one device, which no real workload
+	 * reaches: a session lasts as long as the file it was opened on.
+	 */
+	session->remote_session_id = atomic_inc_return(&qdev->session_id_seq);
+	INIT_LIST_HEAD(&session->msg_buf_pool);
+	mutex_init(&session->msg_buf_pool_lock);
+	kref_init(&session->ref);
 
 	return session;
 }
@@ -50,22 +61,47 @@ static int qda_open(struct drm_device *dev, struct drm_file *file)
 	return 0;
 }
 
-/**
- * qda_session_free() - Release a session and whatever it still holds
- * @session: Session to release
+/*
+ * Runs once the owner and every invocation of the session are gone, so the
+ * context bank is held for as long as the DSP may still write into a buffer
+ * allocated from it.
  */
-void qda_session_free(struct qda_session *session)
+static void qda_session_release(struct kref *ref)
 {
+	struct qda_session *session = container_of(ref, struct qda_session, ref);
+
+	qda_session_msg_buf_pool_destroy(session);
+
 	if (session->assigned_iommu_dev)
 		qda_memory_manager_release_device(session->assigned_iommu_dev);
 
+	mutex_destroy(&session->msg_buf_pool_lock);
 	kfree(session);
 }
-EXPORT_SYMBOL_FOR_MODULES(qda_session_free, "qda_fastrpc_shim");
+
+/**
+ * qda_session_get() - Take a reference on a session
+ * @session: Session to reference
+ */
+void qda_session_get(struct qda_session *session)
+{
+	kref_get(&session->ref);
+}
+EXPORT_SYMBOL_FOR_MODULES(qda_session_get, "qda_fastrpc_shim");
+
+/**
+ * qda_session_put() - Drop a reference on a session
+ * @session: Session to release
+ */
+void qda_session_put(struct qda_session *session)
+{
+	kref_put(&session->ref, qda_session_release);
+}
+EXPORT_SYMBOL_FOR_MODULES(qda_session_put, "qda_fastrpc_shim");
 
 static void qda_postclose(struct drm_device *dev, struct drm_file *file)
 {
-	qda_session_free(file->driver_priv);
+	qda_session_put(file->driver_priv);
 }
 
 DEFINE_DRM_ACCEL_FOPS(qda_accel_fops);
@@ -102,6 +138,7 @@ struct qda_dev *qda_alloc_device(struct device *dev)
 	mutex_init(&qdev->import_lock);
 	xa_init_flags(&qdev->ctx_xa, XA_FLAGS_ALLOC1);
 	atomic64_set(&qdev->ctx_seq, 0);
+	atomic_set(&qdev->session_id_seq, 0);
 
 	return qdev;
 }

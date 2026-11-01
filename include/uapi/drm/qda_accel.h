@@ -70,6 +70,42 @@ struct drm_qda_gem_mmap_offset {
 	__u32 pad;
 };
 
+/**
+ * struct drm_qda_fastrpc_invoke_args - FastRPC invocation argument descriptor
+ * @offset: Byte offset within the buffer at which the argument starts
+ * @length: Length of the argument data in bytes
+ * @handle: GEM handle of the buffer holding the argument
+ * @attr: Argument attributes and flags
+ *
+ * Describes a single argument of a FastRPC invocation. Every argument lives
+ * in a buffer, named by the handle it was created or imported under, and
+ * @offset and @length must describe a region within that buffer. Userspace
+ * imports any DMA-BUF fd to a GEM handle before passing it here; the driver
+ * never accepts DMA-BUF fds directly.
+ */
+struct drm_qda_fastrpc_invoke_args {
+	__u64 offset;
+	__u64 length;
+	__u32 handle;
+	__u32 attr;
+};
+
+/**
+ * struct drm_qda_invoke_args - Dynamic FastRPC invocation parameters
+ * @handle: Remote handle to invoke on the DSP
+ * @sc: Scalars value encoding the remote method and the argument counts
+ * @args: User-space pointer to an array of struct
+ *        drm_qda_fastrpc_invoke_args entries, one per argument @sc describes
+ *
+ * Runs a method on the DSP. Results are written directly into the argument
+ * buffers, so there is nothing to read back from this structure.
+ */
+struct drm_qda_invoke_args {
+	__u32 handle;
+	__u32 sc;
+	__u64 args;
+};
+
 #if defined(__cplusplus)
 }
 #endif
