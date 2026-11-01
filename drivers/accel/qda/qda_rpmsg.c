@@ -132,6 +132,7 @@ static int qda_rpmsg_cb(struct rpmsg_device *rpdev, void *data, int len,
 	}
 
 	ctx->retval = resp_msg->retval;
+	WRITE_ONCE(ctx->is_work_done, true);
 	complete(&ctx->work);
 
 	/*
@@ -266,6 +267,8 @@ static int qda_rpmsg_probe(struct rpmsg_device *rpdev)
 	qdev->soc_data = of_device_get_match_data(&rpdev->dev);
 	if (!qdev->soc_data)
 		return -ENODEV;
+
+	qdev->poll_mode_supported = qda_soc_poll_mode_supported(qdev->soc_data);
 
 	ret = of_property_read_string(rpdev->dev.of_node, "label", &qdev->dsp_name);
 	if (ret) {

@@ -20,6 +20,7 @@ extern "C" {
 #define DRM_QDA_REMOTE_MMAP		0x05
 #define DRM_QDA_REMOTE_MUNMAP		0x06
 #define DRM_QDA_REMOTE_SESSION_ATTACH	0x07
+#define DRM_QDA_SET_OPTION		0x08
 
 #define DRM_IOCTL_QDA_QUERY		DRM_IOWR(DRM_COMMAND_BASE + DRM_QDA_QUERY, \
 					 struct drm_qda_query)
@@ -39,6 +40,8 @@ extern "C" {
 #define DRM_IOCTL_QDA_REMOTE_SESSION_ATTACH					\
 	DRM_IOW(DRM_COMMAND_BASE + DRM_QDA_REMOTE_SESSION_ATTACH,		\
 		struct drm_qda_remote_attach)
+#define DRM_IOCTL_QDA_SET_OPTION	DRM_IOW(DRM_COMMAND_BASE + DRM_QDA_SET_OPTION, \
+					 struct drm_qda_set_option)
 
 /* Request types for drm_qda_mem_map.request */
 #define QDA_REQUEST_MMAP	1	/* Map a whole buffer */
@@ -246,6 +249,30 @@ struct drm_qda_remote_attach {
 	__u32 pd_type;
 	__u32 namelen;
 	__u64 name;
+};
+
+/* Request IDs for drm_qda_set_option.request_id */
+#define QDA_SET_OPTION_POLL_MODE	1
+
+/* Values for drm_qda_set_option.value with QDA_SET_OPTION_POLL_MODE */
+#define QDA_POLL_MODE_DISABLE	0
+#define QDA_POLL_MODE_ENABLE	1
+
+/**
+ * struct drm_qda_set_option - Set a per-session option
+ * @request_id: Option to set (QDA_SET_OPTION_*)
+ * @value: Request-specific value
+ *
+ * For QDA_SET_OPTION_POLL_MODE, @value is QDA_POLL_MODE_ENABLE or
+ * QDA_POLL_MODE_DISABLE. Enabling poll mode lets the driver poll shared
+ * memory for completion of a dynamically loaded module's invocations in a
+ * user PD instead of waiting for an interrupt-based response, trading CPU
+ * cycles for lower round-trip latency. DSPs that do not support it reject
+ * the request with EOPNOTSUPP.
+ */
+struct drm_qda_set_option {
+	__u32 request_id;
+	__u32 value;
 };
 
 #if defined(__cplusplus)

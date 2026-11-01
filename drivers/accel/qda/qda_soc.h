@@ -24,11 +24,14 @@ struct qda_soc_data {
 	u32 dma_addr_bits_cdsp;
 	/** @dma_addr_bits_default: DMA address width of all other context banks */
 	u32 dma_addr_bits_default;
+	/** @poll_mode_supported: DSP firmware supports invocation completion polling */
+	bool poll_mode_supported;
 };
 
 extern const struct qda_soc_data kaanapali_soc_data;
 extern const struct qda_soc_data default_soc_data;
 
+bool qda_soc_poll_mode_supported(const struct qda_soc_data *soc_data);
 u32 qda_soc_dma_addr_bits(const struct qda_dev *qdev);
 
 /**

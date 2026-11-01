@@ -75,6 +75,15 @@ struct qda_session;
 #define QDA_USER_PD			1
 #define QDA_SENSORS_PD			2
 
+/* Handles up to this value name static DSP services, not loaded modules */
+#define QDA_FASTRPC_MAX_STATIC_HANDLE	20
+
+/* Value the DSP writes to the poll word once a polled invocation completes */
+#define QDA_FASTRPC_POLL_RESPONSE	0xdecaf
+
+/* How long to poll before falling back to waiting for the rpmsg response */
+#define QDA_FASTRPC_POLL_MAX_TIMEOUT_US	10000
+
 /* Largest ELF image a process may be created from */
 #define QDA_FASTRPC_INIT_FILELEN_MAX	(4 * 1024 * 1024)
 
@@ -342,6 +351,12 @@ struct qda_fastrpc_invoke_ctx {
 	struct drm_gem_object *map_obj;
 	/** @pages: Array of physical page descriptors inside the payload */
 	struct qda_phy_page *pages;
+	/** @poll_addr: Poll word at the end of the payload, written by the DSP */
+	u32 *poll_addr;
+	/** @is_polled: Wait for completion by polling @poll_addr first */
+	bool is_polled;
+	/** @is_work_done: Set once either the poll or the rpmsg path saw completion */
+	bool is_work_done;
 	/** @work: Completed once the DSP has answered */
 	struct completion work;
 	/**

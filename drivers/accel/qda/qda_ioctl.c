@@ -413,3 +413,48 @@ int qda_ioctl_invoke(struct drm_device *dev, void *data, struct drm_file *file_p
 {
 	return qda_fastrpc_invoke(QDA_FASTRPC_RMID_INVOKE_DYNAMIC, data, file_priv->driver_priv);
 }
+
+/**
+ * qda_session_set_option() - Set a per-session option
+ * @session: Session to update
+ * @request_id: Option to set (QDA_SET_OPTION_*)
+ * @value: Request-specific value
+ *
+ * Shared by the accel UAPI and the legacy shim's FASTRPC_IOCTL_SET_OPTION.
+ *
+ * Return: 0 on success, negative error code on failure
+ */
+int qda_session_set_option(struct qda_session *session, u32 request_id, u32 value)
+{
+	switch (request_id) {
+	case QDA_SET_OPTION_POLL_MODE:
+		if (!session->qda_dev->poll_mode_supported)
+			return -EOPNOTSUPP;
+
+		if (value == QDA_POLL_MODE_ENABLE)
+			WRITE_ONCE(session->poll_mode, true);
+		else if (value == QDA_POLL_MODE_DISABLE)
+			WRITE_ONCE(session->poll_mode, false);
+		else
+			return -EINVAL;
+
+		return 0;
+	default:
+		return -EINVAL;
+	}
+}
+
+/**
+ * qda_ioctl_set_option() - Set a per-session option
+ * @dev: DRM device structure
+ * @data: User-space data (struct drm_qda_set_option)
+ * @file_priv: DRM file private data
+ *
+ * Return: 0 on success, negative error code on failure
+ */
+int qda_ioctl_set_option(struct drm_device *dev, void *data, struct drm_file *file_priv)
+{
+	struct drm_qda_set_option *args = data;
+
+	return qda_session_set_option(file_priv->driver_priv, args->request_id, args->value);
+}

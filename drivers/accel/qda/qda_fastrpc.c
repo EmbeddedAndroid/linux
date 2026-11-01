@@ -3,6 +3,7 @@
 #include <linux/bitfield.h>
 #include <linux/capability.h>
 #include <linux/dma-mapping.h>
+#include <linux/iopoll.h>
 #include <linux/limits.h>
 #include <linux/mm.h>
 #include <linux/sched.h>
@@ -89,8 +90,8 @@ static u64 calculate_page_aligned_size(u64 addr, u64 len)
  * import time unless they are. So the metadata region needs exactly one
  * qda_remote_buf, one qda_invoke_buf and one qda_phy_page per scalar; unlike
  * drivers/misc/fastrpc.c, which supports multi-page buffers and so may need
- * several qda_phy_page entries per scalar. It ends with the handle list and
- * the CRC list.
+ * several qda_phy_page entries per scalar. It ends with the handle list, the
+ * CRC list and the poll word.
  */
 static size_t qda_fastrpc_get_meta_size(struct qda_fastrpc_invoke_ctx *ctx)
 {
@@ -98,7 +99,8 @@ static size_t qda_fastrpc_get_meta_size(struct qda_fastrpc_invoke_ctx *ctx)
 		sizeof(struct qda_invoke_buf) +
 		sizeof(struct qda_phy_page)) * ctx->nscalars +
 		sizeof(u64) * QDA_FASTRPC_MAX_HANDLELIST +
-		sizeof(u32) * QDA_FASTRPC_MAX_CRCLIST;
+		sizeof(u32) * QDA_FASTRPC_MAX_CRCLIST +
+		sizeof(u32);
 }
 
 /**
@@ -518,6 +520,10 @@ static int qda_fastrpc_get_args(struct qda_fastrpc_invoke_ctx *ctx, struct qda_m
 	pages = (struct qda_phy_page *)&list[ctx->nscalars];
 	/* Kept so the handle list, which follows the pages, can be found later */
 	ctx->pages = pages;
+	/* The poll word follows the handle list and the CRC list */
+	ctx->poll_addr = (u32 *)((u8 *)(pages + ctx->nscalars) +
+				 sizeof(u64) * QDA_FASTRPC_MAX_HANDLELIST +
+				 sizeof(u32) * QDA_FASTRPC_MAX_CRCLIST);
 
 	for (i = 0; i < ctx->nbufs; ++i) {
 		rpra[i].buf.addr = 0;
@@ -598,6 +604,54 @@ int qda_fastrpc_invoke_pack(struct qda_fastrpc_invoke_ctx *ctx, struct qda_msg *
 	return 0;
 }
 
+static u32 qda_fastrpc_read_poll_addr(struct qda_fastrpc_invoke_ctx *ctx)
+{
+	dma_rmb();
+
+	return READ_ONCE(*ctx->poll_addr);
+}
+
+/*
+ * Busy-wait for the DSP to write QDA_FASTRPC_POLL_RESPONSE into the poll word,
+ * which saves the interrupt and scheduling latency of waiting for the rpmsg
+ * response. The response still arrives afterwards and drops the reference
+ * qda_rpmsg_send_msg() took for it as usual.
+ *
+ * Return: 0 if the invocation completed, negative error code if it has not
+ * answered within QDA_FASTRPC_POLL_MAX_TIMEOUT_US
+ */
+static int qda_fastrpc_poll_for_rsp(struct qda_fastrpc_invoke_ctx *ctx)
+{
+	u32 val;
+	int err;
+
+	err = read_poll_timeout_atomic(qda_fastrpc_read_poll_addr, val,
+				       val == QDA_FASTRPC_POLL_RESPONSE ||
+				       READ_ONCE(ctx->is_work_done),
+				       1, QDA_FASTRPC_POLL_MAX_TIMEOUT_US, false, ctx);
+	if (err)
+		return err;
+
+	/* The rpmsg path records its own status, so only the poll path's is set here */
+	if (val == QDA_FASTRPC_POLL_RESPONSE) {
+		WRITE_ONCE(ctx->is_work_done, true);
+		ctx->retval = 0;
+	}
+
+	return 0;
+}
+
+static int qda_fastrpc_wait_for_completion(struct qda_fastrpc_invoke_ctx *ctx)
+{
+	if (ctx->is_polled && !qda_fastrpc_poll_for_rsp(ctx))
+		return 0;
+
+	/* Polling timed out, so fall back to waiting for the rpmsg response */
+	ctx->is_polled = false;
+
+	return qda_rpmsg_wait_for_rsp(ctx);
+}
+
 /**
  * qda_fastrpc_flush_pending() - Fail every invocation still in flight
  * @qdev: Device whose invocations should be failed
@@ -617,6 +671,7 @@ void qda_fastrpc_flush_pending(struct qda_dev *qdev)
 
 	xa_for_each(&qdev->ctx_xa, idx, ctx) {
 		ctx->retval = -EPIPE;
+		WRITE_ONCE(ctx->is_work_done, true);
 		complete(&ctx->work);
 		kref_put(&ctx->refcount, qda_fastrpc_context_free);
 	}
@@ -680,11 +735,15 @@ int qda_fastrpc_invoke_common(struct qda_dev *qdev, struct qda_fastrpc_invoke_ct
 	if (err)
 		return err;
 
+	/* Only invocations of a dynamically loaded module in a user PD are polled */
+	ctx->is_polled = READ_ONCE(ctx->session->poll_mode) && ctx->pd == QDA_USER_PD &&
+			 ctx->handle > QDA_FASTRPC_MAX_STATIC_HANDLE;
+
 	err = qda_rpmsg_send_msg(qdev, &msg);
 	if (err)
 		return err;
 
-	err = qda_rpmsg_wait_for_rsp(ctx);
+	err = qda_fastrpc_wait_for_completion(ctx);
 	if (err)
 		return err;
 

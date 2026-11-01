@@ -20,6 +20,8 @@ int qda_ioctl_init_create(struct drm_device *dev, void *data, struct drm_file *f
 int qda_ioctl_mmap(struct drm_device *dev, void *data, struct drm_file *file_priv);
 int qda_ioctl_munmap(struct drm_device *dev, void *data, struct drm_file *file_priv);
 int qda_ioctl_attach(struct drm_device *dev, void *data, struct drm_file *file_priv);
+int qda_ioctl_set_option(struct drm_device *dev, void *data, struct drm_file *file_priv);
+int qda_session_set_option(struct qda_session *session, u32 request_id, u32 value);
 int qda_session_init_create(struct qda_session *session, struct qda_init_create_args *create);
 int qda_session_attach(struct qda_session *session, u32 pd_type, const char __user *name,
 		       u32 namelen);
