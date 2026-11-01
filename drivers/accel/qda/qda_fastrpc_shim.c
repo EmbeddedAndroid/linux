@@ -15,8 +15,10 @@
 #include <linux/string.h>
 #include <linux/uaccess.h>
 #include <drm/drm_drv.h>
+#include <drm/drm_gem.h>
 #include <uapi/misc/fastrpc.h>
 #include "qda_drv.h"
+#include "qda_fastrpc.h"
 #include "qda_legacy_ops.h"
 
 /* State of one open /dev/fastrpc-* file */
@@ -49,6 +51,25 @@ struct qda_shim_dev {
 };
 
 static const struct file_operations qda_shim_fops;
+
+/* A negative @fd means the argument has no buffer, which is not an error */
+static struct drm_gem_object *shim_import_fd(struct qda_session *session, s32 fd)
+{
+	struct drm_gem_object *obj;
+	struct dma_buf *dmabuf;
+
+	if (fd < 0)
+		return NULL;
+
+	dmabuf = dma_buf_get(fd);
+	if (IS_ERR(dmabuf))
+		return ERR_CAST(dmabuf);
+
+	obj = qda_legacy_ops_table.import_dmabuf(session, dmabuf);
+	dma_buf_put(dmabuf);
+
+	return obj;
+}
 
 static int qda_shim_open(struct inode *inode, struct file *file)
 {
@@ -120,11 +141,77 @@ static long qda_shim_alloc_dma_buf(struct qda_shim_file *sf, void __user *argp)
 	return 0;
 }
 
+static long qda_shim_invoke(struct qda_shim_file *sf, void __user *argp)
+{
+	struct qda_legacy_invoke_arg *largs;
+	struct fastrpc_invoke_args *uargs;
+	struct fastrpc_invoke args;
+	u32 nargs;
+	int err;
+	int i;
+
+	if (copy_from_user(&args, argp, sizeof(args)))
+		return -EFAULT;
+
+	nargs = QDA_REMOTE_SCALARS_LENGTH(args.sc);
+	if (!nargs)
+		return qda_legacy_ops_table.invoke(sf->session, args.handle, args.sc, NULL);
+
+	uargs = kcalloc(nargs, sizeof(*uargs), GFP_KERNEL);
+	if (!uargs)
+		return -ENOMEM;
+
+	if (copy_from_user(uargs, u64_to_user_ptr(args.args), nargs * sizeof(*uargs))) {
+		kfree(uargs);
+		return -EFAULT;
+	}
+
+	largs = kcalloc(nargs, sizeof(*largs), GFP_KERNEL);
+	if (!largs) {
+		kfree(uargs);
+		return -ENOMEM;
+	}
+
+	for (i = 0; i < nargs; ++i) {
+		struct drm_gem_object *obj;
+
+		largs[i].ptr = uargs[i].ptr;
+		largs[i].length = uargs[i].length;
+		largs[i].fd = uargs[i].fd;
+
+		obj = shim_import_fd(sf->session, uargs[i].fd);
+		if (IS_ERR(obj)) {
+			err = PTR_ERR(obj);
+			goto err_put_objs;
+		}
+		largs[i].obj = obj;
+	}
+
+	kfree(uargs);
+
+	/* Takes ownership of every largs[i].obj, whether or not it succeeds */
+	err = qda_legacy_ops_table.invoke(sf->session, args.handle, args.sc, largs);
+	kfree(largs);
+
+	return err;
+
+err_put_objs:
+	while (i-- > 0)
+		if (largs[i].obj)
+			drm_gem_object_put(largs[i].obj);
+	kfree(largs);
+	kfree(uargs);
+
+	return err;
+}
+
 static long qda_shim_dispatch(struct qda_shim_file *sf, unsigned int cmd, void __user *argp)
 {
 	switch (cmd) {
 	case FASTRPC_IOCTL_ALLOC_DMA_BUFF:
 		return qda_shim_alloc_dma_buf(sf, argp);
+	case FASTRPC_IOCTL_INVOKE:
+		return qda_shim_invoke(sf, argp);
 	default:
 		/*
 		 * Includes FASTRPC_IOCTL_FREE_DMA_BUFF, which the driver this
