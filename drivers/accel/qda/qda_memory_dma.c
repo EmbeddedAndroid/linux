@@ -70,3 +70,16 @@ int qda_dma_mmap(struct qda_gem_obj *gem_obj, struct vm_area_struct *vma)
 	return dma_mmap_coherent(gem_obj->iommu_dev->dev, vma, gem_obj->virt,
 				 qda_gem_dma_addr(gem_obj), gem_obj->size);
 }
+
+/**
+ * qda_dma_get_sgtable() - Describe a buffer's pages for an importer
+ * @gem_obj: GEM object to describe
+ * @sgt: Table to fill in; the caller frees it with sg_free_table()
+ *
+ * Return: 0 on success, negative error code on failure
+ */
+int qda_dma_get_sgtable(struct qda_gem_obj *gem_obj, struct sg_table *sgt)
+{
+	return dma_get_sgtable(gem_obj->iommu_dev->dev, sgt, gem_obj->virt,
+			       qda_gem_dma_addr(gem_obj), gem_obj->size);
+}
