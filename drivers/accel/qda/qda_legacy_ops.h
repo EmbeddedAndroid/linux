@@ -30,6 +30,11 @@ struct qda_legacy_ops {
 	struct qda_session *(*session_create)(struct qda_dev *qdev);
 	/** @session_destroy: Close a session */
 	void (*session_destroy)(struct qda_session *session);
+	/** @init_create: Create a DSP process from an imported ELF image */
+	int (*init_create)(struct qda_session *session, struct drm_gem_object *elf_obj,
+			   u32 filelen, u32 attrs, u32 siglen);
+	/** @release: Release the session's DSP process, if it has one */
+	int (*release)(struct qda_session *session);
 	/** @alloc_dmabuf: Allocate a buffer and export it as a DMA-BUF */
 	struct dma_buf *(*alloc_dmabuf)(struct qda_session *session, u64 size);
 	/** @import_dmabuf: Map a DMA-BUF into a session's context bank */

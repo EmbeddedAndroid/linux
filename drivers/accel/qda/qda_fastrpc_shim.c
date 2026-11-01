@@ -24,6 +24,11 @@
 /* State of one open /dev/fastrpc-* file */
 struct qda_shim_file {
 	struct qda_session *session;
+	/* Opened through the /dev/fastrpc-<dsp>-secure node */
+	bool secure_node;
+	/* Properties of the qda_shim_dev this file was opened on */
+	bool secure_channel;
+	bool unsigned_support;
 };
 
 /* One misc device node */
@@ -31,6 +36,7 @@ struct qda_shim_node {
 	struct qda_shim_dev *sdev;
 	struct miscdevice miscdev;
 	char *name;
+	bool secure;
 	bool registered;
 };
 
@@ -42,11 +48,13 @@ struct qda_shim_node {
  * offload, always get both, so that untrusted applications can still reach
  * the non-secure node on a secure channel.
  *
- * The two nodes behave identically for now; what separates them is applied
- * to the operations that need it as those are added.
+ * What separates the two nodes is applied to the operations that need it,
+ * using the channel properties recorded here.
  */
 struct qda_shim_dev {
 	struct qda_dev *qdev;
+	bool secure_channel;
+	bool unsigned_support;
 	struct qda_shim_node nodes[2];
 };
 
@@ -89,6 +97,10 @@ static int qda_shim_open(struct inode *inode, struct file *file)
 		return err;
 	}
 
+	sf->secure_node = snode->secure;
+	sf->secure_channel = snode->sdev->secure_channel;
+	sf->unsigned_support = snode->sdev->unsigned_support;
+
 	file->private_data = sf;
 
 	return 0;
@@ -98,6 +110,7 @@ static int qda_shim_release(struct inode *inode, struct file *file)
 {
 	struct qda_shim_file *sf = file->private_data;
 
+	qda_legacy_ops_table.release(sf->session);
 	qda_legacy_ops_table.session_destroy(sf->session);
 	kfree(sf);
 
@@ -139,6 +152,43 @@ static long qda_shim_alloc_dma_buf(struct qda_shim_file *sf, void __user *argp)
 	fd_install(fd, dmabuf->file);
 
 	return 0;
+}
+
+/*
+ * As in drivers/misc/fastrpc.c: on a secure channel, a client that came in
+ * through the non-secure node may only create an unsigned PD, and only on a
+ * domain that supports unsigned PD offload.
+ */
+static bool qda_shim_session_rejected(struct qda_shim_file *sf, bool unsigned_pd)
+{
+	if (!sf->secure_node && sf->secure_channel)
+		return !sf->unsigned_support || !unsigned_pd;
+
+	return false;
+}
+
+static long qda_shim_init_create(struct qda_shim_file *sf, void __user *argp)
+{
+	struct drm_gem_object *elf_obj = NULL;
+	struct fastrpc_init_create args;
+	int err;
+
+	if (copy_from_user(&args, argp, sizeof(args)))
+		return -EFAULT;
+
+	if (qda_shim_session_rejected(sf, args.attrs & FASTRPC_MODE_UNSIGNED_MODULE))
+		return -ECONNREFUSED;
+
+	elf_obj = shim_import_fd(sf->session, args.filefd);
+	if (IS_ERR(elf_obj))
+		return PTR_ERR(elf_obj);
+
+	err = qda_legacy_ops_table.init_create(sf->session, elf_obj, args.filelen, args.attrs,
+					       args.siglen);
+	if (elf_obj)
+		drm_gem_object_put(elf_obj);
+
+	return err;
 }
 
 static long qda_shim_invoke(struct qda_shim_file *sf, void __user *argp)
@@ -210,6 +260,8 @@ static long qda_shim_dispatch(struct qda_shim_file *sf, unsigned int cmd, void _
 	switch (cmd) {
 	case FASTRPC_IOCTL_ALLOC_DMA_BUFF:
 		return qda_shim_alloc_dma_buf(sf, argp);
+	case FASTRPC_IOCTL_INIT_CREATE:
+		return qda_shim_init_create(sf, argp);
 	case FASTRPC_IOCTL_INVOKE:
 		return qda_shim_invoke(sf, argp);
 	default:
@@ -256,6 +308,7 @@ static int qda_shim_node_register(struct qda_shim_dev *sdev, int i, bool secure)
 		return -ENOMEM;
 
 	snode->sdev = sdev;
+	snode->secure = secure;
 	snode->miscdev.minor = MISC_DYNAMIC_MINOR;
 	snode->miscdev.name = snode->name;
 	snode->miscdev.fops = &qda_shim_fops;
@@ -293,8 +346,6 @@ static int qda_shim_probe(struct auxiliary_device *auxdev,
 			  const struct auxiliary_device_id *id)
 {
 	struct qda_dev *qdev = dev_get_platdata(&auxdev->dev);
-	bool secure_channel = !of_property_read_bool(qdev->dev->of_node,
-						     "qcom,non-secure-domain");
 	struct qda_shim_dev *sdev;
 	int err;
 
@@ -303,16 +354,19 @@ static int qda_shim_probe(struct auxiliary_device *auxdev,
 		return -ENOMEM;
 
 	sdev->qdev = qdev;
+	sdev->secure_channel = !of_property_read_bool(qdev->dev->of_node,
+						      "qcom,non-secure-domain");
 
 	if (!strncmp(qdev->dsp_name, "cdsp", 4) || !strncmp(qdev->dsp_name, "gdsp", 4)) {
 		/* Both nodes, so signed and unsigned PDs are both reachable */
+		sdev->unsigned_support = true;
 		err = qda_shim_node_register(sdev, 0, true);
 		if (!err)
 			err = qda_shim_node_register(sdev, 1, false);
 	} else if (!strncmp(qdev->dsp_name, "adsp", 4) ||
 		   !strncmp(qdev->dsp_name, "mdsp", 4) ||
 		   !strncmp(qdev->dsp_name, "sdsp", 4)) {
-		err = qda_shim_node_register(sdev, 0, secure_channel);
+		err = qda_shim_node_register(sdev, 0, sdev->secure_channel);
 	} else {
 		err = -ENODEV;
 	}

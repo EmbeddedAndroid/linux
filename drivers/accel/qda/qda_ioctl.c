@@ -137,7 +137,27 @@ out_put:
  */
 int qda_ioctl_init_create(struct drm_device *dev, void *data, struct drm_file *file_priv)
 {
-	return qda_fastrpc_invoke(QDA_FASTRPC_RMID_INIT_CREATE, data, file_priv->driver_priv);
+	struct qda_init_create_args create = {
+		.init = *(struct drm_qda_init_create *)data,
+	};
+
+	return qda_fastrpc_invoke(QDA_FASTRPC_RMID_INIT_CREATE, &create, file_priv->driver_priv);
+}
+
+/**
+ * qda_session_init_create() - Create a DSP process from an imported ELF buffer
+ * @session: Session to create the process for
+ * @create: Creation parameters; @create->init.filehandle and @create->init.file
+ *          must be zero
+ *
+ * For sessions with no handle table to name the ELF buffer by, such as those
+ * of the legacy shim.
+ *
+ * Return: 0 on success, negative error code on failure
+ */
+int qda_session_init_create(struct qda_session *session, struct qda_init_create_args *create)
+{
+	return qda_fastrpc_invoke(QDA_FASTRPC_RMID_INIT_CREATE, create, session);
 }
 
 /**

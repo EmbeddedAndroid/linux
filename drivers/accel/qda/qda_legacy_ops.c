@@ -10,6 +10,7 @@
 #include "qda_drv.h"
 #include "qda_fastrpc.h"
 #include "qda_gem.h"
+#include "qda_ioctl.h"
 #include "qda_legacy_ops.h"
 #include "qda_prime.h"
 
@@ -36,6 +37,42 @@ static void legacy_session_destroy(struct qda_session *session)
 
 	qda_session_put(session);
 	drm_dev_put(drm_dev);
+}
+
+/*
+ * The ELF image of a legacy caller is named by file descriptor, so it arrives
+ * already imported. An image passed as a bare pointer has no buffer to
+ * resolve, so it is only accepted when there is none, i.e. an empty image.
+ */
+static int legacy_init_create(struct qda_session *session, struct drm_gem_object *elf_obj,
+			      u32 filelen, u32 attrs, u32 siglen)
+{
+	struct qda_init_create_args create = {
+		.init = {
+			.filelen = filelen,
+			.attrs = attrs,
+			.siglen = siglen,
+		},
+		.elf_obj = elf_obj,
+	};
+
+	if (!elf_obj && filelen)
+		return -EOPNOTSUPP;
+
+	return qda_session_init_create(session, &create);
+}
+
+static int legacy_release(struct qda_session *session)
+{
+	/* Only a session that created a process has one to release */
+	if (!READ_ONCE(session->init_mem_gem_obj))
+		return 0;
+
+	/* Unplug check only; see qda_shim_ioctl() for why not drm_dev_enter() */
+	if (drm_dev_is_unplugged(&session->qda_dev->drm_dev))
+		return -ENODEV;
+
+	return qda_release_dsp_process(session->qda_dev, session);
 }
 
 /*
@@ -81,6 +118,8 @@ static int legacy_invoke(struct qda_session *session, u32 handle, u32 sc,
 const struct qda_legacy_ops qda_legacy_ops_table = {
 	.session_create = legacy_session_create,
 	.session_destroy = legacy_session_destroy,
+	.init_create = legacy_init_create,
+	.release = legacy_release,
 	.alloc_dmabuf = legacy_alloc_dmabuf,
 	.import_dmabuf = legacy_import_dmabuf,
 	.invoke = legacy_invoke,
