@@ -3,6 +3,7 @@
 #include <linux/bitfield.h>
 #include <linux/capability.h>
 #include <linux/dma-mapping.h>
+#include <linux/limits.h>
 #include <linux/mm.h>
 #include <linux/sched.h>
 #include <linux/slab.h>
@@ -251,6 +252,9 @@ void qda_fastrpc_context_free(struct kref *ref)
 	if (ctx->init_mem_gem_obj)
 		drm_gem_object_put(&ctx->init_mem_gem_obj->base);
 
+	if (ctx->map_obj)
+		drm_gem_object_put(ctx->map_obj);
+
 	if (ctx->session)
 		qda_session_put(ctx->session);
 
@@ -326,7 +330,10 @@ static struct qda_gem_obj *alloc_kernel_gem(struct qda_fastrpc_invoke_ctx *ctx, 
 	return to_qda_gem_obj(gem_obj);
 }
 
-/* The context releases whatever has been allocated here if a later step fails */
+/*
+ * The context releases whatever has been allocated here if a later step
+ * fails, which needs @nscalars to cover every slot that may hold a reference.
+ */
 static int alloc_kernel_args(struct qda_fastrpc_invoke_ctx *ctx, u32 nargs)
 {
 	ctx->args = kzalloc_objs(*ctx->args, nargs);
@@ -336,6 +343,8 @@ static int alloc_kernel_args(struct qda_fastrpc_invoke_ctx *ctx, u32 nargs)
 	ctx->gem_objs = kzalloc_objs(*ctx->gem_objs, nargs);
 	if (!ctx->gem_objs)
 		return -ENOMEM;
+
+	ctx->nscalars = nargs;
 
 	return 0;
 }
@@ -611,6 +620,37 @@ void qda_fastrpc_flush_pending(struct qda_dev *qdev)
 		complete(&ctx->work);
 		kref_put(&ctx->refcount, qda_fastrpc_context_free);
 	}
+}
+
+/**
+ * qda_fastrpc_return_result() - Copy what a request returns into the ioctl data
+ * @ctx: Invocation that completed successfully
+ * @argp: Kernel-side ioctl argument buffer owned by the DRM core
+ *
+ * Buffer arguments are written by the DSP straight into memory the caller can
+ * see, so only the mapping requests have a value to surface, which the DSP
+ * wrote into the response slot the driver built for it.
+ */
+void qda_fastrpc_return_result(struct qda_fastrpc_invoke_ctx *ctx, void *argp)
+{
+	struct drm_qda_mem_map *margs = argp;
+	struct qda_fastrpc_map_rsp_msg *rsp;
+	int idx;
+
+	switch (ctx->type) {
+	case QDA_FASTRPC_RMID_INIT_MMAP:
+		idx = 2;
+		break;
+	case QDA_FASTRPC_RMID_INIT_MEM_MAP:
+		idx = 3;
+		break;
+	default:
+		return;
+	}
+
+	rsp = (struct qda_fastrpc_map_rsp_msg *)
+	      ((u8 *)to_qda_gem_obj(ctx->gem_objs[idx])->virt + ctx->args[idx].offset);
+	margs->vaddrout = rsp->vaddrout;
 }
 
 /**
@@ -891,6 +931,148 @@ out_put:
 }
 
 /*
+ * Find the buffer a mapping request names and describe it to the DSP. The
+ * buffer is held by the context until the request is done, so that closing its
+ * handle meanwhile cannot free memory the DSP is being told to map. The
+ * region must fit in the buffer, as the DSP would otherwise map past its end.
+ */
+static int setup_mmap_pages(struct qda_fastrpc_invoke_ctx *ctx, struct drm_qda_mem_map *margs,
+			    struct qda_phy_page *pages)
+{
+	struct qda_gem_obj *qda_gem_obj;
+	int err;
+
+	if (!margs->handle)
+		return -EINVAL;
+
+	err = get_gem_obj_from_handle(ctx, margs->handle, &ctx->map_obj);
+	if (err)
+		return err;
+
+	qda_gem_obj = to_qda_gem_obj(ctx->map_obj);
+	if (margs->size > qda_gem_obj->size)
+		return -EINVAL;
+
+	pages->addr = qda_gem_obj->dma_addr;
+	pages->size = margs->size ? margs->size : qda_gem_obj->size;
+
+	return 0;
+}
+
+/*
+ * INIT_MMAP packed layout:
+ *   [0] req	sizeof(qda_fastrpc_map_req_msg)		IN
+ *   [1] pages	sizeof(qda_phy_page)			IN
+ *   [2] rsp	sizeof(qda_fastrpc_map_rsp_msg)		OUT
+ */
+static int qda_fastrpc_prepare_args_map(struct qda_fastrpc_invoke_ctx *ctx, void *argp)
+{
+	struct drm_qda_mem_map *margs = argp;
+	struct qda_fastrpc_map_req_msg *req;
+	struct qda_gem_obj *kernel_gem;
+	u8 *gv;
+	int err;
+
+	const size_t off_req = 0;
+	const size_t off_pages = off_req + sizeof(*req);
+	const size_t off_rsp = off_pages + sizeof(struct qda_phy_page);
+	const size_t total_size = off_rsp + sizeof(struct qda_fastrpc_map_rsp_msg);
+
+	ctx->sc = QDA_FASTRPC_SCALARS(QDA_FASTRPC_RMID_INIT_MMAP, 2, 1);
+	ctx->handle = QDA_FASTRPC_INIT_HANDLE;
+
+	err = alloc_kernel_args(ctx, 3);
+	if (err)
+		return err;
+
+	kernel_gem = alloc_kernel_gem(ctx, total_size);
+	if (IS_ERR(kernel_gem))
+		return PTR_ERR(kernel_gem);
+	gv = kernel_gem->virt;
+
+	req = (struct qda_fastrpc_map_req_msg *)(gv + off_req);
+	req->remote_session_id = ctx->session->remote_session_id;
+	req->flags = margs->flags;
+	req->vaddr = margs->vaddrin;
+	req->num = sizeof(struct qda_phy_page);
+
+	err = setup_mmap_pages(ctx, margs, (struct qda_phy_page *)(gv + off_pages));
+	if (err)
+		goto out_put;
+
+	assign_kernel_gem_arg(ctx, 0, kernel_gem, gv + off_req, sizeof(*req));
+	assign_kernel_gem_arg(ctx, 1, kernel_gem, gv + off_pages, sizeof(struct qda_phy_page));
+	assign_kernel_gem_arg(ctx, 2, kernel_gem, gv + off_rsp,
+			      sizeof(struct qda_fastrpc_map_rsp_msg));
+
+out_put:
+	drm_gem_object_put(&kernel_gem->base);
+
+	return err;
+}
+
+/*
+ * INIT_MEM_MAP packed layout:
+ *   [0] req	sizeof(qda_fastrpc_mem_map_req_msg)	IN
+ *   [1] pages	sizeof(qda_phy_page)			IN
+ *   [2] empty	0 bytes, which the DSP requires		IN
+ *   [3] rsp	sizeof(qda_fastrpc_map_rsp_msg)		OUT
+ */
+static int qda_fastrpc_prepare_args_mem_map(struct qda_fastrpc_invoke_ctx *ctx, void *argp)
+{
+	struct drm_qda_mem_map *margs = argp;
+	struct qda_fastrpc_mem_map_req_msg *req;
+	struct qda_gem_obj *kernel_gem;
+	u8 *gv;
+	int err;
+
+	const size_t off_req = 0;
+	const size_t off_pages = off_req + sizeof(*req);
+	const size_t off_rsp = off_pages + sizeof(struct qda_phy_page);
+	const size_t total_size = off_rsp + sizeof(struct qda_fastrpc_map_rsp_msg);
+
+	/* The wire field is signed */
+	if (margs->offset > INT_MAX)
+		return -EINVAL;
+
+	ctx->sc = QDA_FASTRPC_SCALARS(QDA_FASTRPC_RMID_INIT_MEM_MAP, 3, 1);
+	ctx->handle = QDA_FASTRPC_INIT_HANDLE;
+
+	err = alloc_kernel_args(ctx, 4);
+	if (err)
+		return err;
+
+	kernel_gem = alloc_kernel_gem(ctx, total_size);
+	if (IS_ERR(kernel_gem))
+		return PTR_ERR(kernel_gem);
+	gv = kernel_gem->virt;
+
+	req = (struct qda_fastrpc_mem_map_req_msg *)(gv + off_req);
+	req->remote_session_id = ctx->session->remote_session_id;
+	req->handle = margs->dsp_handle;
+	req->offset = margs->offset;
+	req->flags = margs->flags;
+	req->vaddrin = margs->vaddrin;
+	req->num = sizeof(struct qda_phy_page);
+	req->data_len = 0;
+
+	err = setup_mmap_pages(ctx, margs, (struct qda_phy_page *)(gv + off_pages));
+	if (err)
+		goto out_put;
+
+	assign_kernel_gem_arg(ctx, 0, kernel_gem, gv + off_req, sizeof(*req));
+	assign_kernel_gem_arg(ctx, 1, kernel_gem, gv + off_pages, sizeof(struct qda_phy_page));
+	assign_kernel_gem_arg(ctx, 2, kernel_gem, gv + off_pages, 0);
+	assign_kernel_gem_arg(ctx, 3, kernel_gem, gv + off_rsp,
+			      sizeof(struct qda_fastrpc_map_rsp_msg));
+
+out_put:
+	drm_gem_object_put(&kernel_gem->base);
+
+	return err;
+}
+
+/*
  * INVOKE_DYNAMIC: the argument descriptors are supplied by user space, which
  * is also responsible for having imported every buffer to a GEM handle.
  */
@@ -952,6 +1134,12 @@ int qda_fastrpc_prepare_args(struct qda_fastrpc_invoke_ctx *ctx,
 		/* The new process is in the user PD, and so is the request creating it */
 		ctx->pd = QDA_USER_PD;
 		err = qda_fastrpc_prepare_args_init_create(ctx, argp);
+		break;
+	case QDA_FASTRPC_RMID_INIT_MMAP:
+		err = qda_fastrpc_prepare_args_map(ctx, argp);
+		break;
+	case QDA_FASTRPC_RMID_INIT_MEM_MAP:
+		err = qda_fastrpc_prepare_args_mem_map(ctx, argp);
 		break;
 	case QDA_FASTRPC_RMID_INVOKE_DYNAMIC:
 		err = qda_fastrpc_prepare_args_invoke(ctx, argp);

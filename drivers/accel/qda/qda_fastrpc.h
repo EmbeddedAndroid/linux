@@ -45,8 +45,10 @@ struct qda_session;
 
 /* Methods of the initialisation handle */
 #define QDA_FASTRPC_RMID_INIT_RELEASE		1
+#define QDA_FASTRPC_RMID_INIT_MMAP		4
 #define QDA_FASTRPC_RMID_INIT_CREATE		6
 #define QDA_FASTRPC_RMID_INIT_CREATE_ATTR	7
+#define QDA_FASTRPC_RMID_INIT_MEM_MAP		10
 #define QDA_FASTRPC_RMID_INVOKE_DYNAMIC		0xFFFFFFFFU
 
 /* Handle the initialisation methods are addressed to */
@@ -150,6 +152,52 @@ struct qda_fastrpc_create_process_inbuf {
 };
 
 /**
+ * struct qda_fastrpc_map_req_msg - Request to map a whole buffer
+ *
+ * Layout the DSP expects; do not reorder.
+ */
+struct qda_fastrpc_map_req_msg {
+	/** @remote_session_id: Session the mapping belongs to */
+	s32 remote_session_id;
+	/** @flags: Mapping flags (cache attributes, permissions) */
+	u32 flags;
+	/** @vaddr: Address the DSP should map the buffer at, if it can */
+	u64 vaddr;
+	/** @num: Size of the physical page descriptor in bytes */
+	s32 num;
+};
+
+/**
+ * struct qda_fastrpc_mem_map_req_msg - Request to map a region with attributes
+ *
+ * Layout the DSP expects; do not reorder.
+ */
+struct qda_fastrpc_mem_map_req_msg {
+	/** @remote_session_id: Session the mapping belongs to */
+	s32 remote_session_id;
+	/** @handle: Identifier the DSP tracks the buffer by */
+	s32 handle;
+	/** @offset: Offset within the buffer */
+	s32 offset;
+	/** @flags: Mapping flags (cache attributes, permissions) */
+	u32 flags;
+	/** @vaddrin: Address the DSP should map the buffer at, if it can */
+	u64 vaddrin;
+	/** @num: Size of the physical page descriptor in bytes */
+	s32 num;
+	/** @data_len: Length of additional inline data */
+	s32 data_len;
+};
+
+/**
+ * struct qda_fastrpc_map_rsp_msg - The DSP's answer to a map request
+ */
+struct qda_fastrpc_map_rsp_msg {
+	/** @vaddrout: Address the DSP mapped the buffer at */
+	u64 vaddrout;
+};
+
+/**
  * struct qda_fastrpc_msg - FastRPC wire message for remote invocations
  *
  * Sent to the remote processor via RPMsg. This is the exact layout
@@ -226,6 +274,8 @@ struct qda_fastrpc_invoke_ctx {
 	struct qda_gem_obj *msg_gem_obj;
 	/** @init_mem_gem_obj: Memory the DSP loads a new process into */
 	struct qda_gem_obj *init_mem_gem_obj;
+	/** @map_obj: Buffer being mapped into the DSP, held until the request is done */
+	struct drm_gem_object *map_obj;
 	/** @pages: Array of physical page descriptors inside the payload */
 	struct qda_phy_page *pages;
 	/** @work: Completed once the DSP has answered */
@@ -285,6 +335,7 @@ void qda_session_msg_buf_pool_destroy(struct qda_session *session);
 int qda_fastrpc_prepare_args(struct qda_fastrpc_invoke_ctx *ctx,
 			     struct qda_session *session, void *argp);
 int qda_fastrpc_invoke_pack(struct qda_fastrpc_invoke_ctx *ctx, struct qda_msg *msg);
+void qda_fastrpc_return_result(struct qda_fastrpc_invoke_ctx *ctx, void *argp);
 int qda_fastrpc_invoke_common(struct qda_dev *qdev, struct qda_fastrpc_invoke_ctx *ctx);
 void qda_fastrpc_flush_pending(struct qda_dev *qdev);
 int qda_fastrpc_invoke_legacy(struct qda_dev *qdev, struct qda_session *session,
