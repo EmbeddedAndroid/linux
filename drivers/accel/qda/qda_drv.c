@@ -13,6 +13,7 @@
 
 #include "qda_drv.h"
 #include "qda_fastrpc.h"
+#include "qda_gem.h"
 #include "qda_ioctl.h"
 #include "qda_prime.h"
 
@@ -72,6 +73,9 @@ static void qda_session_release(struct kref *ref)
 
 	qda_session_msg_buf_pool_destroy(session);
 
+	if (session->init_mem_gem_obj)
+		drm_gem_object_put(&session->init_mem_gem_obj->base);
+
 	if (session->assigned_iommu_dev)
 		qda_memory_manager_release_device(session->assigned_iommu_dev);
 
@@ -101,7 +105,16 @@ EXPORT_SYMBOL_FOR_MODULES(qda_session_put, "qda_fastrpc_shim");
 
 static void qda_postclose(struct drm_device *dev, struct drm_file *file)
 {
-	qda_session_put(file->driver_priv);
+	struct qda_session *session = file->driver_priv;
+	int idx;
+
+	/* Only a session that created a process has one to release */
+	if (READ_ONCE(session->init_mem_gem_obj) && drm_dev_enter(dev, &idx)) {
+		qda_release_dsp_process(session->qda_dev, session);
+		drm_dev_exit(idx);
+	}
+
+	qda_session_put(session);
 }
 
 DEFINE_DRM_ACCEL_FOPS(qda_accel_fops);
@@ -111,6 +124,7 @@ static const struct drm_ioctl_desc qda_ioctls[] = {
 	DRM_IOCTL_DEF_DRV(QDA_GEM_CREATE, qda_ioctl_gem_create, 0),
 	DRM_IOCTL_DEF_DRV(QDA_GEM_MMAP_OFFSET, qda_ioctl_gem_mmap_offset, 0),
 	DRM_IOCTL_DEF_DRV(QDA_REMOTE_INVOKE, qda_ioctl_invoke, 0),
+	DRM_IOCTL_DEF_DRV(QDA_REMOTE_SESSION_CREATE, qda_ioctl_init_create, 0),
 };
 
 static const struct drm_driver qda_drm_driver = {

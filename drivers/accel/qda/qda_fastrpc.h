@@ -33,13 +33,31 @@ struct qda_session;
 						 QDA_REMOTE_SCALARS_INHANDLES(sc) + \
 						 QDA_REMOTE_SCALARS_OUTHANDLES(sc))
 
+/* Encodes a method ID and the in/out buffer counts; handle counts are zero */
+#define QDA_FASTRPC_SCALARS(method, in, out)	((((method) & 0x1f) << 24) | \
+						 (((in) & 0xff) << 16) |     \
+						 (((out) & 0xff) << 8))
+
 /* FastRPC configuration constants */
 #define QDA_FASTRPC_ALIGN		128	/* Alignment the DSP expects of the payload */
 #define QDA_FASTRPC_MAX_HANDLELIST	16	/* Handles the DSP can ask to release */
 #define QDA_FASTRPC_MAX_CRCLIST		64	/* CRC list entries */
 
-/* Protection domain a session's invocations run in */
+/* Methods of the initialisation handle */
+#define QDA_FASTRPC_RMID_INIT_RELEASE		1
+#define QDA_FASTRPC_RMID_INIT_CREATE		6
+#define QDA_FASTRPC_RMID_INIT_CREATE_ATTR	7
+#define QDA_FASTRPC_RMID_INVOKE_DYNAMIC		0xFFFFFFFFU
+
+/* Handle the initialisation methods are addressed to */
+#define QDA_FASTRPC_INIT_HANDLE		0x1
+
+/* Protection domains a request can be directed at */
+#define QDA_ROOT_PD			0
 #define QDA_USER_PD			1
+
+/* Largest ELF image a process may be created from */
+#define QDA_FASTRPC_INIT_FILELEN_MAX	(4 * 1024 * 1024)
 
 /* Idle invoke header buffers a session keeps for reuse */
 #define QDA_MSG_BUF_POOL_MAX		8
@@ -112,6 +130,26 @@ struct qda_invoke_buf {
 };
 
 /**
+ * struct qda_fastrpc_create_process_inbuf - Input buffer for process creation
+ *
+ * Layout the DSP expects; do not reorder.
+ */
+struct qda_fastrpc_create_process_inbuf {
+	/** @remote_session_id: Session the process belongs to */
+	int remote_session_id;
+	/** @namelen: Length of the process name including the NUL */
+	u32 namelen;
+	/** @filelen: Length of the ELF image in bytes */
+	u32 filelen;
+	/** @pageslen: Number of physical page descriptors */
+	u32 pageslen;
+	/** @attrs: Process attribute flags */
+	u32 attrs;
+	/** @siglen: Length of the signature data in bytes */
+	u32 siglen;
+};
+
+/**
  * struct qda_fastrpc_msg - FastRPC wire message for remote invocations
  *
  * Sent to the remote processor via RPMsg. This is the exact layout
@@ -164,6 +202,12 @@ struct qda_fastrpc_invoke_ctx {
 	u64 ctxid;
 	/** @retval: Status the DSP reported, or an error if it never answered */
 	int retval;
+	/** @pd: Protection domain, OR'ed into the low bits of @ctxid when packed */
+	int pd;
+	/** @type: Method being invoked (QDA_FASTRPC_RMID_*) */
+	u32 type;
+	/** @legacy: Arguments came from the legacy shim, where offsets are user VAs */
+	bool legacy;
 	/** @nscalars: Total number of scalar arguments */
 	int nscalars;
 	/** @nbufs: Number of buffer arguments; the rest are handle arguments */
@@ -180,6 +224,8 @@ struct qda_fastrpc_invoke_ctx {
 	struct drm_gem_object **gem_objs;
 	/** @msg_gem_obj: GEM object backing the message payload buffer */
 	struct qda_gem_obj *msg_gem_obj;
+	/** @init_mem_gem_obj: Memory the DSP loads a new process into */
+	struct qda_gem_obj *init_mem_gem_obj;
 	/** @pages: Array of physical page descriptors inside the payload */
 	struct qda_phy_page *pages;
 	/** @work: Completed once the DSP has answered */
