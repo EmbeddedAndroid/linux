@@ -22,6 +22,14 @@ void qda_fastrpc_context_free(struct kref *ref)
 	kfree(ctx);
 }
 
+static void qda_fastrpc_context_put_wq(struct work_struct *work)
+{
+	struct qda_fastrpc_invoke_ctx *ctx =
+		container_of(work, struct qda_fastrpc_invoke_ctx, put_work);
+
+	kref_put(&ctx->refcount, qda_fastrpc_context_free);
+}
+
 /**
  * qda_fastrpc_context_alloc() - Allocate an invocation and give it an ID
  * @qdev: Device the invocation is issued on
@@ -42,6 +50,7 @@ struct qda_fastrpc_invoke_ctx *qda_fastrpc_context_alloc(struct qda_dev *qdev)
 		return ERR_PTR(-ENOMEM);
 
 	init_completion(&ctx->work);
+	INIT_WORK(&ctx->put_work, qda_fastrpc_context_put_wq);
 	kref_init(&ctx->refcount);
 	ctx->qdev = qdev;
 	/* Anything but a status the DSP could send, until it answers */
