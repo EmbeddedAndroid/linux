@@ -690,7 +690,7 @@ static void qcom_swrm_set_slave_dev_num(struct sdw_bus *bus,
 	status = (status >> (devnum * SWRM_MCP_SLV_STATUS_SZ));
 	status &= SWRM_MCP_SLV_STATUS_MASK;
 
-	if (status == SDW_SLAVE_ATTACHED) {
+	if (status == SDW_SLAVE_ATTACHED || status == SDW_SLAVE_ALERT) {
 		if (slave)
 			slave->dev_num = devnum;
 		mutex_lock(&bus->bus_lock);
@@ -701,6 +701,28 @@ static void qcom_swrm_set_slave_dev_num(struct sdw_bus *bus,
 		ctrl->page1_cache[devnum] = -1;
 		ctrl->page2_cache[devnum] = -1;
 	}
+}
+
+/* Read the 48-bit device ID from the SCP registers of a numbered peripheral */
+static int qcom_swrm_read_devid(struct qcom_swrm_ctrl *ctrl, int devnum, u64 *addr)
+{
+	int ret = 0;
+	u8 b;
+	int k;
+
+	*addr = 0;
+	mutex_lock(&ctrl->bus.msg_lock);
+	for (k = 0; k < 6; k++) {
+		if (qcom_swrm_cmd_fifo_rd_cmd(ctrl, devnum, SDW_SCP_DEVID_0 + k, 1, &b) !=
+		    SDW_CMD_OK) {
+			ret = -EIO;
+			break;
+		}
+		*addr = (*addr << 8) | b;
+	}
+	mutex_unlock(&ctrl->bus.msg_lock);
+
+	return ret;
 }
 
 static int qcom_swrm_enumerate(struct sdw_bus *bus)
@@ -725,12 +747,21 @@ static int qcom_swrm_enumerate(struct sdw_bus *bus)
 		/*SCP_Devid3 - DevId 2 Devid 1 Devid 0*/
 		ctrl->reg_read(ctrl, SWRM_ENUMERATOR_SLAVE_DEV_ID_2(i), &val2);
 
-		if (!val1 && !val2)
-			break;
-
-		addr = buf2[1] | (buf2[0] << 8) | (buf1[3] << 16) |
-			((u64)buf1[2] << 24) | ((u64)buf1[1] << 32) |
-			((u64)buf1[0] << 40);
+		if (!val1 && !val2) {
+			/*
+			 * A peripheral that kept its device number over a
+			 * controller reset (a codec not reset by an ADSP
+			 * restart) attaches without passing the enumerator,
+			 * which then has no ID for it: read it from the
+			 * peripheral.
+			 */
+			if (qcom_swrm_read_devid(ctrl, i, &addr))
+				continue;
+		} else {
+			addr = buf2[1] | (buf2[0] << 8) | (buf1[3] << 16) |
+				((u64)buf1[2] << 24) | ((u64)buf1[1] << 32) |
+				((u64)buf1[0] << 40);
+		}
 
 		sdw_extract_slave_id(bus, addr, &id);
 		found = false;
@@ -739,6 +770,14 @@ static int qcom_swrm_enumerate(struct sdw_bus *bus)
 		list_for_each_entry_safe(slave, _s, &bus->slaves, node) {
 			if (sdw_compare_devid(slave, id) == 0) {
 				qcom_swrm_set_slave_dev_num(bus, slave, i);
+				/*
+				 * The core only initialises a peripheral it sees
+				 * attached; one that attaches with an alert pending
+				 * gets the alert handled after that.
+				 */
+				if (slave->status == SDW_SLAVE_UNATTACHED &&
+				    ctrl->status[i] == SDW_SLAVE_ALERT)
+					ctrl->status[i] = SDW_SLAVE_ATTACHED;
 				if (slave->prop.clk_stop_mode1)
 					ctrl->clock_stop_not_supported = true;
 
@@ -755,6 +794,20 @@ static int qcom_swrm_enumerate(struct sdw_bus *bus)
 
 	complete(&ctrl->enumeration);
 	return 0;
+}
+
+static void qcom_swrm_handle_status_change(struct qcom_swrm_ctrl *ctrl)
+{
+	qcom_swrm_get_device_status(ctrl);
+	qcom_swrm_enumerate(&ctrl->bus);
+	sdw_handle_slave_status(&ctrl->bus, ctrl->status);
+
+	/*
+	 * A peripheral that attached with an alert pending is known now; the
+	 * controller does not raise the alert again, so handle it here.
+	 */
+	if (qcom_swrm_get_alert_slave_dev_num(ctrl) > 0)
+		sdw_handle_slave_status(&ctrl->bus, ctrl->status);
 }
 
 static irqreturn_t qcom_swrm_wake_irq_handler(int irq, void *dev_id)
@@ -820,9 +873,7 @@ static irqreturn_t qcom_swrm_irq_handler(int irq, void *dev_id)
 					dev_dbg(ctrl->dev, "Slave status not changed %x\n",
 						slave_status);
 				} else {
-					qcom_swrm_get_device_status(ctrl);
-					qcom_swrm_enumerate(&ctrl->bus);
-					sdw_handle_slave_status(&ctrl->bus, ctrl->status);
+					qcom_swrm_handle_status_change(ctrl);
 				}
 				break;
 			case SWRM_INTERRUPT_STATUS_MASTER_CLASH_DET:
@@ -1698,9 +1749,7 @@ static void qcom_swrm_status_work(struct work_struct *work)
 	if (pm_runtime_resume_and_get(ctrl->dev) < 0)
 		return;
 
-	qcom_swrm_get_device_status(ctrl);
-	qcom_swrm_enumerate(&ctrl->bus);
-	sdw_handle_slave_status(&ctrl->bus, ctrl->status);
+	qcom_swrm_handle_status_change(ctrl);
 
 	pm_runtime_mark_last_busy(ctrl->dev);
 	pm_runtime_put_autosuspend(ctrl->dev);
