@@ -181,4 +181,37 @@ int qda_prime_fd_to_handle(struct drm_device *drm_dev, struct drm_file *file_pri
 	return ret;
 }
 
+/**
+ * qda_prime_import_dmabuf() - Import a DMA-BUF without installing a handle
+ * @drm_dev: DRM device
+ * @session: Session to import into
+ * @dma_buf: Buffer to import
+ *
+ * As qda_prime_fd_to_handle(), but stopping at the GEM object: a session the
+ * legacy shim created has no DRM file to install a handle in. The caller owns
+ * the returned reference.
+ *
+ * Return: The new GEM object on success, ERR_PTR on failure
+ */
+struct drm_gem_object *qda_prime_import_dmabuf(struct drm_device *drm_dev,
+					       struct qda_session *session,
+					       struct dma_buf *dma_buf)
+{
+	struct qda_dev *qdev = qda_dev_from_drm(drm_dev);
+	struct drm_gem_object *gem_obj;
+	int ret;
+
+	ret = qda_memory_manager_assign_device(qdev->iommu_mgr, session);
+	if (ret)
+		return ERR_PTR(ret);
+
+	guard(mutex)(&qdev->import_lock);
+
+	qdev->importing_session = session;
+	gem_obj = qda_gem_prime_import(drm_dev, dma_buf);
+	qdev->importing_session = NULL;
+
+	return gem_obj;
+}
+
 MODULE_IMPORT_NS("DMA_BUF");

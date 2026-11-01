@@ -10,6 +10,7 @@ qda-y := \
 	qda_drv.o \
 	qda_gem.o \
 	qda_ioctl.o \
+	qda_legacy_ops.o \
 	qda_memory_dma.o \
 	qda_memory_manager.o \
 	qda_prime.o \
