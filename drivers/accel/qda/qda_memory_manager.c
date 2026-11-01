@@ -5,6 +5,8 @@
 #include <linux/spinlock.h>
 #include <drm/drm_print.h>
 #include "qda_drv.h"
+#include "qda_gem.h"
+#include "qda_memory_dma.h"
 #include "qda_memory_manager.h"
 
 static void iommu_device_free(struct kref *ref)
@@ -84,6 +86,41 @@ void qda_memory_manager_release_device(struct qda_iommu_device *iommu_dev)
 		iommu_dev->assigned_session = NULL;
 
 	kref_put(&iommu_dev->ref, iommu_device_free);
+}
+
+/**
+ * qda_memory_manager_alloc() - Allocate a buffer for a session
+ * @mem_mgr: Memory manager of the device
+ * @gem_obj: GEM object to back with the allocation
+ * @session: Session the buffer belongs to
+ *
+ * Allocates from the context bank the session owns, assigning it one on its
+ * first allocation.
+ *
+ * Return: 0 on success, negative error code on failure
+ */
+int qda_memory_manager_alloc(struct qda_memory_manager *mem_mgr, struct qda_gem_obj *gem_obj,
+			     struct qda_session *session)
+{
+	int ret;
+
+	ret = qda_memory_manager_assign_device(mem_mgr, session);
+	if (ret)
+		return ret;
+
+	return qda_dma_alloc(session->assigned_iommu_dev, gem_obj, gem_obj->size);
+}
+
+/**
+ * qda_memory_manager_free() - Release a buffer
+ * @gem_obj: GEM object to free
+ *
+ * The buffer remembers the context bank it was allocated from, so no
+ * memory manager is needed here.
+ */
+void qda_memory_manager_free(struct qda_gem_obj *gem_obj)
+{
+	qda_dma_free(gem_obj);
 }
 
 /**

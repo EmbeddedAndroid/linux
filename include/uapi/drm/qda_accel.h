@@ -12,10 +12,16 @@
 extern "C" {
 #endif
 
-#define DRM_QDA_QUERY		0x00
+#define DRM_QDA_QUERY			0x00
+#define DRM_QDA_GEM_CREATE		0x01
+#define DRM_QDA_GEM_MMAP_OFFSET		0x02
 
 #define DRM_IOCTL_QDA_QUERY		DRM_IOWR(DRM_COMMAND_BASE + DRM_QDA_QUERY, \
 					 struct drm_qda_query)
+#define DRM_IOCTL_QDA_GEM_CREATE	DRM_IOWR(DRM_COMMAND_BASE + DRM_QDA_GEM_CREATE, \
+					 struct drm_qda_gem_create)
+#define DRM_IOCTL_QDA_GEM_MMAP_OFFSET	DRM_IOWR(DRM_COMMAND_BASE + DRM_QDA_GEM_MMAP_OFFSET, \
+					 struct drm_qda_gem_mmap_offset)
 
 /* Query type definitions for drm_qda_query */
 #define QDA_QUERY_DSP_NAME		1
@@ -32,6 +38,36 @@ extern "C" {
 struct drm_qda_query {
 	__u32 query_type;
 	__u8 dsp_name[16];
+};
+
+/**
+ * struct drm_qda_gem_create - Buffer allocation parameters
+ * @size: Size of the buffer to allocate in bytes (input)
+ * @handle: Handle of the new buffer (output)
+ * @pad: Must be zero
+ *
+ * Allocates a buffer the DSP can access and returns a handle to it. The
+ * handle identifies the buffer in later ioctls, and the buffer is released
+ * when the last handle to it is closed.
+ */
+struct drm_qda_gem_create {
+	__u64 size;
+	__u32 handle;
+	__u32 pad;
+};
+
+/**
+ * struct drm_qda_gem_mmap_offset - Buffer mmap offset query
+ * @offset: Offset to pass to mmap() (output)
+ * @handle: Handle of the buffer (input)
+ * @pad: Must be zero
+ *
+ * Returns the offset at which a buffer can be mmap()ed on the accel node.
+ */
+struct drm_qda_gem_mmap_offset {
+	__u64 offset;
+	__u32 handle;
+	__u32 pad;
 };
 
 #if defined(__cplusplus)

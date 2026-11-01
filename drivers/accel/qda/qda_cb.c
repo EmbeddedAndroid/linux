@@ -10,7 +10,7 @@
 #include "qda_memory_manager.h"
 #include "qda_soc.h"
 
-static int qda_cb_setup_device(struct qda_dev *qdev, struct device *cb_dev)
+static int qda_cb_setup_device(struct qda_dev *qdev, struct device *cb_dev, u32 sid)
 {
 	struct qda_iommu_device *iommu_dev;
 	int ret;
@@ -21,6 +21,7 @@ static int qda_cb_setup_device(struct qda_dev *qdev, struct device *cb_dev)
 
 	iommu_dev->dev = cb_dev;
 	iommu_dev->qdev = qdev;
+	iommu_dev->sid = sid;
 
 	ret = qda_memory_manager_register_device(qdev->iommu_mgr, iommu_dev);
 	if (ret) {
@@ -50,7 +51,16 @@ static int qda_create_cb_device(struct qda_dev *qdev, struct device_node *cb_nod
 	struct qda_cb_dev *entry;
 	struct platform_device *pdev;
 	u32 dma_bits;
+	u32 sid = 0;
 	int ret;
+
+	/*
+	 * The stream ID identifies the context bank to the DSP. A node without
+	 * one is accepted so that buffers can still be allocated from it, but
+	 * the DSP will then see every such bank as stream ID 0.
+	 */
+	if (of_property_read_u32(cb_node, "reg", &sid))
+		drm_info(&qdev->drm_dev, "No stream ID in %pOFn, using 0\n", cb_node);
 
 	pdev = of_platform_device_create(cb_node, NULL, qdev->dev);
 	if (!pdev) {
@@ -66,7 +76,7 @@ static int qda_create_cb_device(struct qda_dev *qdev, struct device_node *cb_nod
 		goto err_destroy;
 	}
 
-	ret = qda_cb_setup_device(qdev, &pdev->dev);
+	ret = qda_cb_setup_device(qdev, &pdev->dev, sid);
 	if (ret)
 		goto err_destroy;
 
