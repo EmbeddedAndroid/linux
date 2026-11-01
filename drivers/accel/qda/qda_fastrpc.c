@@ -633,7 +633,7 @@ void qda_fastrpc_flush_pending(struct qda_dev *qdev)
  */
 void qda_fastrpc_return_result(struct qda_fastrpc_invoke_ctx *ctx, void *argp)
 {
-	struct drm_qda_mem_map *margs = argp;
+	struct qda_mem_map_args *map_args = argp;
 	struct qda_fastrpc_map_rsp_msg *rsp;
 	int idx;
 
@@ -650,7 +650,7 @@ void qda_fastrpc_return_result(struct qda_fastrpc_invoke_ctx *ctx, void *argp)
 
 	rsp = (struct qda_fastrpc_map_rsp_msg *)
 	      ((u8 *)to_qda_gem_obj(ctx->gem_objs[idx])->virt + ctx->args[idx].offset);
-	margs->vaddrout = rsp->vaddrout;
+	map_args->map.vaddrout = rsp->vaddrout;
 }
 
 /**
@@ -935,19 +935,33 @@ out_put:
  * buffer is held by the context until the request is done, so that closing its
  * handle meanwhile cannot free memory the DSP is being told to map. The
  * region must fit in the buffer, as the DSP would otherwise map past its end.
+ *
+ * A caller with no handle table supplies the buffer already imported. It is
+ * checked as a buffer named by handle would be: an fd can name a buffer that
+ * another session exported, which resolves to the original object, still
+ * mapped in that session's context bank.
  */
-static int setup_mmap_pages(struct qda_fastrpc_invoke_ctx *ctx, struct drm_qda_mem_map *margs,
+static int setup_mmap_pages(struct qda_fastrpc_invoke_ctx *ctx, struct qda_mem_map_args *args,
 			    struct qda_phy_page *pages)
 {
+	struct drm_qda_mem_map *margs = &args->map;
 	struct qda_gem_obj *qda_gem_obj;
 	int err;
 
-	if (!margs->handle)
-		return -EINVAL;
+	if (args->obj) {
+		if (to_qda_gem_obj(args->obj)->iommu_dev != ctx->session->assigned_iommu_dev)
+			return -EACCES;
 
-	err = get_gem_obj_from_handle(ctx, margs->handle, &ctx->map_obj);
-	if (err)
-		return err;
+		drm_gem_object_get(args->obj);
+		ctx->map_obj = args->obj;
+	} else {
+		if (!margs->handle)
+			return -EINVAL;
+
+		err = get_gem_obj_from_handle(ctx, margs->handle, &ctx->map_obj);
+		if (err)
+			return err;
+	}
 
 	qda_gem_obj = to_qda_gem_obj(ctx->map_obj);
 	if (margs->size > qda_gem_obj->size)
@@ -967,7 +981,8 @@ static int setup_mmap_pages(struct qda_fastrpc_invoke_ctx *ctx, struct drm_qda_m
  */
 static int qda_fastrpc_prepare_args_map(struct qda_fastrpc_invoke_ctx *ctx, void *argp)
 {
-	struct drm_qda_mem_map *margs = argp;
+	struct qda_mem_map_args *map_args = argp;
+	struct drm_qda_mem_map *margs = &map_args->map;
 	struct qda_fastrpc_map_req_msg *req;
 	struct qda_gem_obj *kernel_gem;
 	u8 *gv;
@@ -996,7 +1011,7 @@ static int qda_fastrpc_prepare_args_map(struct qda_fastrpc_invoke_ctx *ctx, void
 	req->vaddr = margs->vaddrin;
 	req->num = sizeof(struct qda_phy_page);
 
-	err = setup_mmap_pages(ctx, margs, (struct qda_phy_page *)(gv + off_pages));
+	err = setup_mmap_pages(ctx, map_args, (struct qda_phy_page *)(gv + off_pages));
 	if (err)
 		goto out_put;
 
@@ -1020,7 +1035,8 @@ out_put:
  */
 static int qda_fastrpc_prepare_args_mem_map(struct qda_fastrpc_invoke_ctx *ctx, void *argp)
 {
-	struct drm_qda_mem_map *margs = argp;
+	struct qda_mem_map_args *map_args = argp;
+	struct drm_qda_mem_map *margs = &map_args->map;
 	struct qda_fastrpc_mem_map_req_msg *req;
 	struct qda_gem_obj *kernel_gem;
 	u8 *gv;
@@ -1056,7 +1072,7 @@ static int qda_fastrpc_prepare_args_mem_map(struct qda_fastrpc_invoke_ctx *ctx, 
 	req->num = sizeof(struct qda_phy_page);
 	req->data_len = 0;
 
-	err = setup_mmap_pages(ctx, margs, (struct qda_phy_page *)(gv + off_pages));
+	err = setup_mmap_pages(ctx, map_args, (struct qda_phy_page *)(gv + off_pages));
 	if (err)
 		goto out_put;
 

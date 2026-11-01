@@ -75,6 +75,79 @@ static int legacy_release(struct qda_session *session)
 	return qda_release_dsp_process(session->qda_dev, session);
 }
 
+static int legacy_mmap(struct qda_session *session, struct drm_gem_object *obj,
+		       u64 vaddrin, u64 size, u32 flags, u64 *vaddrout)
+{
+	struct qda_mem_map_args args = {
+		.map = {
+			.request = QDA_REQUEST_MMAP,
+			.flags = flags,
+			.vaddrin = vaddrin,
+			.size = size,
+		},
+		.obj = obj,
+	};
+	int err;
+
+	err = qda_session_mem_map(session, &args);
+	if (err)
+		return err;
+
+	*vaddrout = args.map.vaddrout;
+
+	return 0;
+}
+
+static int legacy_mem_map(struct qda_session *session, struct drm_gem_object *obj, u32 flags,
+			  u32 attrs, u32 offset, u64 vaddrin, u64 size, s32 dsp_handle,
+			  u64 *vaddrout)
+{
+	struct qda_mem_map_args args = {
+		.map = {
+			.request = QDA_REQUEST_MEM_MAP,
+			.flags = flags,
+			.attrs = attrs,
+			.offset = offset,
+			.dsp_handle = dsp_handle,
+			.vaddrin = vaddrin,
+			.size = size,
+		},
+		.obj = obj,
+	};
+	int err;
+
+	err = qda_session_mem_map(session, &args);
+	if (err)
+		return err;
+
+	*vaddrout = args.map.vaddrout;
+
+	return 0;
+}
+
+static int legacy_munmap(struct qda_session *session, u64 vaddrout, u64 size)
+{
+	struct drm_qda_mem_unmap unmap = {
+		.request = QDA_REQUEST_MUNMAP,
+		.vaddrout = vaddrout,
+		.size = size,
+	};
+
+	return qda_session_mem_unmap(session, &unmap);
+}
+
+static int legacy_mem_unmap(struct qda_session *session, s32 dsp_handle, u64 vaddr, u64 size)
+{
+	struct drm_qda_mem_unmap unmap = {
+		.request = QDA_REQUEST_MEM_UNMAP,
+		.dsp_handle = dsp_handle,
+		.vaddr = vaddr,
+		.size = size,
+	};
+
+	return qda_session_mem_unmap(session, &unmap);
+}
+
 /*
  * As the GEM_CREATE ioctl, but exporting a DMA-BUF rather than installing a
  * handle: a session the shim created has no DRM file to hold handles, and the
@@ -120,6 +193,10 @@ const struct qda_legacy_ops qda_legacy_ops_table = {
 	.session_destroy = legacy_session_destroy,
 	.init_create = legacy_init_create,
 	.release = legacy_release,
+	.mmap = legacy_mmap,
+	.mem_map = legacy_mem_map,
+	.munmap = legacy_munmap,
+	.mem_unmap = legacy_mem_unmap,
 	.alloc_dmabuf = legacy_alloc_dmabuf,
 	.import_dmabuf = legacy_import_dmabuf,
 	.invoke = legacy_invoke,
