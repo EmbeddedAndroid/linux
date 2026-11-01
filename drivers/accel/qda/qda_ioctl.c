@@ -183,7 +183,7 @@ int qda_release_dsp_process(struct qda_dev *qdev, struct qda_session *session)
  * so that a concurrent one cannot skip the heap while the first is still in
  * flight, and the flag is set only once the DSP has accepted it.
  */
-static int qda_attach_audio_pd(struct qda_session *session, struct drm_qda_remote_attach *args)
+static int qda_attach_audio_pd(struct qda_session *session, const char __user *uname, u32 namelen)
 {
 	struct qda_dev *qdev = session->qda_dev;
 	struct qda_static_pd_args sargs = {};
@@ -193,20 +193,20 @@ static int qda_attach_audio_pd(struct qda_session *session, struct drm_qda_remot
 	if (strcmp(qdev->dsp_name, "adsp") || !qdev->remote_heap_size)
 		return -ENODEV;
 
-	if (!args->namelen || args->namelen > QDA_FASTRPC_INIT_NAMELEN_MAX)
+	if (!namelen || namelen > QDA_FASTRPC_INIT_NAMELEN_MAX)
 		return -EINVAL;
 
-	name = memdup_user(u64_to_user_ptr(args->name), args->namelen);
+	name = memdup_user(uname, namelen);
 	if (IS_ERR(name))
 		return PTR_ERR(name);
 
-	if (name[args->namelen - 1]) {
+	if (name[namelen - 1]) {
 		err = -EINVAL;
 		goto out_free;
 	}
 
 	sargs.name = name;
-	sargs.namelen = args->namelen;
+	sargs.namelen = namelen;
 
 	scoped_guard(mutex, &qdev->remote_heap_lock) {
 		if (!qdev->audio_init_mem) {
@@ -226,6 +226,45 @@ out_free:
 }
 
 /**
+ * qda_session_attach() - Attach a session to a DSP-resident protection domain
+ * @session: Session to attach
+ * @pd_type: QDA_ATTACH_ROOT_PD, QDA_ATTACH_SENSORS_PD or QDA_ATTACH_AUDIO_PD
+ * @name: User pointer to the static PD name (QDA_ATTACH_AUDIO_PD only)
+ * @namelen: Length of @name including the NUL (QDA_ATTACH_AUDIO_PD only)
+ *
+ * Shared by the accel UAPI and the legacy shim, so the privilege check lives
+ * here rather than on the ioctl.
+ *
+ * Return: 0 on success, negative error code on failure
+ */
+int qda_session_attach(struct qda_session *session, u32 pd_type, const char __user *name,
+		       u32 namelen)
+{
+	int pd;
+
+	if (!capable(CAP_SYS_ADMIN))
+		return -EPERM;
+
+	if (READ_ONCE(session->init_mem_gem_obj))
+		return -EBUSY;
+
+	switch (pd_type) {
+	case QDA_ATTACH_ROOT_PD:
+	case QDA_ATTACH_SENSORS_PD:
+		if (name || namelen)
+			return -EINVAL;
+
+		pd = pd_type == QDA_ATTACH_ROOT_PD ? QDA_ROOT_PD : QDA_SENSORS_PD;
+
+		return qda_fastrpc_invoke(QDA_FASTRPC_RMID_INIT_ATTACH, &pd, session);
+	case QDA_ATTACH_AUDIO_PD:
+		return qda_attach_audio_pd(session, name, namelen);
+	default:
+		return -EINVAL;
+	}
+}
+
+/**
  * qda_ioctl_attach() - Attach to a DSP-resident protection domain
  * @dev: DRM device structure
  * @data: User-space data (struct drm_qda_remote_attach)
@@ -236,26 +275,9 @@ out_free:
 int qda_ioctl_attach(struct drm_device *dev, void *data, struct drm_file *file_priv)
 {
 	struct drm_qda_remote_attach *args = data;
-	struct qda_session *session = file_priv->driver_priv;
-	int pd;
 
-	if (READ_ONCE(session->init_mem_gem_obj))
-		return -EBUSY;
-
-	switch (args->pd_type) {
-	case QDA_ATTACH_ROOT_PD:
-	case QDA_ATTACH_SENSORS_PD:
-		if (args->name || args->namelen)
-			return -EINVAL;
-
-		pd = args->pd_type == QDA_ATTACH_ROOT_PD ? QDA_ROOT_PD : QDA_SENSORS_PD;
-
-		return qda_fastrpc_invoke(QDA_FASTRPC_RMID_INIT_ATTACH, &pd, session);
-	case QDA_ATTACH_AUDIO_PD:
-		return qda_attach_audio_pd(session, args);
-	default:
-		return -EINVAL;
-	}
+	return qda_session_attach(file_priv->driver_priv, args->pd_type,
+				  u64_to_user_ptr(args->name), args->namelen);
 }
 
 /**
