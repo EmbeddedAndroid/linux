@@ -1100,14 +1100,28 @@ static int wsa883x_update_status(struct sdw_slave *slave,
 				 enum sdw_slave_status status)
 {
 	struct wsa883x_priv *wsa883x = dev_get_drvdata(&slave->dev);
+	int ret;
 
-	if (status == SDW_SLAVE_UNATTACHED)
+	if (status == SDW_SLAVE_UNATTACHED) {
 		wsa883x->hw_init = false;
+		regcache_cache_only(wsa883x->regmap, true);
+		regcache_mark_dirty(wsa883x->regmap);
+		return 0;
+	}
 
-	if (status == SDW_SLAVE_ATTACHED && slave->dev_num > 0)
-		return wsa883x_init(wsa883x);
+	if (wsa883x->hw_init || status != SDW_SLAVE_ATTACHED || !slave->dev_num)
+		return 0;
 
-	return 0;
+	/*
+	 * The amplifier lost its state, and its regmap may be cache-only if
+	 * it is runtime suspended: initialise it through the bus.
+	 */
+	regcache_cache_only(wsa883x->regmap, false);
+	ret = regcache_sync(wsa883x->regmap);
+	if (ret)
+		return ret;
+
+	return wsa883x_init(wsa883x);
 }
 
 static int wsa883x_port_prep(struct sdw_slave *slave,
