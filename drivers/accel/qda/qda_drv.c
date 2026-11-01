@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+#include <linux/auxiliary_bus.h>
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <drm/drm_accel.h>
@@ -14,7 +15,13 @@
 #include "qda_ioctl.h"
 #include "qda_prime.h"
 
-static struct qda_session *qda_session_alloc(struct qda_dev *qdev)
+/**
+ * qda_session_alloc() - Create a session on a device
+ * @qdev: Device to create the session on
+ *
+ * Return: The new session, or ERR_PTR on failure
+ */
+struct qda_session *qda_session_alloc(struct qda_dev *qdev)
 {
 	struct qda_session *session;
 
@@ -26,6 +33,7 @@ static struct qda_session *qda_session_alloc(struct qda_dev *qdev)
 
 	return session;
 }
+EXPORT_SYMBOL_FOR_MODULES(qda_session_alloc, "qda_fastrpc_shim");
 
 static int qda_open(struct drm_device *dev, struct drm_file *file)
 {
@@ -42,13 +50,18 @@ static int qda_open(struct drm_device *dev, struct drm_file *file)
 	return 0;
 }
 
-static void qda_session_free(struct qda_session *session)
+/**
+ * qda_session_free() - Release a session and whatever it still holds
+ * @session: Session to release
+ */
+void qda_session_free(struct qda_session *session)
 {
 	if (session->assigned_iommu_dev)
 		qda_memory_manager_release_device(session->assigned_iommu_dev);
 
 	kfree(session);
 }
+EXPORT_SYMBOL_FOR_MODULES(qda_session_free, "qda_fastrpc_shim");
 
 static void qda_postclose(struct drm_device *dev, struct drm_file *file)
 {
@@ -117,10 +130,37 @@ int qda_register_device(struct qda_dev *qdev)
 	int ret;
 
 	ret = drm_dev_register(&qdev->drm_dev, 0);
-	if (ret)
+	if (ret) {
 		drm_err(&qdev->drm_dev, "Failed to register DRM device: %d\n", ret);
+		return ret;
+	}
 
-	return ret;
+	/*
+	 * The legacy FastRPC interface is served by a separate module, which
+	 * needs a device per DSP domain to bind to. Put one on the auxiliary
+	 * bus and let the driver core handle discovery, ordering and module
+	 * loading; the module is optional, so failing to create it is not
+	 * fatal to the accel interface.
+	 *
+	 * The auxiliary bus names devices <modname>.<name>.<id> and requires
+	 * the name to be unique across the bus, so every DSP domain needs its
+	 * own id. The accel minor index is unique per registered device.
+	 */
+	qdev->legacy_auxdev = auxiliary_device_create(qdev->dev, KBUILD_MODNAME,
+						      QDA_LEGACY_AUXDEV_NAME, qdev,
+						      qdev->drm_dev.accel->index);
+	if (!qdev->legacy_auxdev)
+		drm_warn(&qdev->drm_dev, "Failed to create legacy FastRPC device\n");
+
+	return 0;
+}
+
+void qda_unregister_device(struct qda_dev *qdev)
+{
+	if (qdev->legacy_auxdev) {
+		auxiliary_device_destroy(qdev->legacy_auxdev);
+		qdev->legacy_auxdev = NULL;
+	}
 }
 
 MODULE_AUTHOR("Qualcomm AI Infra Team");

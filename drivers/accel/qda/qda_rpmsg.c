@@ -50,6 +50,9 @@ static void qda_rpmsg_remove(struct rpmsg_device *rpdev)
 {
 	struct qda_dev *qdev = dev_get_drvdata(&rpdev->dev);
 
+	/* Take the legacy nodes away first, so nothing new opens during teardown */
+	qda_unregister_device(qdev);
+
 	/*
 	 * Unplug before clearing @rpdev: once there are ioctls that reach the
 	 * DSP, this is what stops a new one from starting and waits for the
