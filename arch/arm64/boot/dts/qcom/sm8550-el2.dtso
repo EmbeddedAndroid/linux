@@ -24,17 +24,17 @@
 	status = "disabled";
 };
 
-/* No PAS service authenticates and starts the DSPs at EL2 yet. */
+/*
+ * At EL2 Linux owns the APPS SMMU, which blocks unknown streams: describe the
+ * DSP streams the hypervisor maps otherwise, so that the PAS driver maps the
+ * DSP carve-outs for them.
+ */
 &remoteproc_adsp {
-	status = "disabled";
+	iommus = <&apps_smmu 0x1000 0x0>;
 };
 
 &remoteproc_cdsp {
-	status = "disabled";
-};
-
-&remoteproc_mpss {
-	status = "disabled";
+	iommus = <&apps_smmu 0x0c00 0x0>;
 };
 
 /*
