@@ -979,6 +979,11 @@
 	};
 };
 
+&i2c5 {
+	/* The ADSP also drives this bus and needs the firmware loaded here */
+	status = "okay";
+};
+
 &iris {
 	status = "okay";
 };
@@ -1163,6 +1168,8 @@
 };
 
 &qupv3_1 {
+	firmware-name = "qcom/sm8750/qupv3fw.elf";
+
 	status = "okay";
 };
 
