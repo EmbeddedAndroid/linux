@@ -34,12 +34,18 @@ enum domain_type {
 	DECODER	= BIT(1),
 };
 
+struct iommu_domain;
+struct qcom_pas_context;
 struct qcom_ubwc_cfg_data;
 
 /**
  * struct iris_core - holds core parameters valid for all instances
  *
  * @dev: reference to device structure
+ * @fw_dev: device of the firmware stream, when Linux manages its IOMMU
+ * @fw_domain: IOMMU domain of @fw_dev
+ * @fw_mapped: size of the firmware region mapped in @fw_domain
+ * @pas_ctx: PAS context for the authenticated firmware load
  * @reg_base: IO memory base address
  * @irq: iris irq
  * @v4l2_dev: a holder for v4l2 device structure
@@ -86,6 +92,10 @@ struct qcom_ubwc_cfg_data;
 
 struct iris_core {
 	struct device				*dev;
+	struct device				*fw_dev;
+	struct iommu_domain			*fw_domain;
+	size_t					fw_mapped;
+	struct qcom_pas_context			*pas_ctx;
 	void __iomem				*reg_base;
 	int					irq;
 	struct v4l2_device			v4l2_dev;

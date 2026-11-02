@@ -5,6 +5,9 @@
 
 #include <linux/firmware.h>
 #include <linux/firmware/qcom/qcom_pas.h>
+#include <linux/iommu.h>
+#include <linux/of_device.h>
+#include <linux/platform_device.h>
 #include <linux/of_address.h>
 #include <linux/of_reserved_mem.h>
 #include <linux/soc/qcom/mdt_loader.h>
@@ -13,6 +16,7 @@
 #include "iris_firmware.h"
 
 #define IRIS_PAS_ID				9
+#define IRIS_FIRMWARE_START_ADDR		0
 
 /* Detect Gen2 firmware by scanning the blob for:
  *   QC_IMAGE_VERSION_STRING=<version>
@@ -170,6 +174,35 @@ static void iris_detect_firmware(struct iris_core *core, const char *fw_name,
 	core->iris_firmware_desc = desc;
 }
 
+/*
+ * Without a hypervisor, nothing translates the firmware's own stream: the
+ * core runs its image at IRIS_FIRMWARE_START_ADDR, so map the firmware
+ * region there in the domain of the firmware stream device.
+ */
+static int iris_fw_iommu_map(struct iris_core *core, phys_addr_t mem_phys,
+			     size_t size)
+{
+	int ret;
+
+	ret = iommu_map(core->fw_domain, IRIS_FIRMWARE_START_ADDR, mem_phys, size,
+			IOMMU_READ | IOMMU_WRITE | IOMMU_PRIV, GFP_KERNEL);
+	if (ret)
+		return ret;
+
+	core->fw_mapped = size;
+
+	return 0;
+}
+
+static void iris_fw_iommu_unmap(struct iris_core *core)
+{
+	if (!core->fw_mapped)
+		return;
+
+	iommu_unmap(core->fw_domain, IRIS_FIRMWARE_START_ADDR, core->fw_mapped);
+	core->fw_mapped = 0;
+}
+
 static int iris_load_fw_to_memory(struct iris_core *core)
 {
 	const struct iris_firmware_desc *desc = NULL;
@@ -190,6 +223,16 @@ static int iris_load_fw_to_memory(struct iris_core *core)
 	mem_phys = res.start;
 	res_size = resource_size(&res);
 
+	if (!core->pas_ctx) {
+		core->pas_ctx = devm_qcom_pas_context_alloc(dev, IRIS_PAS_ID,
+							    mem_phys, res_size);
+		if (IS_ERR(core->pas_ctx)) {
+			ret = PTR_ERR(core->pas_ctx);
+			core->pas_ctx = NULL;
+			return ret;
+		}
+	}
+
 	firmware = iris_load_firmware(core, &fw_name, &desc);
 	if (IS_ERR(firmware))
 		return PTR_ERR(firmware);
@@ -208,13 +251,20 @@ static int iris_load_fw_to_memory(struct iris_core *core)
 
 	memset(mem_virt, 0, res_size);
 
-	ret = qcom_mdt_load(dev, firmware, fw_name,
-			    IRIS_PAS_ID, mem_virt, mem_phys, res_size, NULL);
+	/* Without a hypervisor, an SCM PAS service needs a shared memory bridge */
+	core->pas_ctx->use_tzmem = !!core->fw_dev;
+	ret = qcom_mdt_pas_load(core->pas_ctx, firmware, fw_name, NULL);
 
 	if (!ret)
 		iris_detect_firmware(core, fw_name, mem_virt, res_size, desc);
 
 	memunmap(mem_virt);
+
+	if (!ret && core->fw_dev) {
+		ret = iris_fw_iommu_map(core, mem_phys, res_size);
+		if (ret)
+			dev_err(dev, "could not map the firmware region: %d\n", ret);
+	}
 err_release_fw:
 	release_firmware(firmware);
 
@@ -229,13 +279,15 @@ int iris_fw_load(struct iris_core *core)
 	ret = iris_load_fw_to_memory(core);
 	if (ret) {
 		dev_err(core->dev, "firmware download failed %d\n", ret);
+		qcom_pas_metadata_release(core->pas_ctx);
 		return ret;
 	}
 
-	ret = qcom_pas_auth_and_reset(IRIS_PAS_ID);
+	ret = qcom_pas_prepare_and_auth_reset(core->pas_ctx);
+	qcom_pas_metadata_release(core->pas_ctx);
 	if (ret)  {
 		dev_err(core->dev, "auth and reset failed: %d\n", ret);
-		return ret;
+		goto err_unmap;
 	}
 
 	for (i = 0; i < core->iris_platform_data->tz_cp_config_data_size; i++) {
@@ -246,17 +298,93 @@ int iris_fw_load(struct iris_core *core)
 						     cp_config->cp_nonpixel_size);
 		if (ret) {
 			dev_err(core->dev, "qcom_pas_mem_protect_video_var failed: %d\n", ret);
-			qcom_pas_shutdown(IRIS_PAS_ID);
-			return ret;
+			goto err_shutdown;
 		}
 	}
 
 	return 0;
+
+err_shutdown:
+	qcom_pas_shutdown(IRIS_PAS_ID);
+err_unmap:
+	iris_fw_iommu_unmap(core);
+
+	return ret;
 }
 
 int iris_fw_unload(struct iris_core *core)
 {
-	return qcom_pas_shutdown(IRIS_PAS_ID);
+	int ret;
+
+	ret = qcom_pas_shutdown(IRIS_PAS_ID);
+	iris_fw_iommu_unmap(core);
+
+	return ret;
+}
+
+/*
+ * The "video-firmware" child describes the stream the core fetches its
+ * firmware with, on platforms where Linux and not a hypervisor manages the
+ * IOMMU.
+ */
+int iris_fw_dev_init(struct iris_core *core)
+{
+	struct platform_device_info info = {};
+	struct iommu_domain *domain;
+	struct platform_device *pdev;
+	struct device_node *np;
+	int ret;
+
+	np = of_get_child_by_name(core->dev->of_node, "video-firmware");
+	if (!np)
+		return 0;
+
+	info.fwnode = of_fwnode_handle(np);
+	info.parent = core->dev;
+	info.name = np->name;
+
+	pdev = platform_device_register_full(&info);
+	of_node_put(np);
+	if (IS_ERR(pdev))
+		return PTR_ERR(pdev);
+
+	ret = of_dma_configure(&pdev->dev, pdev->dev.of_node, true);
+	if (ret)
+		goto err_unregister;
+
+	domain = iommu_paging_domain_alloc(&pdev->dev);
+	if (IS_ERR(domain)) {
+		ret = PTR_ERR(domain);
+		goto err_unregister;
+	}
+
+	ret = iommu_attach_device(domain, &pdev->dev);
+	if (ret)
+		goto err_free_domain;
+
+	core->fw_dev = &pdev->dev;
+	core->fw_domain = domain;
+
+	return 0;
+
+err_free_domain:
+	iommu_domain_free(domain);
+err_unregister:
+	platform_device_unregister(pdev);
+
+	return ret;
+}
+
+void iris_fw_dev_deinit(struct iris_core *core)
+{
+	if (!core->fw_dev)
+		return;
+
+	iommu_detach_device(core->fw_domain, core->fw_dev);
+	iommu_domain_free(core->fw_domain);
+	platform_device_unregister(to_platform_device(core->fw_dev));
+	core->fw_domain = NULL;
+	core->fw_dev = NULL;
 }
 
 int iris_set_hw_state(struct iris_core *core, bool resume)

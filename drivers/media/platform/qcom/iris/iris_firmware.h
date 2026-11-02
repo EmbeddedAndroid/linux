@@ -8,6 +8,8 @@
 
 struct iris_core;
 
+int iris_fw_dev_init(struct iris_core *core);
+void iris_fw_dev_deinit(struct iris_core *core);
 int iris_fw_load(struct iris_core *core);
 int iris_fw_unload(struct iris_core *core);
 int iris_set_hw_state(struct iris_core *core, bool resume);
