@@ -17,8 +17,9 @@
 };
 
 &iris {
-	/* TODO: Add video-firmware iommus to start IRIS from EL2 */
-	status = "disabled";
+	video-firmware {
+		iommus = <&apps_smmu 0x1942 0x0>;
+	};
 };
 
 /*
