@@ -450,9 +450,18 @@ static void sc8280xp_snd_exit(struct snd_soc_pcm_runtime *rtd)
 	struct sc8280xp_snd_data *data = snd_soc_card_get_drvdata(rtd->card);
 	struct snd_soc_dai *cpu_dai = snd_soc_rtd_to_cpu(rtd, 0);
 	const struct sc8280xp_dai_data *dai_data;
+	enum sc8280xp_jack_setup setup;
 
 	dai_data = sc8280xp_get_dai_data(data->priv, cpu_dai->id);
-	if (dai_data && dai_data->jack_setup == SC8280XP_JACK_SETUP_CODEC) {
+	if (dai_data)
+		setup = dai_data->jack_setup;
+	else if (data->priv->wcd_jack)
+		setup = SC8280XP_JACK_SETUP_WCD;
+	else
+		setup = SC8280XP_JACK_SETUP_NONE;
+
+	/* The jack is freed with the card; the card can be bound again. */
+	if (setup != SC8280XP_JACK_SETUP_NONE) {
 		qcom_snd_headset_jack_cleanup(rtd);
 		data->jack_setup = false;
 	}
