@@ -265,10 +265,12 @@ int iris_fw_load(struct iris_core *core)
 	ret = iris_load_fw_to_memory(core);
 	if (ret) {
 		dev_err(core->dev, "firmware download failed %d\n", ret);
+		qcom_pas_metadata_release(core->pas_ctx);
 		return ret;
 	}
 
 	ret = qcom_pas_prepare_and_auth_reset(core->pas_ctx);
+	qcom_pas_metadata_release(core->pas_ctx);
 	if (ret)  {
 		dev_err(core->dev, "auth and reset failed: %d\n", ret);
 		goto err_unmap;
