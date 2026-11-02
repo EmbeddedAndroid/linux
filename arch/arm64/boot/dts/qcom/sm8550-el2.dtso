@@ -14,11 +14,6 @@
 	status = "okay";
 };
 
-/* No PAS service loads the zap shader at EL2; Linux resets the GPU itself. */
-&gpu_zap_shader {
-	status = "disabled";
-};
-
 &iris {
 	/* TODO: Add video-firmware iommus to start IRIS from EL2 */
 	status = "disabled";
