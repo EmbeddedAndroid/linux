@@ -10,6 +10,10 @@
 
 #include <dt-bindings/interrupt-controller/arm-gic.h>
 
+&apss_watchdog {
+	status = "okay";
+};
+
 /* No PAS service loads the zap shader at EL2; Linux resets the GPU itself. */
 &gpu_zap_shader {
 	status = "disabled";
