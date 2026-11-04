@@ -33,7 +33,11 @@ properties:
     maxItems: 6
 
   iommus:
-    maxItems: 1
+    minItems: 1
+    items:
+      - description: Stream of the remote processor's own memory accesses
+      - description: Stream of an additional bus master of the remote
+          processor subsystem, such as the LPASS island of an ADSP
 
   power-domains:
     minItems: 1
