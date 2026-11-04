@@ -50,7 +50,11 @@ properties:
     const: qup-core
 
   iommus:
-    maxItems: 1
+    minItems: 1
+    maxItems: 2
+    description:
+      Stream IDs of the QUP wrapper. Some wrappers issue SE DMA with a
+      second stream ID besides the GPI DMA one.
 
   dma-coherent: true
 
