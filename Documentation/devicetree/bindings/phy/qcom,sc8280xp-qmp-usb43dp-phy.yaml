@@ -61,7 +61,12 @@ properties:
     maxItems: 5
 
   power-domains:
-    maxItems: 1
+    minItems: 1
+    items:
+      - description: PHY power domain, or the USB controller power domain
+          on SoCs without a separate PHY power domain
+      - description: USB controller power domain, gating the com_aux and
+          pipe clocks of the PHY
 
   resets:
     maxItems: 2
@@ -271,10 +276,15 @@ allOf:
           enum:
             - qcom,glymur-qmp-usb3-dp-phy
     then:
+      properties:
+        power-domains:
+          minItems: 2
       required:
         - refgen-supply
     else:
       properties:
+        power-domains:
+          maxItems: 1
         refgen-supply: false
 
 additionalProperties: false
