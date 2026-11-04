@@ -990,6 +990,11 @@ static int qcom_scm_pas_mem_protect_video_var(struct device *dev, u32 cp_start,
 					      cp_nonpixel_size);
 }
 
+static int qcom_scm_pas_gpu_init_regs(struct device *dev, u32 gpu_req)
+{
+	return qcom_scm_gpu_init_regs(gpu_req);
+}
+
 static struct qcom_pas_ops qcom_pas_ops_scm = {
 	.drv_name		= "qcom_scm",
 	.supported		= qcom_scm_pas_supported,
@@ -1001,6 +1006,7 @@ static struct qcom_pas_ops qcom_pas_ops_scm = {
 	.set_remote_state	= qcom_scm_pas_set_remote_state,
 	.shutdown		= qcom_scm_pas_shutdown,
 	.mem_protect_video_var	= qcom_scm_pas_mem_protect_video_var,
+	.gpu_init_regs		= qcom_scm_pas_gpu_init_regs,
 	.metadata_release	= qcom_scm_pas_metadata_release,
 };
 

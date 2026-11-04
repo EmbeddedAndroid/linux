@@ -265,6 +265,27 @@ int qcom_pas_mem_protect_video_var(u32 cp_start, u32 cp_size,
 EXPORT_SYMBOL_GPL(qcom_pas_mem_protect_video_var);
 
 /**
+ * qcom_pas_gpu_init_regs() - Set up the GPU registers owned by the firmware
+ * @gpu_req:	bitmask of QCOM_SCM_GPU_* requests
+ *
+ * Backends whose firmware sets these registers up at boot do not implement
+ * this operation, in which case it is a no-op.
+ *
+ * Return: 0 on success.
+ */
+int qcom_pas_gpu_init_regs(u32 gpu_req)
+{
+	if (!ops_ptr)
+		return -ENODEV;
+
+	if (!ops_ptr->gpu_init_regs)
+		return 0;
+
+	return ops_ptr->gpu_init_regs(ops_ptr->dev, gpu_req);
+}
+EXPORT_SYMBOL_GPL(qcom_pas_gpu_init_regs);
+
+/**
  * qcom_pas_supported() - Check if the peripheral authentication service is
  *			  supported for the given peripheral
  * @pas_id:	peripheral authentication service id

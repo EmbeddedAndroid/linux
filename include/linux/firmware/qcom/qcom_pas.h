@@ -51,6 +51,7 @@ int qcom_pas_set_remote_state(u32 state, u32 pas_id);
 int qcom_pas_shutdown(u32 pas_id);
 int qcom_pas_mem_protect_video_var(u32 cp_start, u32 cp_size,
 				   u32 cp_nonpixel_start, u32 cp_nonpixel_size);
+int qcom_pas_gpu_init_regs(u32 gpu_req);
 bool qcom_pas_supported(u32 pas_id);
 void qcom_pas_metadata_release(struct qcom_pas_context *ctx);
 
