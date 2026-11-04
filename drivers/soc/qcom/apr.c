@@ -344,9 +344,14 @@ static int apr_device_probe(struct device *dev)
 	struct apr_driver *adrv = to_apr_driver(dev->driver);
 	int ret;
 
+	/*
+	 * GPR services may wait for a reply to a command they send from their
+	 * probe, so the callback must be in place first.
+	 */
+	adev->svc.callback = adrv->gpr_callback;
 	ret = adrv->probe(adev);
-	if (!ret)
-		adev->svc.callback = adrv->gpr_callback;
+	if (ret)
+		adev->svc.callback = NULL;
 
 	return ret;
 }

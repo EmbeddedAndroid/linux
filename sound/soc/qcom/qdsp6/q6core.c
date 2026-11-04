@@ -2,6 +2,7 @@
 // Copyright (c) 2011-2017, The Linux Foundation. All rights reserved.
 // Copyright (c) 2018, Linaro Limited
 
+#include <linux/delay.h>
 #include <linux/slab.h>
 #include <linux/wait.h>
 #include <linux/kernel.h>
@@ -16,6 +17,7 @@
 
 #define ADSP_STATE_READY_TIMEOUT_MS    3000
 #define Q6_READY_TIMEOUT_MS 100
+#define Q6_READY_POLL_MS	10
 #define AVCS_CMD_ADSP_EVENT_GET_STATE		0x0001290C
 #define AVCS_CMDRSP_ADSP_EVENT_GET_STATE	0x0001290D
 #define AVCS_GET_VERSIONS       0x00012905
@@ -54,6 +56,7 @@ struct q6core {
 	struct apr_device *adev;
 	wait_queue_head_t wait;
 	uint32_t avcs_state;
+	u32 get_state_status;
 	struct mutex lock;
 	bool resp_received;
 	uint32_t num_services;
@@ -91,6 +94,7 @@ static int q6core_callback(struct apr_device *adev, const struct apr_resp_pkt *d
 		case AVCS_CMD_ADSP_EVENT_GET_STATE:
 			if (result->status == ADSP_EUNSUPPORTED)
 				core->get_state_supported = false;
+			core->get_state_status = result->status;
 			core->resp_received = true;
 			break;
 		}
@@ -210,6 +214,9 @@ static bool __q6core_is_adsp_ready(struct q6core *core)
 	int rc;
 
 	core->get_state_supported = false;
+	core->get_state_status = 0;
+	core->avcs_state = 0;
+	core->resp_received = false;
 
 	pkt.hdr.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD,
 				      APR_HDR_LEN(APR_HDR_SIZE), APR_PKT_VER);
@@ -227,6 +234,11 @@ static bool __q6core_is_adsp_ready(struct q6core *core)
 
 		if (core->avcs_state)
 			return true;
+
+		/* The DSP rejects every command until its services are up */
+		if (core->get_state_status &&
+		    core->get_state_status != ADSP_EUNSUPPORTED)
+			return false;
 	}
 
 	/* assume that the adsp is up if we not support this command */
@@ -318,6 +330,8 @@ bool q6core_is_adsp_ready(void)
 			ret = false;
 			break;
 		}
+
+		msleep(Q6_READY_POLL_MS);
 	}
 
 	mutex_unlock(&g_core->lock);
