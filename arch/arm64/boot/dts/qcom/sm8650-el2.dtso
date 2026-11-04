@@ -14,6 +14,14 @@
 	status = "okay";
 };
 
+/*
+ * The CP fetches the zap shader through GPU SMMU stream 3, which the
+ * hypervisor maps otherwise.
+ */
+&gpu_zap_shader {
+	iommus = <&adreno_smmu 3 0x0>;
+};
+
 &iris {
 	/* TODO: Add video-firmware iommus to start IRIS from EL2 */
 	status = "disabled";
