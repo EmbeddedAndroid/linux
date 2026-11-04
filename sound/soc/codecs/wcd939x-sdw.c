@@ -194,9 +194,21 @@ EXPORT_SYMBOL_GPL(wcd939x_sdw_set_sdw_stream);
 static int wcd9390_interrupt_callback(struct sdw_slave *slave,
 				      struct sdw_slave_intr_status *status)
 {
+	static const u8 masks[] = { 0xff, 0xff, 0xff };
 	struct wcd939x_sdw_priv *wcd = dev_get_drvdata(&slave->dev);
+	struct irq_domain *slave_irq = wcd->slave_irq;
 
-	return wcd_interrupt_callback(slave, wcd->slave_irq, WCD939X_DIGITAL_INTR_STATUS_0,
+	/*
+	 * Until the codec binds there is no interrupt chip to acknowledge the
+	 * codec interrupts, and a pending one keeps the device alerting:
+	 * mask them. Creating the chip at bind writes the masks again.
+	 */
+	if (!slave_irq) {
+		sdw_nwrite(slave, WCD939X_DIGITAL_INTR_MASK_0, sizeof(masks), masks);
+		return 0;
+	}
+
+	return wcd_interrupt_callback(slave, slave_irq, WCD939X_DIGITAL_INTR_STATUS_0,
 			WCD939X_DIGITAL_INTR_STATUS_1, WCD939X_DIGITAL_INTR_STATUS_2);
 }
 
