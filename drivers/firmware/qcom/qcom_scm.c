@@ -981,6 +981,29 @@ static bool qcom_scm_pas_supported(struct device *dev, u32 pas_id)
 	return ret ? false : !!res.result[0];
 }
 
+static int qcom_scm_pas_mem_protect_video_var(struct device *dev, u32 cp_start,
+					      u32 cp_size, u32 cp_nonpixel_start,
+					      u32 cp_nonpixel_size)
+{
+	int ret;
+	struct qcom_scm_desc desc = {
+		.svc = QCOM_SCM_SVC_MP,
+		.cmd = QCOM_SCM_MP_VIDEO_VAR,
+		.arginfo = QCOM_SCM_ARGS(4, QCOM_SCM_VAL, QCOM_SCM_VAL,
+					 QCOM_SCM_VAL, QCOM_SCM_VAL),
+		.args[0] = cp_start,
+		.args[1] = cp_size,
+		.args[2] = cp_nonpixel_start,
+		.args[3] = cp_nonpixel_size,
+		.owner = ARM_SMCCC_OWNER_SIP,
+	};
+	struct qcom_scm_res res;
+
+	ret = qcom_scm_call(dev, &desc, &res);
+
+	return ret ? : res.result[0];
+}
+
 static struct qcom_pas_ops qcom_pas_ops_scm = {
 	.drv_name		= "qcom_scm",
 	.supported		= qcom_scm_pas_supported,
@@ -991,6 +1014,7 @@ static struct qcom_pas_ops qcom_pas_ops_scm = {
 	.prepare_and_auth_reset	= qcom_scm_pas_prepare_and_auth_reset,
 	.set_remote_state	= qcom_scm_pas_set_remote_state,
 	.shutdown		= qcom_scm_pas_shutdown,
+	.mem_protect_video_var	= qcom_scm_pas_mem_protect_video_var,
 	.metadata_release	= qcom_scm_pas_metadata_release,
 };
 
@@ -1203,30 +1227,6 @@ int qcom_scm_iommu_set_cp_pool_size(u32 spare, u32 size)
 	return qcom_scm_call(__scm->dev, &desc, NULL);
 }
 EXPORT_SYMBOL_GPL(qcom_scm_iommu_set_cp_pool_size);
-
-int qcom_scm_mem_protect_video_var(u32 cp_start, u32 cp_size,
-				   u32 cp_nonpixel_start,
-				   u32 cp_nonpixel_size)
-{
-	int ret;
-	struct qcom_scm_desc desc = {
-		.svc = QCOM_SCM_SVC_MP,
-		.cmd = QCOM_SCM_MP_VIDEO_VAR,
-		.arginfo = QCOM_SCM_ARGS(4, QCOM_SCM_VAL, QCOM_SCM_VAL,
-					 QCOM_SCM_VAL, QCOM_SCM_VAL),
-		.args[0] = cp_start,
-		.args[1] = cp_size,
-		.args[2] = cp_nonpixel_start,
-		.args[3] = cp_nonpixel_size,
-		.owner = ARM_SMCCC_OWNER_SIP,
-	};
-	struct qcom_scm_res res;
-
-	ret = qcom_scm_call(__scm->dev, &desc, &res);
-
-	return ret ? : res.result[0];
-}
-EXPORT_SYMBOL_GPL(qcom_scm_mem_protect_video_var);
 
 static int __qcom_scm_assign_mem(struct device *dev, phys_addr_t mem_region,
 				 size_t mem_sz, phys_addr_t src, size_t src_sz,
