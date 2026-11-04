@@ -41,6 +41,8 @@
  * @addr:		Resource address as looped up using resource name from
  *			cmd-db
  * @state_synced:	Indicator that sync_state has been invoked for the rpmhpd resource
+ * @skip_sync_state_clamp: Pass votes through before sync_state instead of
+ *			holding the rail at its highest level
  */
 struct rpmhpd {
 	struct device	*dev;
@@ -57,6 +59,7 @@ struct rpmhpd {
 	const char	*res_name;
 	u32		addr;
 	bool		state_synced;
+	bool		skip_sync_state_clamp;
 };
 
 struct rpmhpd_desc {
@@ -208,14 +211,22 @@ static struct rpmhpd nsp = {
 	.res_name = "nsp.lvl",
 };
 
+/*
+ * The NSP rails feed only the NSPs, which their remoteproc drivers boot and
+ * which then vote for their own rail; no bootloader state depends on them.
+ * An apps vote held at the highest level until sync_state makes the NSP
+ * firmware crash when sync_state drops it.
+ */
 static struct rpmhpd nsp0 = {
 	.pd = { .name = "nsp0", },
 	.res_name = "nsp0.lvl",
+	.skip_sync_state_clamp = true,
 };
 
 static struct rpmhpd nsp1 = {
 	.pd = { .name = "nsp1", },
 	.res_name = "nsp1.lvl",
+	.skip_sync_state_clamp = true,
 };
 
 static struct rpmhpd nsp2 = {
@@ -1006,7 +1017,7 @@ static int rpmhpd_aggregate_corner(struct rpmhpd *pd, unsigned int corner)
 	unsigned int peer_active_corner = 0, peer_sleep_corner = 0;
 	unsigned int peer_enabled_corner;
 
-	if (pd->state_synced) {
+	if (pd->state_synced || pd->skip_sync_state_clamp) {
 		to_active_sleep(pd, corner, &this_active_corner, &this_sleep_corner);
 	} else {
 		/* Clamp to highest corner if sync_state hasn't happened */
