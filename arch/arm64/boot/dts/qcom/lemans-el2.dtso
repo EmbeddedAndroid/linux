@@ -10,6 +10,17 @@
 /dts-v1/;
 /plugin/;
 
+#include <dt-bindings/interrupt-controller/arm-gic.h>
+
+&arch_timer {
+	interrupt-parent = <&intc>;
+	interrupts = <GIC_PPI 13 IRQ_TYPE_LEVEL_LOW>,
+		     <GIC_PPI 14 IRQ_TYPE_LEVEL_LOW>,
+		     <GIC_PPI 11 IRQ_TYPE_LEVEL_LOW>,
+		     <GIC_PPI 10 IRQ_TYPE_LEVEL_LOW>,
+		     <GIC_PPI 12 IRQ_TYPE_LEVEL_LOW>;
+};
+
 &gpu_zap_shader {
 	status = "disabled";
 };
