@@ -3,6 +3,7 @@
 
 #include <linux/bitfield.h>
 #include <linux/clk.h>
+#include <linux/firmware/qcom/qcom_pas.h>
 #include <linux/firmware/qcom/qcom_scm.h>
 #include <linux/interconnect.h>
 #include <linux/of_platform.h>
@@ -1215,7 +1216,7 @@ static int a6xx_gmu_secure_init(struct a6xx_gpu *a6xx_gpu)
 	struct adreno_gpu *adreno_gpu = &a6xx_gpu->base;
 	struct msm_gpu *gpu = &adreno_gpu->base;
 	struct a6xx_gmu *gmu = &a6xx_gpu->gmu;
-	u32 fuse_val;
+	u32 fuse_val, req;
 	int ret;
 
 	if (test_bit(GMU_STATUS_SECURE_INIT, &gmu->status))
@@ -1241,8 +1242,12 @@ static int a6xx_gmu_secure_init(struct a6xx_gpu *a6xx_gpu)
 			goto done;
 		}
 
-		ret = qcom_scm_gpu_init_regs(QCOM_SCM_GPU_ALWAYS_EN_REQ |
-					     QCOM_SCM_GPU_TSENSE_EN_REQ);
+		req = QCOM_SCM_GPU_ALWAYS_EN_REQ | QCOM_SCM_GPU_TSENSE_EN_REQ;
+		/* SCM can serve this call without serving PAS */
+		if (qcom_pas_is_available())
+			ret = qcom_pas_gpu_init_regs(req);
+		else
+			ret = qcom_scm_gpu_init_regs(req);
 		if (ret) {
 			dev_warn_once(gpu->dev->dev,
 				"SCM call failed\n");
@@ -1251,8 +1256,8 @@ static int a6xx_gmu_secure_init(struct a6xx_gpu *a6xx_gpu)
 
 		/*
 		 * On A7XX_GEN3 and newer, raytracing may be disabled by the
-		 * firmware, find out whether that's the case. The scm call
-		 * above sets the fuse register.
+		 * firmware, find out whether that's the case. The firmware
+		 * sets the fuse register, on the call above or at boot.
 		 */
 		fuse_val = a6xx_cx_misc_read(a6xx_gpu,
 					 REG_A7XX_CX_MISC_SW_FUSE_VALUE);
