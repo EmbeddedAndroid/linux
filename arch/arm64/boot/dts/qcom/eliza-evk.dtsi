@@ -188,6 +188,10 @@
 	vdd3-supply = <&vreg_l17b>;
 };
 
+&qupv3_1 {
+	firmware-name = "qcom/eliza/qupv3fw.elf";
+};
+
 &sdhc_2 {
 	vmmc-supply = <&vreg_l13b>;
 	vqmmc-supply = <&vreg_l23b>;
