@@ -486,7 +486,12 @@ int handle_exit(struct kvm_vcpu *vcpu, int exception_index)
 	}
 }
 
-static void handle_exit_pkvm_state(struct kvm_vcpu *vcpu, int exception_index)
+/*
+ * Called with interrupts masked, before the host takes the interrupt that
+ * may have caused the exit: its handler can then tell which copy of the
+ * context it must update (see pkvm_sync_host_vcpu_state()).
+ */
+void handle_exit_pkvm_state(struct kvm_vcpu *vcpu, int exception_index)
 {
 	int exception_code = ARM_EXCEPTION_CODE(exception_index);
 
@@ -507,11 +512,25 @@ static void handle_exit_pkvm_state(struct kvm_vcpu *vcpu, int exception_index)
 	}
 }
 
+/*
+ * Make the host copy of a non-protected vCPU's context authoritative
+ * before the host changes it outside of a trap, as a PMU overflow
+ * interrupt does. Otherwise the next entry keeps the hyp copy and the
+ * next sync overwrites the change.
+ */
+void pkvm_sync_host_vcpu_state(struct kvm_vcpu *vcpu)
+{
+	if (!is_protected_kvm_enabled() || kvm_vm_is_protected(vcpu->kvm) ||
+	    vcpu_get_flag(vcpu, PKVM_HOST_STATE_DIRTY))
+		return;
+
+	kvm_call_hyp_nvhe(__pkvm_vcpu_sync_state);
+	vcpu_set_flag(vcpu, PKVM_HOST_STATE_DIRTY);
+}
+
 /* For exit types that need handling before we can be preempted */
 void handle_exit_early(struct kvm_vcpu *vcpu, int exception_index)
 {
-	handle_exit_pkvm_state(vcpu, exception_index);
-
 	if (ARM_SERROR_PENDING(exception_index)) {
 		if (this_cpu_has_cap(ARM64_HAS_RAS_EXTN)) {
 			u64 disr = kvm_vcpu_get_disr(vcpu);
