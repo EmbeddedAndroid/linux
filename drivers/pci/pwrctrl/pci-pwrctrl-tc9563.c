@@ -666,12 +666,10 @@ static int tc9563_pwrctrl_probe(struct platform_device *pdev)
 
 	ret = devm_pci_pwrctrl_device_set_ready(dev, &tc9563->pwrctrl);
 	if (ret)
-		goto power_off;
+		goto remove_i2c;
 
 	return 0;
 
-power_off:
-	tc9563_pwrctrl_power_off(&tc9563->pwrctrl);
 remove_i2c:
 	i2c_unregister_device(tc9563->client);
 	i2c_put_adapter(tc9563->adapter);
@@ -684,7 +682,6 @@ static void tc9563_pwrctrl_remove(struct platform_device *pdev)
 	struct tc9563_pwrctrl *tc9563 = container_of(pwrctrl,
 					struct tc9563_pwrctrl, pwrctrl);
 
-	tc9563_pwrctrl_power_off(&tc9563->pwrctrl);
 	i2c_unregister_device(tc9563->client);
 	i2c_put_adapter(tc9563->adapter);
 }
