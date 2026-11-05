@@ -1093,7 +1093,13 @@ static int __reset_add_reset_gpio_device(struct fwnode_handle *fwnode,
 		goto err_put_fwnode;
 	}
 
-	ret = reset_create_gpio_aux_device(rgpio_dev, parent);
+	/*
+	 * The reset-gpio device outlives the GPIO chip: when the controller's
+	 * driver unbinds, the gpio_device is deleted together with the sysfs
+	 * directories of its children. Parent it to the controller device,
+	 * which stays registered across driver rebinds.
+	 */
+	ret = reset_create_gpio_aux_device(rgpio_dev, parent->parent ?: parent);
 	if (ret)
 		goto err_del_swnode;
 
