@@ -546,6 +546,8 @@ static void kvm_pmu_perf_overflow(struct perf_event *perf_event,
 	perf_event->attr.sample_period = period;
 	perf_event->hw.sample_period = period;
 
+	pkvm_sync_host_vcpu_state(vcpu);
+
 	__vcpu_rmw_sys_reg(vcpu, PMOVSSET_EL0, |=, BIT(idx));
 
 	if (kvm_pmu_counter_can_chain(pmc))
