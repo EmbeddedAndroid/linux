@@ -370,8 +370,11 @@ out:
 	ffa_to_smccc_res(res, ret);
 }
 
+/* The kind of the transaction whose fragments do_ffa_mem_frag_tx() takes. */
+static bool ffa_xfer_is_lend;
+
 static u32 __ffa_host_share_ranges(struct ffa_mem_region_addr_range *ranges,
-				   u32 nranges)
+				   u32 nranges, bool lend)
 {
 	u32 i;
 
@@ -383,7 +386,8 @@ static u32 __ffa_host_share_ranges(struct ffa_mem_region_addr_range *ranges,
 		if (!PAGE_ALIGNED(sz | range->address))
 			break;
 
-		if (__pkvm_host_share_ffa(pfn, sz / PAGE_SIZE))
+		if (lend ? __pkvm_host_lend_ffa(pfn, sz / PAGE_SIZE) :
+			   __pkvm_host_share_ffa(pfn, sz / PAGE_SIZE))
 			break;
 	}
 
@@ -403,7 +407,9 @@ static u32 __ffa_host_unshare_ranges(struct ffa_mem_region_addr_range *ranges,
 		if (!PAGE_ALIGNED(sz | range->address))
 			break;
 
-		if (__pkvm_host_unshare_ffa(pfn, sz / PAGE_SIZE))
+		/* A reclaim does not say whether the handle was lent. */
+		if (__pkvm_host_unshare_ffa(pfn, sz / PAGE_SIZE) &&
+		    __pkvm_host_reclaim_lent_ffa(pfn, sz / PAGE_SIZE))
 			break;
 	}
 
@@ -411,9 +417,9 @@ static u32 __ffa_host_unshare_ranges(struct ffa_mem_region_addr_range *ranges,
 }
 
 static int ffa_host_share_ranges(struct ffa_mem_region_addr_range *ranges,
-				 u32 nranges)
+				 u32 nranges, bool lend)
 {
-	u32 nshared = __ffa_host_share_ranges(ranges, nranges);
+	u32 nshared = __ffa_host_share_ranges(ranges, nranges, lend);
 	int ret = 0;
 
 	if (nshared != nranges) {
@@ -431,7 +437,7 @@ static int ffa_host_unshare_ranges(struct ffa_mem_region_addr_range *ranges,
 	int ret = 0;
 
 	if (nunshared != nranges) {
-		WARN_ON(__ffa_host_share_ranges(ranges, nunshared) != nunshared);
+		WARN_ON(__ffa_host_share_ranges(ranges, nunshared, false) != nunshared);
 		ret = FFA_RET_DENIED;
 	}
 
@@ -468,7 +474,7 @@ static void do_ffa_mem_frag_tx(struct arm_smccc_1_2_regs *res,
 	memcpy(buf, host_buffers.tx, fraglen);
 	nr_ranges = fraglen / sizeof(*buf);
 
-	ret = ffa_host_share_ranges(buf, nr_ranges);
+	ret = ffa_host_share_ranges(buf, nr_ranges, ffa_xfer_is_lend);
 	if (ret) {
 		/*
 		 * We're effectively aborting the transaction, so we need
@@ -577,7 +583,8 @@ static void __do_ffa_mem_xfer(const u64 func_id,
 	}
 
 	nr_ranges /= sizeof(reg->constituents[0]);
-	ret = ffa_host_share_ranges(reg->constituents, nr_ranges);
+	ffa_xfer_is_lend = func_id == FFA_FN64_MEM_LEND;
+	ret = ffa_host_share_ranges(reg->constituents, nr_ranges, ffa_xfer_is_lend);
 	if (ret)
 		goto out_unlock;
 
