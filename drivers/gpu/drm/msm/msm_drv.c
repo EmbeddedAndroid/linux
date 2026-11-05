@@ -115,8 +115,12 @@ static bool msm_separate_gpu_kms_auto(void)
 	int gpus = msm_count_gpus();
 	int display_subsystems = msm_count_mdss() + msm_count_mdp4();
 
-	if (gpus <= 0 || display_subsystems <= 0)
+	if (gpus <= 0)
 		return false;
+
+	/* Without a display subsystem the GPU has no master to bind to */
+	if (display_subsystems <= 0)
+		return true;
 
 	/* Single card if there is exactly one GPU and one display subsystem */
 	return gpus > 1 || display_subsystems > 1;
