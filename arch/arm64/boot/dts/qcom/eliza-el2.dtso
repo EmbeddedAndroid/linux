@@ -22,6 +22,13 @@
 	status = "disabled";
 };
 
+/* Stream of the iris core's own firmware fetches, mapped by Gunyah at EL1 */
+&iris {
+	video-firmware {
+		iommus = <&apps_smmu 0x1942 0x0>;
+	};
+};
+
 &remoteproc_adsp {
 	iommus = <&apps_smmu 0x1000 0x0>,
 		 <&apps_smmu 0x100c 0x0>;
