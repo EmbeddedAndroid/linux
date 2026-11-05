@@ -1361,6 +1361,8 @@ void kvm_resume_vcpu(struct kvm_vcpu *vcpu);
 
 int handle_exit(struct kvm_vcpu *vcpu, int exception_index);
 void handle_exit_early(struct kvm_vcpu *vcpu, int exception_index);
+void handle_exit_pkvm_state(struct kvm_vcpu *vcpu, int exception_index);
+void pkvm_sync_host_vcpu_state(struct kvm_vcpu *vcpu);
 
 int kvm_handle_cp14_load_store(struct kvm_vcpu *vcpu);
 int kvm_handle_cp14_32(struct kvm_vcpu *vcpu);

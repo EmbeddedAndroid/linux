@@ -1502,6 +1502,8 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu)
 		 * Back from guest
 		 *************************************************************/
 
+		handle_exit_pkvm_state(vcpu, ret);
+
 		/*
 		 * We must sync the PMU state before the vgic state so
 		 * that the vgic can properly sample the updated state of the
