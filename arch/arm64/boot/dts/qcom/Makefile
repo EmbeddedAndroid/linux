@@ -16,12 +16,14 @@ dtb-$(CONFIG_ARCH_QCOM)	+= apq8096sg-db820c.dtb
 dtb-$(CONFIG_ARCH_QCOM)	+= apq8096-ifc6640.dtb
 dtb-$(CONFIG_ARCH_QCOM)	+= eliza-cqs-evk.dtb
 
-eliza-cqs-evk-el2-dtbs	:= eliza-cqs-evk.dtb eliza-el2.dtbo
+eliza-cqs-evk-el2-dtbs	:= eliza-cqs-evk.dtb eliza-el2.dtbo eliza-el2-fw-streams.dtbo
+eliza-cqs-evk-el2-fw-smmu-dtbs	:= eliza-cqs-evk.dtb eliza-el2.dtbo
 
 dtb-$(CONFIG_ARCH_QCOM)	+= eliza-cqs-evk-el2.dtb
+dtb-$(CONFIG_ARCH_QCOM)	+= eliza-cqs-evk-el2-fw-smmu.dtb
 dtb-$(CONFIG_ARCH_QCOM)	+= eliza-mtp.dtb
 
-eliza-mtp-el2-dtbs	:= eliza-mtp.dtb eliza-el2.dtbo
+eliza-mtp-el2-dtbs	:= eliza-mtp.dtb eliza-el2.dtbo eliza-el2-fw-streams.dtbo
 
 dtb-$(CONFIG_ARCH_QCOM)	+= eliza-mtp-el2.dtb
 
