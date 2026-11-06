@@ -1,0 +1,23 @@
+// SPDX-License-Identifier: BSD-3-Clause
+/*
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ *
+ * Agatti specific modifications required to boot in EL2.
+ */
+
+/dts-v1/;
+/plugin/;
+
+&remoteproc_adsp {
+	iommus = <&apps_smmu 0x1c0 0x0>;
+};
+
+&gpu_zap_shader {
+	iommus = <&adreno_smmu 0x3 0x0>;
+};
+
+&venus {
+	video-firmware {
+		iommus = <&apps_smmu 0x882 0x0>;
+	};
+};
