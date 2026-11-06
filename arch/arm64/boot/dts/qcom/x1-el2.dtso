@@ -17,8 +17,9 @@
 };
 
 &iris {
-	/* TODO: Add video-firmware iommus to start IRIS from EL2 */
-	status = "disabled";
+	video-firmware {
+		iommus = <&apps_smmu 0x1942 0x0>;
+	};
 };
 
 /*
@@ -53,7 +54,8 @@
 };
 
 &remoteproc_adsp {
-	iommus = <&apps_smmu 0x1000 0x80>;
+	iommus = <&apps_smmu 0x1000 0x80>,
+		 <&apps_smmu 0x100c 0x0>;
 };
 
 &remoteproc_cdsp {
