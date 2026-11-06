@@ -8,12 +8,17 @@
 /dts-v1/;
 /plugin/;
 
+#include <dt-bindings/interrupt-controller/arm-gic.h>
+
 &gpu_zap_shader {
 	status = "disabled";
 };
 
 &iris {
-	status = "disabled";
+	status = "okay";
+	video-firmware {
+		iommus = <&apps_smmu 0x0882 0x0400>;
+	};
 };
 
 &remoteproc_adsp {
@@ -26,4 +31,13 @@
 
 &remoteproc_gpdsp {
 	iommus = <&apps_smmu 0x28a0 0x0>;
+};
+
+&{/timer} {
+	interrupt-parent = <&intc>;
+	interrupts = <GIC_PPI 13 IRQ_TYPE_LEVEL_LOW 0>,
+		     <GIC_PPI 14 IRQ_TYPE_LEVEL_LOW 0>,
+		     <GIC_PPI 11 IRQ_TYPE_LEVEL_LOW 0>,
+		     <GIC_PPI 10 IRQ_TYPE_LEVEL_LOW 0>,
+		     <GIC_PPI 12 IRQ_TYPE_LEVEL_LOW 0>;
 };
