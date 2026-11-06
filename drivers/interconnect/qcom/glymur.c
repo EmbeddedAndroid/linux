@@ -1928,6 +1928,7 @@ static const struct qcom_icc_desc glymur_aggre3_noc = {
 	.config = &glymur_aggre3_noc_regmap_config,
 	.nodes = aggre3_noc_nodes,
 	.num_nodes = ARRAY_SIZE(aggre3_noc_nodes),
+	.qos_requires_clocks = true,
 };
 
 static struct qcom_icc_bcm * const aggre4_noc_bcms[] = {
