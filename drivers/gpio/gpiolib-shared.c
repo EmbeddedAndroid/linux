@@ -362,13 +362,22 @@ static bool gpio_shared_dev_is_reset_gpio(struct device *consumer,
 {
 	struct fwnode_handle *reset_fwnode = dev_fwnode(consumer);
 	struct fwnode_reference_args ref_args, aux_args;
+	struct device *parent = consumer->parent;
 	struct gpio_shared_ref *real_ref;
 	bool match;
 	int ret;
 
 	lockdep_assert_held(&ref->lock);
 
-	if (!reset_fwnode)
+	/* The reset-gpio device must have a parent AND a firmware node. */
+	if (!parent || !reset_fwnode)
+		return false;
+
+	/*
+	 * Parent of the reset-gpio auxiliary device is the GPIO chip whose
+	 * fwnode we stored in the entry structure.
+	 */
+	if (!device_match_fwnode(parent, entry->fwnode))
 		return false;
 
 	/*
