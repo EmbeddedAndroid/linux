@@ -886,6 +886,10 @@
 	status = "okay";
 };
 
+&pmm8654au_0_rtc {
+	allow-set-time;
+};
+
 &pmm8654au_2_gpios {
 	usb0_intr_state: usb0-intr-state {
 		pins = "gpio5";

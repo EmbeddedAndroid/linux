@@ -3853,6 +3853,7 @@
 			clocks = <&aoss_qmp>;
 			clock-names = "apb_pclk";
 			arm,coresight-loses-context-with-cpu;
+			arm,primecell-periphid = <0x002bbd4b>;
 			qcom,skip-power-up;
 
 			out-ports {
@@ -3873,6 +3874,7 @@
 			clocks = <&aoss_qmp>;
 			clock-names = "apb_pclk";
 			arm,coresight-loses-context-with-cpu;
+			arm,primecell-periphid = <0x002bbd4b>;
 			qcom,skip-power-up;
 
 			out-ports {
@@ -3893,6 +3895,7 @@
 			clocks = <&aoss_qmp>;
 			clock-names = "apb_pclk";
 			arm,coresight-loses-context-with-cpu;
+			arm,primecell-periphid = <0x002bbd4b>;
 			qcom,skip-power-up;
 
 			out-ports {
@@ -3913,6 +3916,7 @@
 			clocks = <&aoss_qmp>;
 			clock-names = "apb_pclk";
 			arm,coresight-loses-context-with-cpu;
+			arm,primecell-periphid = <0x002bbd4b>;
 			qcom,skip-power-up;
 
 			out-ports {
@@ -3933,6 +3937,7 @@
 			clocks = <&aoss_qmp>;
 			clock-names = "apb_pclk";
 			arm,coresight-loses-context-with-cpu;
+			arm,primecell-periphid = <0x002bbd4b>;
 			qcom,skip-power-up;
 
 			out-ports {
@@ -3953,6 +3958,7 @@
 			clocks = <&aoss_qmp>;
 			clock-names = "apb_pclk";
 			arm,coresight-loses-context-with-cpu;
+			arm,primecell-periphid = <0x002bbd4b>;
 			qcom,skip-power-up;
 
 			out-ports {
@@ -3973,6 +3979,7 @@
 			clocks = <&aoss_qmp>;
 			clock-names = "apb_pclk";
 			arm,coresight-loses-context-with-cpu;
+			arm,primecell-periphid = <0x002bbd4b>;
 			qcom,skip-power-up;
 
 			out-ports {
@@ -3993,6 +4000,7 @@
 			clocks = <&aoss_qmp>;
 			clock-names = "apb_pclk";
 			arm,coresight-loses-context-with-cpu;
+			arm,primecell-periphid = <0x002bbd4b>;
 			qcom,skip-power-up;
 
 			out-ports {
