@@ -16,6 +16,7 @@
 #include <linux/of_graph.h>
 #include <linux/phy/phy.h>
 #include <linux/platform_device.h>
+#include <linux/pm_domain.h>
 #include <linux/regulator/consumer.h>
 #include <linux/reset.h>
 #include <linux/slab.h>
@@ -5499,10 +5500,15 @@ static int qmp_combo_get_dt_usb3_orientation(struct device *dev,
 	return 0;
 }
 
+static const struct dev_pm_domain_attach_data qmp_combo_pd_data = {
+	.pd_flags = PD_FLAG_DEV_LINK_ON,
+};
+
 static int qmp_combo_probe(struct platform_device *pdev)
 {
 	struct qmp_combo *qmp;
 	struct device *dev = &pdev->dev;
+	struct dev_pm_domain_list *pd_list;
 	struct device_node *dp_np, *usb_np;
 	struct phy_provider *phy_provider;
 	int ret;
@@ -5530,6 +5536,15 @@ static int qmp_combo_probe(struct platform_device *pdev)
 					qmp->cfg->vreg_list, &qmp->vregs);
 	if (ret)
 		return ret;
+
+	/* The driver core only attaches a single power domain by itself */
+	if (!dev->pm_domain) {
+		ret = devm_pm_domain_attach_list(dev, &qmp_combo_pd_data,
+						 &pd_list);
+		if (ret < 0)
+			return dev_err_probe(dev, ret,
+					     "failed to attach power domains\n");
+	}
 
 	/* Check for legacy binding with child nodes. */
 	usb_np = of_get_child_by_name(dev->of_node, "usb3-phy");
