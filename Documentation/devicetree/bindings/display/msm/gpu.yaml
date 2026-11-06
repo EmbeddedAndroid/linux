@@ -113,6 +113,12 @@ properties:
         description: |
           Default name of the firmware to load to the remote processor.
 
+      iommus:
+        maxItems: 1
+        description:
+          Stream the CP fetches the zap shader with, for an OS that owns
+          the GPU SMMU without a hypervisor mapping that stream for it.
+
   "#cooling-cells":
     const: 2
 
