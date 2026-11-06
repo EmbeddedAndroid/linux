@@ -9525,7 +9525,7 @@ static int ufshcd_device_init(struct ufs_hba *hba, bool init_dev_params)
 	ufshcd_set_link_active(hba);
 
 	/* Reconfigure MCQ upon reset */
-	if (hba->mcq_enabled && !init_dev_params) {
+	if (hba->mcq_enabled) {
 		ufshcd_config_mcq(hba);
 		ufshcd_mcq_enable(hba);
 	}
@@ -9548,11 +9548,6 @@ static int ufshcd_device_init(struct ufs_hba *hba, bool init_dev_params)
 		ret = ufshcd_device_params_init(hba);
 		if (ret)
 			return ret;
-		if (is_mcq_supported(hba) &&
-		    hba->quirks & UFSHCD_QUIRK_REINIT_AFTER_MAX_GEAR_SWITCH) {
-			ufshcd_config_mcq(hba);
-			ufshcd_mcq_enable(hba);
-		}
 	}
 
 	return ufshcd_post_device_init(hba);
