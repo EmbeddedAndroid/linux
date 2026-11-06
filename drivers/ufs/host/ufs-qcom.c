@@ -2414,7 +2414,9 @@ static void ufs_qcom_write_msi_msg(struct msi_desc *desc, struct msi_msg *msg)
 {
 	struct device *dev = msi_desc_to_dev(desc);
 	struct ufs_hba *hba = dev_get_drvdata(dev);
+	struct ufs_qcom_host *host = ufshcd_get_variant(hba);
 
+	host->esi_msg = *msg;
 	ufshcd_mcq_config_esi(hba, msg);
 }
 
@@ -2442,8 +2444,10 @@ static int ufs_qcom_config_esi(struct ufs_hba *hba)
 	struct ufs_qcom_irq *qi;
 	int nr_irqs, ret;
 
-	if (host->esi_enabled)
-		return 0;
+	if (host->esi_enabled) {
+		ufshcd_mcq_config_esi(hba, &host->esi_msg);
+		goto enable;
+	}
 
 	/*
 	 * 1. We only handle CQs as of now.
@@ -2481,12 +2485,14 @@ static int ufs_qcom_config_esi(struct ufs_hba *hba)
 		}
 	}
 
+	host->esi_enabled = true;
+
+enable:
 	if (host->hw_ver.major >= 6) {
 		ufshcd_rmwl(hba, ESI_VEC_MASK, FIELD_PREP(ESI_VEC_MASK, MAX_ESI_VEC - 1),
 			    REG_UFS_CFG3);
 	}
 	ufshcd_mcq_enable_esi(hba);
-	host->esi_enabled = true;
 	return 0;
 }
 
@@ -2996,6 +3002,39 @@ static const struct ufs_hba_variant_ops ufs_hba_qcom_sa8255p_vops = {
 	.config_esi		= ufs_qcom_config_esi,
 };
 
+/*
+ * ufshcd_pltfrm_init() turns the device supplies on before ufs_qcom_init()
+ * looks up the PHY and the interconnect paths, and off again if one of them
+ * defers, under a device the bootloader may have left running. Check for
+ * those suppliers first; any other lookup error is left to ufs_qcom_init().
+ */
+static int ufs_qcom_check_suppliers(struct device *dev)
+{
+	static const char * const paths[] = { "ufs-ddr", "cpu-ufs" };
+	struct icc_path *path;
+	struct phy *phy;
+	int i;
+
+	if (!has_acpi_companion(dev)) {
+		phy = phy_get(dev, "ufsphy");
+		if (PTR_ERR(phy) == -EPROBE_DEFER)
+			return dev_err_probe(dev, -EPROBE_DEFER, "PHY not ready\n");
+		if (!IS_ERR(phy))
+			phy_put(dev, phy);
+	}
+
+	for (i = 0; i < ARRAY_SIZE(paths); i++) {
+		path = of_icc_get(dev, paths[i]);
+		if (PTR_ERR(path) == -EPROBE_DEFER)
+			return dev_err_probe(dev, -EPROBE_DEFER,
+					     "interconnect %s not ready\n", paths[i]);
+		if (!IS_ERR(path))
+			icc_put(path);
+	}
+
+	return 0;
+}
+
 /**
  * ufs_qcom_probe - probe routine of the driver
  * @pdev: pointer to Platform device handle
@@ -3013,6 +3052,10 @@ static int ufs_qcom_probe(struct platform_device *pdev)
 		vops = drvdata->vops;
 	else
 		vops = &ufs_hba_qcom_vops;
+
+	err = ufs_qcom_check_suppliers(dev);
+	if (err)
+		return err;
 
 	/* Perform generic probe */
 	err = ufshcd_pltfrm_init(pdev, vops);
