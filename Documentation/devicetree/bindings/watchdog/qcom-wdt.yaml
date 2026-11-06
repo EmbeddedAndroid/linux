@@ -17,6 +17,7 @@ properties:
     oneOf:
       - items:
           - enum:
+              - qcom,apss-wdt-eliza
               - qcom,apss-wdt-glymur
               - qcom,apss-wdt-hawi
               - qcom,kpss-wdt-ipq4019
@@ -50,6 +51,8 @@ properties:
               - qcom,apss-wdt-sm6350
               - qcom,apss-wdt-sm8150
               - qcom,apss-wdt-sm8250
+              - qcom,apss-wdt-sm8550
+              - qcom,apss-wdt-sm8650
               - qcom,apss-wdt-x1e80100
           - const: qcom,kpss-wdt
       - const: qcom,kpss-wdt
