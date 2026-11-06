@@ -646,9 +646,19 @@
 		#size-cells = <2>;
 		ranges;
 
+		aop_image_mem: aop-image@85f00000 {
+			reg = <0x0 0x85f00000 0x0 0x20000>;
+			no-map;
+		};
+
 		aop_cmd_db_mem: aop-cmd-db@85f20000 {
 			compatible = "qcom,cmd-db";
 			reg = <0x0 0x85f20000 0x0 0x20000>;
+			no-map;
+		};
+
+		secdata_apss_mem: secdata-apss@85fff000 {
+			reg = <0x0 0x85fff000 0x0 0x1000>;
 			no-map;
 		};
 
@@ -657,6 +667,26 @@
 			reg = <0x0 0x86000000 0x0 0x200000>;
 			no-map;
 			hwlocks = <&tcsr_mutex 3>;
+		};
+
+		tz_stat_mem: tz-stat@86200000 {
+			reg = <0x0 0x86200000 0x0 0x100000>;
+			no-map;
+		};
+
+		tags_mem: tags@86300000 {
+			reg = <0x0 0x86300000 0x0 0x1200000>;
+			no-map;
+		};
+
+		qtee_mem: qtee@87500000 {
+			reg = <0x0 0x87500000 0x0 0x500000>;
+			no-map;
+		};
+
+		trusted_apps_mem: trusted-apps@87a00000 {
+			reg = <0x0 0x87a00000 0x0 0x1c00000>;
+			no-map;
 		};
 
 		pil_video_mem: pil-video@93400000 {
