@@ -369,4 +369,30 @@ void pkvm_pgtable_stage2_free_unlinked(struct kvm_pgtable_mm_ops *mm_ops, void *
 kvm_pte_t *pkvm_pgtable_stage2_create_unlinked(struct kvm_pgtable *pgt, u64 phys, s8 level,
 					       enum kvm_pgtable_prot prot, void *mc,
 					       bool force_pte);
+
+/*
+ * PROTOTYPE (P2.3, never merge): firmware streams of one MMU-500 that the
+ * hypervisor attaches to its own stage-2 only context bank at init. The
+ * host collects them from DT before KVM initialises and keeps its SMMU
+ * driver below PKVM_SMMU_PROTO_SMR0 and PKVM_SMMU_PROTO_CB.
+ */
+#define PKVM_SMMU_PROTO_MAX_SIDS	4
+#define PKVM_SMMU_PROTO_SMR0		120
+#define PKVM_SMMU_PROTO_CB		111
+
+struct pkvm_smmu_proto {
+	u64	base;
+	u32	nr;
+	u32	smr[PKVM_SMMU_PROTO_MAX_SIDS];	/* mask << 16 | stream ID */
+};
+
+extern struct pkvm_smmu_proto kvm_nvhe_sym(pkvm_smmu_proto);
+int pkvm_smmu_proto_init(void);
+
+#ifdef CONFIG_KVM
+phys_addr_t pkvm_smmu_proto_base(void);
+#else
+static inline phys_addr_t pkvm_smmu_proto_base(void) { return 0; }
+#endif
+
 #endif	/* __ARM64_KVM_PKVM_H__ */

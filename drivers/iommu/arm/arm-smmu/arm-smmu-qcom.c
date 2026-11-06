@@ -5,6 +5,7 @@
 
 #include <linux/acpi.h>
 #include <linux/adreno-smmu-priv.h>
+#include <asm/kvm_pkvm.h>
 #include <linux/delay.h>
 #include <linux/of_device.h>
 #include <linux/firmware/qcom/qcom_scm.h>
@@ -455,6 +456,16 @@ static int qcom_smmu_cfg_probe(struct arm_smmu_device *smmu)
 	u32 reg;
 	u32 smr;
 	int i;
+
+	/* PROTOTYPE (P2.3, never merge): entries owned by the hypervisor */
+	if (pkvm_smmu_proto_base() && pkvm_smmu_proto_base() == smmu->ioaddr) {
+		smmu->num_mapping_groups = min_t(unsigned int, smmu->num_mapping_groups,
+						 PKVM_SMMU_PROTO_SMR0);
+		smmu->num_context_banks = min_t(unsigned int, smmu->num_context_banks,
+						PKVM_SMMU_PROTO_CB);
+		dev_notice(smmu->dev, "pkvm-smmu-proto: %u SMRs, %u CBs left to the host\n",
+			   smmu->num_mapping_groups, smmu->num_context_banks);
+	}
 
 	/*
 	 * MSM8998 LPASS SMMU reports 13 context banks, but accessing

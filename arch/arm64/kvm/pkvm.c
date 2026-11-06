@@ -11,6 +11,8 @@
 #include <asm/kvm_mmu.h>
 #include <linux/memblock.h>
 #include <linux/mutex.h>
+#include <linux/of.h>
+#include <linux/of_address.h>
 
 #include <asm/kvm_pkvm.h>
 
@@ -422,6 +424,71 @@ static int __init finalize_pkvm(void)
 	return 0;
 }
 device_initcall_sync(finalize_pkvm);
+
+/* PROTOTYPE (P2.3, never merge), see asm/kvm_pkvm.h */
+static struct pkvm_smmu_proto smmu_proto;
+
+phys_addr_t pkvm_smmu_proto_base(void)
+{
+	return smmu_proto.base;
+}
+
+static int __init pkvm_smmu_proto_collect(void)
+{
+	static const char * const compat[] = {
+		"qcom,eliza-adsp-pas", "qcom,eliza-cdsp-pas",
+	};
+	struct pkvm_smmu_proto p = { };
+	struct of_phandle_args args;
+	struct property *prop;
+	struct device_node *np;
+	struct resource res;
+	int i, n;
+
+	if (!is_protected_kvm_enabled())
+		return 0;
+
+	for (i = 0; i < ARRAY_SIZE(compat); i++) {
+		np = of_find_compatible_node(NULL, NULL, compat[i]);
+		if (!np)
+			continue;
+		for (n = 0; !of_parse_phandle_with_args(np, "iommus", "#iommu-cells",
+							n, &args); n++) {
+			int ret = args.args_count != 2 ||
+				  p.nr == PKVM_SMMU_PROTO_MAX_SIDS ||
+				  of_address_to_resource(args.np, 0, &res) ||
+				  (p.base && p.base != res.start);
+
+			of_node_put(args.np);
+			if (ret) {
+				pr_err("pkvm-smmu-proto: %pOF: unusable iommus\n", np);
+				of_node_put(np);
+				return 0;
+			}
+			p.base = res.start;
+			p.smr[p.nr++] = args.args[1] << 16 | args.args[0];
+		}
+		of_node_put(np);
+	}
+	if (!p.nr)
+		return 0;
+
+	for (i = 0; i < ARRAY_SIZE(compat); i++) {
+		np = of_find_compatible_node(NULL, NULL, compat[i]);
+		prop = np ? of_find_property(np, "iommus", NULL) : NULL;
+		if (prop)
+			of_remove_property(np, prop);
+		of_node_put(np);
+	}
+
+	smmu_proto = p;
+	kvm_nvhe_sym(pkvm_smmu_proto) = p;
+	for (i = 0; i < p.nr; i++)
+		pr_info("pkvm-smmu-proto: SMMU %pa SMR %u = %#x to the hypervisor, CB %u\n",
+			&p.base, PKVM_SMMU_PROTO_SMR0 + i, p.smr[i], PKVM_SMMU_PROTO_CB);
+	return 0;
+}
+arch_initcall(pkvm_smmu_proto_collect);
 
 static u64 __pkvm_mapping_start(struct pkvm_mapping *m)
 {
