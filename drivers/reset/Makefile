@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0
 obj-y += core.o
+obj-$(CONFIG_RESET_TEST_SHARED) += test-shared-reset.o
 obj-y += amlogic/
 obj-y += hisilicon/
 obj-y += spacemit/

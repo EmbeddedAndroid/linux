@@ -1650,3 +1650,32 @@
 		};
 	};
 };
+
+/* TEST ONLY: a shared reset-gpios line on a banked gpio-simulator controller */
+/ {
+	gpio-sim {
+		compatible = "gpio-simulator";
+
+		bank0 {
+			gpio-controller;
+			#gpio-cells = <2>;
+			ngpios = <8>;
+		};
+
+		gpio_sim_bank1: bank1 {
+			gpio-controller;
+			#gpio-cells = <2>;
+			ngpios = <8>;
+		};
+	};
+
+	test-shared-reset-0 {
+		compatible = "test,shared-reset-consumer";
+		reset-gpios = <&gpio_sim_bank1 3 GPIO_ACTIVE_LOW>;
+	};
+
+	test-shared-reset-1 {
+		compatible = "test,shared-reset-consumer";
+		reset-gpios = <&gpio_sim_bank1 3 GPIO_ACTIVE_LOW>;
+	};
+};

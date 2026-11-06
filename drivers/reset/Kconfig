@@ -15,6 +15,13 @@ menuconfig RESET_CONTROLLER
 
 if RESET_CONTROLLER
 
+config RESET_TEST_SHARED
+	def_bool y
+	depends on OF && GPIOLIB && SYSFS
+	select GPIO_SIM
+	help
+	  TEST ONLY: shared reset-gpios consumer for a gpio-simulator bank.
+
 config RESET_A10SR
 	tristate "Altera Arria10 System Resource Reset"
 	depends on MFD_ALTERA_A10SR || COMPILE_TEST
