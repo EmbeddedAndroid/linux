@@ -22,6 +22,8 @@ struct device;
  *				callback.
  * @set_remote_state:		Peripheral set remote state callback.
  * @shutdown:			Peripheral shutdown callback.
+ * @mem_protect_video_var:	Optional video secure memory protection callback.
+ *				Backends that do not need it leave it unset.
  * @metadata_release:		Image metadata release callback.
  */
 struct qcom_pas_ops {
@@ -40,6 +42,9 @@ struct qcom_pas_ops {
 	int (*auth_and_reset)(struct device *dev, u32 pas_id);
 	int (*set_remote_state)(struct device *dev, u32 state, u32 pas_id);
 	int (*shutdown)(struct device *dev, u32 pas_id);
+	int (*mem_protect_video_var)(struct device *dev, u32 cp_start,
+				     u32 cp_size, u32 cp_nonpixel_start,
+				     u32 cp_nonpixel_size);
 	void (*metadata_release)(struct device *dev,
 				 struct qcom_pas_context *ctx);
 };
