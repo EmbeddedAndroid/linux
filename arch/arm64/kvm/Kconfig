@@ -41,6 +41,19 @@ menuconfig KVM
 
 if KVM
 
+config PKVM_ARM_SMMU_FW
+	bool "pKVM: keep the host out of the secure firmware's MMU-500 slice"
+	help
+	  On SoCs whose application SMMU is an Arm MMU-500 without the
+	  Security Extensions, the secure firmware (OP-TEE) may program the
+	  top stream mapping groups, context banks and VMIDs of the SMMU for
+	  the stage 2 of remote processor firmware, and describe that slice
+	  over FF-A. In protected mode, the hypervisor then takes the global
+	  register pages and the firmware's context banks away from the host
+	  and emulates host accesses to the rest.
+
+	  If unsure, say N.
+
 config PTDUMP_STAGE2_DEBUGFS
 	bool "Present the stage-2 pagetables to debugfs"
 	depends on DEBUG_KERNEL
