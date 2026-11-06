@@ -45,6 +45,9 @@
 #define FFA_NOTIF_RECEIVER_ENDP_MASK	GENMASK(15, 0)
 #define FFA_NOTIF_SENDER_ENDP_MASK	GENMASK(31, 16)
 
+#define FFA_MSG_DST_MASK		GENMASK(15, 0)
+#define FFA_MSG_SRC_MASK		GENMASK(31, 16)
+
 /*
  * A buffer to hold the maximum descriptor size we can see from the host,
  * which is required when the SPMD returns a fragmented FFA_MEM_RETRIEVE_RESP
@@ -71,6 +74,7 @@ struct kvm_ffa_buffers {
 static struct kvm_ffa_buffers hyp_buffers;
 static struct kvm_ffa_buffers host_buffers;
 static u32 hyp_ffa_version;
+static s32 hyp_ffa_spmc_id = -1;
 static bool has_version_negotiated;
 static hyp_spinlock_t version_lock;
 
@@ -1151,6 +1155,30 @@ out_handled:
 	return true;
 }
 
+/*
+ * Send a direct request of the hypervisor's own to the SPMC, carrying
+ * w3-w7 of @req. Only valid before the host is deprivileged, when no host
+ * FF-A call can be in flight.
+ */
+int hyp_ffa_spmc_direct_req(struct arm_smccc_1_2_regs *req,
+			    struct arm_smccc_1_2_regs *res)
+{
+	if (hyp_ffa_spmc_id < 0)
+		return -EOPNOTSUPP;
+
+	req->a0 = FFA_MSG_SEND_DIRECT_REQ;
+	req->a1 = FIELD_PREP(FFA_MSG_SRC_MASK, HOST_FFA_ID) |
+		  FIELD_PREP(FFA_MSG_DST_MASK, hyp_ffa_spmc_id);
+	req->a2 = 0;
+	hyp_smccc_1_2_smc(req, res);
+
+	if (res->a0 != FFA_MSG_SEND_DIRECT_RESP ||
+	    FIELD_GET(FFA_MSG_SRC_MASK, res->a1) != hyp_ffa_spmc_id)
+		return -EIO;
+
+	return 0;
+}
+
 int hyp_ffa_init(void *pages)
 {
 	struct arm_smccc_1_2_regs res;
@@ -1209,5 +1237,12 @@ int hyp_ffa_init(void *pages)
 	};
 
 	version_lock = __HYP_SPIN_LOCK_UNLOCKED;
+
+	hyp_smccc_1_2_smc(&(struct arm_smccc_1_2_regs) {
+		.a0 = FFA_SPM_ID_GET,
+	}, &res);
+	if (res.a0 == FFA_SUCCESS)
+		hyp_ffa_spmc_id = FIELD_GET(FFA_MSG_DST_MASK, res.a2);
+
 	return 0;
 }

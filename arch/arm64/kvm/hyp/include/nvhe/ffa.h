@@ -12,6 +12,8 @@
 #define FFA_MAX_FUNC_NUM 0xFF
 
 int hyp_ffa_init(void *pages);
+int hyp_ffa_spmc_direct_req(struct arm_smccc_1_2_regs *req,
+			    struct arm_smccc_1_2_regs *res);
 bool kvm_host_ffa_handler(struct kvm_cpu_context *host_ctxt, u32 func_id);
 
 #endif /* __KVM_HYP_FFA_H */
