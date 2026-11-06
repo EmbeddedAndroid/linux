@@ -25,6 +25,8 @@ struct apm_graph_mgmt_cmd {
 	uint32_t sub_graph_id_list[];
 } __packed;
 
+#define APM_STATE_QUERY_TIMEOUT_MS	100
+#define APM_READY_TIMEOUT_MS		5000
 #define APM_GRAPH_MGMT_PSIZE(p, n) ALIGN(struct_size(p, sub_graph_id_list, n), 8)
 
 static struct q6apm *g_apm;
@@ -142,22 +144,56 @@ static void q6apm_put_audioreach_graph(struct kref *ref)
 }
 
 
-static int q6apm_get_apm_state(struct q6apm *apm)
+static int q6apm_get_apm_state(struct q6apm *apm, unsigned int timeout_ms)
 {
 	struct gpr_pkt *pkt __free(kfree) = audioreach_alloc_apm_cmd_pkt(0,
 								APM_CMD_GET_SPF_STATE, 0);
+	int ret;
+
 	if (IS_ERR(pkt))
 		return PTR_ERR(pkt);
 
-	q6apm_send_cmd_sync(apm, pkt, APM_CMD_RSP_GET_SPF_STATE);
+	pkt->hdr.dest_domain = audioreach_gpr_dest_domain(apm->gdev);
 
-	return apm->state;
+	mutex_lock(&apm->lock);
+	apm->result.opcode = 0;
+	apm->state = 0;
+	ret = gpr_send_pkt(apm->gdev, pkt);
+	if (ret >= 0 &&
+	    !wait_event_timeout(apm->wait,
+				apm->result.opcode == APM_CMD_RSP_GET_SPF_STATE,
+				msecs_to_jiffies(timeout_ms)))
+		ret = -ETIMEDOUT;
+	mutex_unlock(&apm->lock);
+
+	return ret < 0 ? ret : apm->state;
+}
+
+/*
+ * The GPR service shows up when the DSP opens its channel, before the APM
+ * answers: the first state query can be dropped without a reply. Ask again
+ * with a short timeout until the APM reports ready.
+ */
+static void q6apm_wait_for_dsp(struct q6apm *apm)
+{
+	unsigned long end = jiffies + msecs_to_jiffies(APM_READY_TIMEOUT_MS);
+	int state;
+
+	do {
+		state = q6apm_get_apm_state(apm, APM_STATE_QUERY_TIMEOUT_MS);
+		if (state > 0)
+			return;
+		if (state != -ETIMEDOUT)
+			msleep(APM_STATE_QUERY_TIMEOUT_MS);
+	} while (time_before(jiffies, end));
+
+	dev_err(apm->dev, "DSP not ready: %d\n", state);
 }
 
 bool q6apm_is_adsp_ready(void)
 {
 	if (g_apm)
-		return q6apm_get_apm_state(g_apm);
+		return q6apm_get_apm_state(g_apm, APM_READY_TIMEOUT_MS) > 0;
 
 	return false;
 }
@@ -906,7 +942,7 @@ static int apm_probe(gpr_device_t *gdev)
 	dev_set_drvdata(dev, apm);
 	g_apm = apm;
 
-	q6apm_get_apm_state(apm);
+	q6apm_wait_for_dsp(apm);
 
 	ret = snd_soc_register_component(dev, &q6apm_audio_component, NULL, 0);
 	if (ret < 0) {
