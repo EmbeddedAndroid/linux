@@ -13,9 +13,11 @@
 #include <asm/kvm_pkvm.h>
 #include <asm/stage2_pgtable.h>
 
+#include <hyp/adjust_pc.h>
 #include <hyp/fault.h>
 
 #include <nvhe/arm-smccc.h>
+#include <nvhe/arm-smmu-fw.h>
 #include <nvhe/gfp.h>
 #include <nvhe/memory.h>
 #include <nvhe/mem_protect.h>
@@ -797,6 +799,14 @@ void handle_host_mem_abort(struct kvm_cpu_context *host_ctxt)
 	 */
 	BUG_ON(!(fault.hpfar_el2 & HPFAR_EL2_NS));
 	addr = FIELD_GET(HPFAR_EL2_FIPA, fault.hpfar_el2) << 12;
+
+	if (ESR_ELx_EC(esr) == ESR_ELx_EC_DABT_LOW && (esr & ESR_ELx_ISV) &&
+	    !addr_is_memory(addr) &&
+	    pkvm_arm_smmu_fw_dabt_handler(&host_ctxt->regs, esr,
+					  addr | FAR_TO_FIPA_OFFSET(fault.far_el2))) {
+		kvm_skip_host_instr();
+		return;
+	}
 
 	switch (host_stage2_idmap(addr)) {
 	case -EPERM:
