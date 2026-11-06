@@ -128,6 +128,10 @@ int wcd_interrupt_callback(struct sdw_slave *slave, struct irq_domain *slave_irq
 	struct regmap *regmap = dev_get_regmap(&slave->dev, NULL);
 	u32 sts1, sts2, sts3;
 
+	/* The codec driver creates the domain once all its slaves are bound */
+	if (!slave_irq)
+		return 0;
+
 	do {
 		handle_nested_irq(irq_find_mapping(slave_irq, 0));
 		regmap_read(regmap, wcd_intr_status0, &sts1);
