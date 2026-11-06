@@ -26,7 +26,6 @@
 /delete-node/ &adsp_mem;
 /delete-node/ &cdsp_mem;
 /delete-node/ &video_mem;
-/delete-node/ &wlan_ce_mem;
 /delete-node/ &wpss_mem;
 /delete-node/ &xbl_mem;
 
@@ -1046,6 +1045,8 @@
 };
 
 &pmk8350_rtc {
+	allow-set-time;
+
 	status = "okay";
 };
 
@@ -1374,7 +1375,7 @@
 
 &uart7 {
 	/delete-property/ interrupts;
-	interrupts-extended = <&intc GIC_SPI 608 IRQ_TYPE_LEVEL_HIGH>,
+	interrupts-extended = <&intc GIC_SPI 608 IRQ_TYPE_LEVEL_HIGH 0>,
 			      <&tlmm 31 IRQ_TYPE_EDGE_FALLING>;
 	pinctrl-1 = <&qup_uart7_sleep_cts>,
 		    <&qup_uart7_sleep_rts>,
@@ -1466,7 +1467,6 @@
 };
 
 &wifi {
-	memory-region = <&wlan_fw_mem>;
 	qcom,calibration-variant = "Qualcomm_rb3gen2";
 
 	status = "okay";
