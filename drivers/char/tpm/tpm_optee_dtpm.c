@@ -15,13 +15,16 @@
 
 #include "tpm_optee.h"
 
-#define TPM_OPTEE_DTPM_SUBMIT_COMMAND	0
+#define TPM_OPTEE_DTPM_SUBMIT_COMMAND		0
+#define TPM_OPTEE_DTPM_SUBMIT_COMMAND_LOCALITY	1
 
 static const struct tpm_optee_config tpm_optee_dtpm_config = {
 	.ta_uuid = UUID_INIT(0x50568cd9, 0x370a, 0x46b8,
 			     0x9f, 0x2c, 0x6f, 0xd9, 0x06, 0x64, 0xd2, 0xee),
 	.login	 = TEE_IOCTL_LOGIN_REE_KERNEL,
 	.cmd_id	 = TPM_OPTEE_DTPM_SUBMIT_COMMAND,
+	.loc_cmd_id = TPM_OPTEE_DTPM_SUBMIT_COMMAND_LOCALITY,
+	.has_loc_cmd = true,
 };
 
 static int tpm_optee_dtpm_probe(struct tee_client_device *tee_device)

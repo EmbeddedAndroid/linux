@@ -9,6 +9,7 @@
  * ID) and binds the TA.
  */
 
+#include <linux/debugfs.h>
 #include <linux/module.h>
 #include <linux/tee_drv.h>
 #include <linux/tpm.h>
@@ -20,12 +21,21 @@
 #define TPM_OPTEE_MAX_COMMAND_SIZE	4096
 #define TPM_OPTEE_MAX_RESPONSE_SIZE	4096
 
+/* GlobalPlatform TEE_ERROR_ACCESS_DENIED, as returned by the TA */
+#define TPM_OPTEE_ERROR_ACCESS_DENIED	0xffff0001
+
+/* Highest TIS locality */
+#define TPM_OPTEE_MAX_LOCALITY		4
+
 struct tpm_optee_private {
 	struct tpm_chip *chip;
 	struct tee_context *ctx;
 	u32 session;
 	struct tee_shm *shm;
 	const struct tpm_optee_config *cfg;
+	/* TIS locality of the commands, set through debugfs; 0 by default */
+	u8 locality;
+	struct dentry *debugfs;
 };
 
 /* Validate the response header the TA wrote back, return its length or -EIO */
@@ -64,6 +74,7 @@ static int tpm_optee_op_send(struct tpm_chip *chip, u8 *buf, size_t bufsiz,
 		.session = pvt_data->session,
 		.num_params = 4,
 	};
+	u8 locality = READ_ONCE(pvt_data->locality);
 	u8 *temp_buf;
 	int rc;
 
@@ -100,8 +111,22 @@ static int tpm_optee_op_send(struct tpm_chip *chip, u8 *buf, size_t bufsiz,
 		},
 	};
 
+	/* value[2]: TIS locality, for any locality but the default one */
+	if (locality) {
+		transceive_args.func = pvt_data->cfg->loc_cmd_id;
+		command_params[2] = (struct tee_param) {
+			.attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT,
+			.u.value.a = locality,
+		};
+	}
+
 	rc = tee_client_invoke_func(pvt_data->ctx, &transceive_args,
 				    command_params);
+	if (!rc && transceive_args.ret == TPM_OPTEE_ERROR_ACCESS_DENIED) {
+		dev_err(&chip->dev, "locality %u refused by the TEE\n",
+			locality);
+		return -EACCES;
+	}
 	if (rc < 0 || transceive_args.ret != 0) {
 		dev_err(&chip->dev, "SUBMIT_COMMAND invoke error: 0x%x\n",
 			transceive_args.ret);
@@ -160,6 +185,45 @@ static int tpm_optee_open_session(struct device *dev, struct tee_context *ctx,
 	return 0;
 }
 
+static int tpm_optee_locality_get(void *data, u64 *val)
+{
+	struct tpm_optee_private *pvt_data = data;
+
+	*val = READ_ONCE(pvt_data->locality);
+
+	return 0;
+}
+
+/*
+ * Only the TEE decides which localities the normal world may use: any value
+ * in range is accepted here and a refused one fails the next command.
+ */
+static int tpm_optee_locality_set(void *data, u64 val)
+{
+	struct tpm_optee_private *pvt_data = data;
+
+	if (val > TPM_OPTEE_MAX_LOCALITY)
+		return -EINVAL;
+
+	WRITE_ONCE(pvt_data->locality, val);
+
+	return 0;
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(tpm_optee_locality_fops, tpm_optee_locality_get,
+			 tpm_optee_locality_set, "%llu\n");
+
+static void tpm_optee_debugfs_init(struct tpm_optee_private *pvt_data)
+{
+	if (!pvt_data->cfg->has_loc_cmd)
+		return;
+
+	pvt_data->debugfs = debugfs_create_dir(dev_name(&pvt_data->chip->dev),
+					       NULL);
+	debugfs_create_file_unsafe("locality", 0600, pvt_data->debugfs,
+				   pvt_data, &tpm_optee_locality_fops);
+}
+
 int tpm_optee_probe(struct device *dev, const struct tpm_optee_config *cfg)
 {
 	struct tpm_optee_private *pvt_data;
@@ -211,6 +275,8 @@ int tpm_optee_probe(struct device *dev, const struct tpm_optee_config *cfg)
 		goto out_chip;
 	}
 
+	tpm_optee_debugfs_init(pvt_data);
+
 	return 0;
 
 out_chip:
@@ -230,6 +296,7 @@ void tpm_optee_remove(struct device *dev)
 {
 	struct tpm_optee_private *pvt_data = dev_get_drvdata(dev);
 
+	debugfs_remove_recursive(pvt_data->debugfs);
 	tpm_chip_unregister(pvt_data->chip);
 	put_device(&pvt_data->chip->dev);
 	tee_shm_free(pvt_data->shm);
