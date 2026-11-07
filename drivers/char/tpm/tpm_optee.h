@@ -18,11 +18,16 @@ struct device;
  * @ta_uuid:	UUID of the trusted application to bind
  * @login:	TEE_IOCTL_LOGIN_* client login used to open the session
  * @cmd_id:	TA function ID that submits a TPM command
+ * @loc_cmd_id:	TA function ID that submits a TPM command at a TIS locality
+ *		(value parameter 2), valid if @has_loc_cmd
+ * @has_loc_cmd: the TA takes a locality; expose it in debugfs
  */
 struct tpm_optee_config {
 	uuid_t	ta_uuid;
 	u32	login;
 	u32	cmd_id;
+	u32	loc_cmd_id;
+	bool	has_loc_cmd;
 };
 
 int tpm_optee_probe(struct device *dev, const struct tpm_optee_config *cfg);
