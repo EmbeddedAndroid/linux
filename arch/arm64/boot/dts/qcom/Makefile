@@ -21,6 +21,10 @@ eliza-mtp-el2-dtbs	:= eliza-mtp.dtb eliza-el2.dtbo eliza-el2-fw-streams.dtbo
 
 dtb-$(CONFIG_ARCH_QCOM)	+= eliza-mtp-el2.dtb
 
+eliza-mtp-el2-fw-smmu-dtbs	:= eliza-mtp.dtb eliza-el2.dtbo
+
+dtb-$(CONFIG_ARCH_QCOM)	+= eliza-mtp-el2-fw-smmu.dtb
+
 dtb-$(CONFIG_ARCH_QCOM)	+= glymur-asus-zenbook-a14-ux3407na.dtb
 dtb-$(CONFIG_ARCH_QCOM)	+= glymur-asus-zenbook-a16-ux3607oa.dtb
 dtb-$(CONFIG_ARCH_QCOM)	+= glymur-crd.dtb
