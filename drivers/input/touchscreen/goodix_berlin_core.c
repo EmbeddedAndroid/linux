@@ -676,6 +676,19 @@ static int goodix_berlin_resume(struct device *dev)
 EXPORT_GPL_SIMPLE_DEV_PM_OPS(goodix_berlin_pm_ops,
 			     goodix_berlin_suspend, goodix_berlin_resume);
 
+/*
+ * The bus controller is shut down after the touchscreen and then fails every
+ * transfer, while the level interrupt keeps asserting until its status is
+ * read, so stop the interrupt before the bus goes away.
+ */
+void goodix_berlin_shutdown(struct device *dev)
+{
+	struct goodix_berlin_core *cd = dev_get_drvdata(dev);
+
+	disable_irq(cd->irq);
+}
+EXPORT_SYMBOL_GPL(goodix_berlin_shutdown);
+
 static void goodix_berlin_power_off_act(void *data)
 {
 	struct goodix_berlin_core *cd = data;

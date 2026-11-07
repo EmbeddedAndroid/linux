@@ -186,6 +186,11 @@ static const struct of_device_id goodix_berlin_spi_of_match[] = {
 };
 MODULE_DEVICE_TABLE(of, goodix_berlin_spi_of_match);
 
+static void goodix_berlin_spi_shutdown(struct spi_device *spi)
+{
+	goodix_berlin_shutdown(&spi->dev);
+}
+
 static struct spi_driver goodix_berlin_spi_driver = {
 	.driver = {
 		.name = "goodix-berlin-spi",
@@ -194,6 +199,7 @@ static struct spi_driver goodix_berlin_spi_driver = {
 		.dev_groups = goodix_berlin_groups,
 	},
 	.probe = goodix_berlin_spi_probe,
+	.shutdown = goodix_berlin_spi_shutdown,
 	.id_table = goodix_berlin_spi_ids,
 };
 module_spi_driver(goodix_berlin_spi_driver);

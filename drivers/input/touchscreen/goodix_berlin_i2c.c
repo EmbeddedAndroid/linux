@@ -67,6 +67,11 @@ static const struct of_device_id goodix_berlin_i2c_of_match[] = {
 };
 MODULE_DEVICE_TABLE(of, goodix_berlin_i2c_of_match);
 
+static void goodix_berlin_i2c_shutdown(struct i2c_client *client)
+{
+	goodix_berlin_shutdown(&client->dev);
+}
+
 static struct i2c_driver goodix_berlin_i2c_driver = {
 	.driver = {
 		.name = "goodix-berlin-i2c",
@@ -75,6 +80,7 @@ static struct i2c_driver goodix_berlin_i2c_driver = {
 		.dev_groups = goodix_berlin_groups,
 	},
 	.probe = goodix_berlin_i2c_probe,
+	.shutdown = goodix_berlin_i2c_shutdown,
 	.id_table = goodix_berlin_i2c_id,
 };
 module_i2c_driver(goodix_berlin_i2c_driver);
