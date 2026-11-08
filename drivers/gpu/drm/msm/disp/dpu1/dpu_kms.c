@@ -1314,8 +1314,6 @@ static int dpu_kms_hw_init(struct msm_kms *kms)
 err_pm_put:
 	pm_runtime_put_sync(&dpu_kms->pdev->dev);
 error:
-	_dpu_kms_hw_destroy(dpu_kms);
-
 	return rc;
 }
 
