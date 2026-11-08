@@ -140,6 +140,7 @@
 #define TIMEOUT_MS						100
 #define SWRM_REENUM_DELAY					msecs_to_jiffies(50)
 #define SWRM_REENUM_MAX						3
+#define SWRM_CLK_STOP_SETTLE_US					13000
 #define QCOM_SWRM_MAX_RD_LEN					0x1
 #define DEFAULT_CLK_FREQ					9600000
 #define SWR_INVALID_PARAM					0xFF
@@ -2062,6 +2063,15 @@ static int __maybe_unused swrm_runtime_suspend(struct device *dev)
 			dev_err(dev, "bus clock stop failed %d", ret);
 			goto err_unmask;
 		}
+
+		/*
+		 * Interim: WSA8845 amplifiers can lose sync when the controller
+		 * clock is gated right after ClockStopNow. The delay is
+		 * empirical, pending the peripheral's clock-stop timing.
+		 */
+		if (ctrl->version >= SWRM_VERSION_2_0_0 && ret != -ENODATA)
+			usleep_range(SWRM_CLK_STOP_SETTLE_US,
+				     SWRM_CLK_STOP_SETTLE_US + 2000);
 	}
 
 	clk_disable_unprepare(ctrl->hclk);
