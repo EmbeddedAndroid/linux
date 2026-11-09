@@ -147,6 +147,7 @@ struct qcom_ethqos {
 	struct clk *link_clk;
 	struct clk *eee_clk;
 	struct phy *serdes_phy;
+	struct clk_bulk_data lane_clks[6];
 	phy_interface_t phy_mode;
 
 	const struct ethqos_emac_por *rgmii_por;
@@ -788,8 +789,23 @@ static int qcom_ethqos_serdes_powerup(struct net_device *ndev, void *priv)
 
 	ret = phy_power_on(ethqos->serdes_phy);
 	if (ret)
-		phy_exit(ethqos->serdes_phy);
+		goto err_exit;
 
+	/* The lane clocks are sourced by the SerDes and only toggle once it is
+	 * powered on (TX) or locked to the link partner (RX); the PCS must not
+	 * be reset or configured before the muxes select them.
+	 */
+	ret = clk_bulk_prepare_enable(ARRAY_SIZE(ethqos->lane_clks),
+				      ethqos->lane_clks);
+	if (ret)
+		goto err_power_off;
+
+	return 0;
+
+err_power_off:
+	phy_power_off(ethqos->serdes_phy);
+err_exit:
+	phy_exit(ethqos->serdes_phy);
 	return ret;
 }
 
@@ -797,6 +813,8 @@ static void qcom_ethqos_serdes_powerdown(struct net_device *ndev, void *priv)
 {
 	struct qcom_ethqos *ethqos = priv;
 
+	clk_bulk_disable_unprepare(ARRAY_SIZE(ethqos->lane_clks),
+				   ethqos->lane_clks);
 	phy_power_off(ethqos->serdes_phy);
 	phy_exit(ethqos->serdes_phy);
 }
@@ -1066,6 +1084,17 @@ static int qcom_ethqos_probe(struct platform_device *pdev)
 	if (IS_ERR(ethqos->eee_clk))
 		return dev_err_probe(dev, PTR_ERR(ethqos->eee_clk),
 				     "Failed to get eee_clk\n");
+
+	ethqos->lane_clks[0].id = "lane_tx";
+	ethqos->lane_clks[1].id = "lane_rx";
+	ethqos->lane_clks[2].id = "rpcs_tx";
+	ethqos->lane_clks[3].id = "rpcs_rx";
+	ethqos->lane_clks[4].id = "xgxs_tx";
+	ethqos->lane_clks[5].id = "xgxs_rx";
+	ret = devm_clk_bulk_get_optional(dev, ARRAY_SIZE(ethqos->lane_clks),
+					 ethqos->lane_clks);
+	if (ret)
+		return dev_err_probe(dev, ret, "Failed to get lane clocks\n");
 
 	ret = ethqos_clks_config(ethqos, true);
 	if (ret)
