@@ -562,6 +562,37 @@
 	status = "okay";
 };
 
+&ethernet0 {
+	phy-mode = "10gbase-r";
+	phy-handle = <&aqr113c_phy0>;
+
+	interconnects = <&hscnoc MASTER_APPSS_PROC QCOM_ICC_TAG_ALWAYS
+			 &config_noc SLAVE_PS_ETH_0 QCOM_ICC_TAG_ALWAYS>,
+			<&aggre2_noc_tile MASTER_EMAC_0 QCOM_ICC_TAG_ALWAYS
+			 &mc_virt SLAVE_EBI1 QCOM_ICC_TAG_ALWAYS>;
+	interconnect-names = "cpu-mac", "mac-mem";
+
+	pinctrl-0 = <&emac0_mdio_default>;
+	pinctrl-names = "default";
+
+	status = "okay";
+
+	mdio {
+		compatible = "snps,dwmac-mdio";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		reset-gpios = <&pmau0102_e_gpios 5 GPIO_ACTIVE_LOW>;
+		reset-delay-us = <20000>;
+		reset-post-delay-us = <500000>;
+
+		aqr113c_phy0: ethernet-phy@0 {
+			compatible = "ethernet-phy-ieee802.3-c45";
+			reg = <0>;
+		};
+	};
+};
+
 &gpu_0 {
 	status = "okay";
 };
@@ -879,8 +910,31 @@
 	status = "okay";
 };
 
+&serdes0 {
+	vdda-0p9-supply = <&vreg_l1h_0p9>;
+	vdda-1p2-supply = <&vreg_l2h_1p2>;
+};
+
 &spi16 {
 	status = "okay";
+};
+
+&tlmm {
+	emac0_mdio_default: emac0-mdio-default-state {
+		mdc-pins {
+			pins = "gpio47";
+			function = "emac0_mdc";
+			drive-strength = <16>;
+			bias-pull-up;
+		};
+
+		mdio-pins {
+			pins = "gpio48";
+			function = "emac0_mdio";
+			drive-strength = <16>;
+			bias-pull-up;
+		};
+	};
 };
 
 &uart4 {
