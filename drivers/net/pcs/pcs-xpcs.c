@@ -1352,6 +1352,24 @@ static void xpcs_link_up_sgmii_1000basex(struct dw_xpcs *xpcs,
 			__func__, ERR_PTR(ret));
 }
 
+/* The Nord XPCS RX datapath is clocked from the clock the SerDes recovers
+ * from the link partner. When that clock starts after the PCS left reset, the
+ * PCS can hold block lock while decoding nothing but errored blocks, so no
+ * frame is received. Reset the PCS once the link is up, when the recovered
+ * clock is running.
+ */
+static void xpcs_link_up_10gbaser_qcom_nord(struct dw_xpcs *xpcs)
+{
+	int ret;
+
+	ret = xpcs_write(xpcs, MDIO_MMD_PCS, MDIO_CTRL1, MDIO_CTRL1_RESET);
+	if (ret >= 0)
+		ret = xpcs_poll_reset(xpcs, MDIO_MMD_PCS);
+	if (ret < 0)
+		dev_err(&xpcs->mdiodev->dev, "PCS reset failed: %pe\n",
+			ERR_PTR(ret));
+}
+
 static void xpcs_link_up(struct phylink_pcs *pcs, unsigned int neg_mode,
 			 phy_interface_t interface, int speed, int duplex)
 {
@@ -1366,6 +1384,11 @@ static void xpcs_link_up(struct phylink_pcs *pcs, unsigned int neg_mode,
 	case PHY_INTERFACE_MODE_1000BASEX:
 		xpcs_link_up_sgmii_1000basex(xpcs, neg_mode, interface, speed,
 					     duplex);
+		break;
+
+	case PHY_INTERFACE_MODE_10GBASER:
+		if (xpcs->desc->id == QCOM_NORD_XPCS_ID)
+			xpcs_link_up_10gbaser_qcom_nord(xpcs);
 		break;
 
 	default:
