@@ -704,6 +704,12 @@ static int xpcs_validate(struct phylink_pcs *pcs, unsigned long *supported,
 	if (!compat)
 		return -EINVAL;
 
+	/* With rate matching the media link modes belong to the PHY; the
+	 * XPCS only carries the host interface at its own speed.
+	 */
+	if (state->rate_matching != RATE_MATCH_NONE)
+		return 0;
+
 	/* Populate the supported link modes for this PHY interface type.
 	 * FIXME: what about the port modes and autoneg bit? This masks
 	 * all those away.
