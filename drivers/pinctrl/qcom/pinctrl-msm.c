@@ -173,7 +173,7 @@ static int msm_pinmux_set_mux(struct pinctrl_dev *pctldev,
 	struct msm_pinctrl *pctrl = pinctrl_dev_get_drvdata(pctldev);
 	struct gpio_chip *gc = &pctrl->chip;
 	unsigned int irq = irq_find_mapping(gc->irq.domain, group);
-	struct irq_data *d = irq_get_irq_data(irq);
+	struct irq_data *d = irq ? irq_get_irq_data(irq) : NULL;
 	unsigned int gpio_func = pctrl->soc->gpio_func;
 	unsigned int egpio_func = pctrl->soc->egpio_func;
 	const struct msm_pingroup *g;
