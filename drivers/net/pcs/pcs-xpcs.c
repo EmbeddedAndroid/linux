@@ -1577,6 +1577,10 @@ static const struct dw_xpcs_compat qcom_nord_xpcs_compat[] = {
 		.supported = xpcs_usxgmii_features,
 		.an_mode = DW_AN_C37_USXGMII,
 	}, {
+		.interface = PHY_INTERFACE_MODE_10GBASER,
+		.supported = xpcs_10gbaser_features,
+		.an_mode = DW_10GBASER,
+	}, {
 	}
 };
 
