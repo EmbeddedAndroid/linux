@@ -57,21 +57,11 @@ properties:
 
   clocks:
     minItems: 4
-    maxItems: 6
+    maxItems: 11
 
   clock-names:
     minItems: 4
-    items:
-      - const: stmmaceth
-      - const: pclk
-      - const: ptp_ref
-      - enum:
-          - rgmii
-          - phyaux
-      - enum:
-          - axi-noc
-          - eee
-      - const: pcie-tile-axi-noc
+    maxItems: 11
 
   iommus:
     minItems: 1
@@ -115,10 +105,9 @@ allOf:
       properties:
         clocks:
           minItems: 5
-          maxItems: 5
+          maxItems: 11
         clock-names:
           minItems: 5
-          maxItems: 5
           items:
             - const: stmmaceth
             - const: pclk
@@ -128,6 +117,18 @@ allOf:
               description: |
                 Due to a hardware quirk, PCS link-up depends on the EEE
                 clock being enabled.
+            - const: lane_tx
+              description: SerDes lane TX clock
+            - const: lane_rx
+              description: SerDes lane RX clock, recovered from the link
+            - const: rpcs_tx
+              description: XPCS TX clock
+            - const: rpcs_rx
+              description: XPCS RX clock
+            - const: xgxs_tx
+              description: XGXS TX clock
+            - const: xgxs_rx
+              description: XGXS RX clock
         iommus:
           minItems: 10
           maxItems: 10
@@ -147,6 +148,7 @@ allOf:
       properties:
         clocks:
           minItems: 6
+          maxItems: 6
         clock-names:
           items:
             - const: stmmaceth

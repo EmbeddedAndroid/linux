@@ -152,7 +152,7 @@ properties:
 
   clocks:
     minItems: 1
-    maxItems: 10
+    maxItems: 11
     additionalItems: true
     items:
       - description: GMAC main clock
@@ -164,7 +164,7 @@ properties:
 
   clock-names:
     minItems: 1
-    maxItems: 10
+    maxItems: 11
     additionalItems: true
     contains:
       enum:
