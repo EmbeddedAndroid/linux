@@ -1043,6 +1043,7 @@ static int qcom_ethqos_probe(struct platform_device *pdev)
 		plat_dat->mac_finish = ethqos_mac_finish_serdes;
 		break;
 	case PHY_INTERFACE_MODE_USXGMII:
+	case PHY_INTERFACE_MODE_10GBASER:
 		plat_dat->fix_mac_speed = ethqos_fix_mac_speed_usxgmii;
 		plat_dat->mac_finish = ethqos_mac_finish_serdes;
 		break;
