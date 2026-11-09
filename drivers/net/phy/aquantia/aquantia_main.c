@@ -910,6 +910,49 @@ static int aqr_gen2_read_global_syscfg(struct phy_device *phydev)
 	return 0;
 }
 
+/* A host wired for 10GBASE-R only (DT phy-mode "10gbase-r") cannot follow
+ * a provisioning that uses USXGMII symbol replication, SGMII or OCSGMII at
+ * the lower media speeds. Keep the system interface at XFI for every media
+ * speed and adapt the rate with pause frames, which the MAC honours, then
+ * restart autonegotiation if anything changed so the next link uses it.
+ */
+static int aqr_gen2_config_10gbaser_host(struct phy_device *phydev)
+{
+	bool changed = false;
+	int i, ret;
+
+	if (phydev->interface != PHY_INTERFACE_MODE_10GBASER)
+		return 0;
+
+	for (i = 0; i < AQR_NUM_GLOBAL_CFG; i++) {
+		u16 rate_adapt = VEND1_GLOBAL_CFG_RATE_ADAPT_PAUSE;
+
+		if (aqr_global_cfg_regs[i].speed == SPEED_10000)
+			rate_adapt = VEND1_GLOBAL_CFG_RATE_ADAPT_NONE;
+
+		ret = phy_modify_mmd_changed(phydev, MDIO_MMD_VEND1,
+					     aqr_global_cfg_regs[i].reg,
+					     VEND1_GLOBAL_CFG_SERDES_MODE |
+					     VEND1_GLOBAL_CFG_AUTONEG_ENA |
+					     VEND1_GLOBAL_CFG_RATE_ADAPT,
+					     FIELD_PREP(VEND1_GLOBAL_CFG_SERDES_MODE,
+							VEND1_GLOBAL_CFG_SERDES_MODE_XFI) |
+					     FIELD_PREP(VEND1_GLOBAL_CFG_RATE_ADAPT,
+							rate_adapt));
+		if (ret < 0)
+			return ret;
+		if (ret)
+			changed = true;
+	}
+
+	if (!changed)
+		return 0;
+
+	phydev_info(phydev, "host interface set to XFI with pause rate adaptation\n");
+
+	return genphy_c45_restart_aneg(phydev);
+}
+
 static int aqr_gen2_fill_interface_modes(struct phy_device *phydev)
 {
 	unsigned long *possible = phydev->possible_interfaces;
@@ -930,6 +973,10 @@ static int aqr_gen2_fill_interface_modes(struct phy_device *phydev)
 		if (ret)
 			return ret;
 	}
+
+	ret = aqr_gen2_config_10gbaser_host(phydev);
+	if (ret)
+		return ret;
 
 	ret = aqr_gen2_read_global_syscfg(phydev);
 	if (ret)
