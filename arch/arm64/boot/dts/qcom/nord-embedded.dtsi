@@ -2092,8 +2092,16 @@
 			 <&segcc SE_GCC_EMAC0_CNOC_APB_CLK>,
 			 <&segcc SE_GCC_EMAC0_PTP_CLK>,
 			 <&segcc SE_GCC_EMAC0_PHY_AUX_CLK>,
-			 <&segcc SE_GCC_EEE_EMAC0_CLK>;
-		clock-names = "stmmaceth", "pclk", "ptp_ref", "phyaux", "eee";
+			 <&segcc SE_GCC_EEE_EMAC0_CLK>,
+			 <&segcc SE_GCC_EMAC0_CC_SGMIIPHY_TX_CLK>,
+			 <&segcc SE_GCC_EMAC0_CC_SGMIIPHY_RX_CLK>,
+			 <&segcc SE_GCC_EMAC0_RPCS_TX_CLK>,
+			 <&segcc SE_GCC_EMAC0_RPCS_RX_CLK>,
+			 <&segcc SE_GCC_EMAC0_XGXS_TX_CLK>,
+			 <&segcc SE_GCC_EMAC0_XGXS_RX_CLK>;
+		clock-names = "stmmaceth", "pclk", "ptp_ref", "phyaux", "eee",
+			      "lane_tx", "lane_rx", "rpcs_tx", "rpcs_rx",
+			      "xgxs_tx", "xgxs_rx";
 		resets = <&segcc SE_GCC_EMAC0_BCR>;
 		power-domains = <&segcc SE_GCC_EMAC0_GDSC>;
 		iommus = <&apps_smmu_2 0x1201 0x2>,
