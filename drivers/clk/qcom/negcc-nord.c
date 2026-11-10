@@ -6,6 +6,7 @@
 #include <linux/clk-provider.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
+#include <linux/property.h>
 #include <linux/regmap.h>
 
 #include <dt-bindings/clock/qcom,nord-negcc.h>
@@ -1885,6 +1886,23 @@ static const struct qcom_reset_map ne_gcc_nord_resets[] = {
 	[NE_GCC_QUSB2PHY_SEC_BCR] = { 0x2f000 },
 };
 
+/* SecaAU has no GPU_2 or UFS block in NE_GCC */
+static const struct qcom_reset_map ne_gcc_seca_resets[] = {
+	[NE_GCC_QUPV3_WRAPPER_2_BCR] = { 0x38000 },
+	[NE_GCC_SDCC4_BCR] = { 0x18000 },
+	[NE_GCC_USB20_PRIM_BCR] = { 0x31000 },
+	[NE_GCC_USB31_PRIM_BCR] = { 0x2a000 },
+	[NE_GCC_USB31_SEC_BCR] = { 0x2c000 },
+	[NE_GCC_USB3_DP_PHY_PRIM_BCR] = { 0x2b008 },
+	[NE_GCC_USB3_DP_PHY_SEC_BCR] = { 0x2d008 },
+	[NE_GCC_USB3_PHY_PRIM_BCR] = { 0x2b000 },
+	[NE_GCC_USB3_PHY_SEC_BCR] = { 0x2d000 },
+	[NE_GCC_USB3PHY_PHY_PRIM_BCR] = { 0x2b004 },
+	[NE_GCC_USB3PHY_PHY_SEC_BCR] = { 0x2d004 },
+	[NE_GCC_QUSB2PHY_PRIM_BCR] = { 0x2e000 },
+	[NE_GCC_QUSB2PHY_SEC_BCR] = { 0x2f000 },
+};
+
 static const struct clk_rcg_dfs_data ne_gcc_nord_dfs_clocks[] = {
 	DEFINE_RCG_DFS(ne_gcc_qupv3_wrap2_s0_clk_src),
 	DEFINE_RCG_DFS(ne_gcc_qupv3_wrap2_s1_clk_src),
@@ -1933,15 +1951,111 @@ static const struct qcom_cc_desc ne_gcc_nord_desc = {
 	.driver_data = &ne_gcc_nord_driver_data,
 };
 
+static const struct qcom_cc_driver_data ne_gcc_seca_driver_data = {
+	.dfs_rcgs = ne_gcc_nord_dfs_clocks,
+	.num_dfs_rcgs = ARRAY_SIZE(ne_gcc_nord_dfs_clocks),
+};
+
+static const struct qcom_cc_desc ne_gcc_seca_desc = {
+	.config = &ne_gcc_nord_regmap_config,
+	.clks = ne_gcc_nord_clocks,
+	.num_clks = ARRAY_SIZE(ne_gcc_nord_clocks),
+	.resets = ne_gcc_seca_resets,
+	.num_resets = ARRAY_SIZE(ne_gcc_seca_resets),
+	.gdscs = ne_gcc_nord_gdscs,
+	.num_gdscs = ARRAY_SIZE(ne_gcc_nord_gdscs),
+	.driver_data = &ne_gcc_seca_driver_data,
+};
+
+/* SecaAU votes all QUP WRAP2 branches in APCS_CLOCK_BRANCH_ENA_VOTE */
+static const struct {
+	struct clk_branch *clk;
+	u32 mask;
+} ne_gcc_seca_wrap2_votes[] = {
+	{ &ne_gcc_qupv3_wrap2_m_ahb_clk, BIT(21) },
+	{ &ne_gcc_qupv3_wrap2_s_ahb_clk, BIT(22) },
+	{ &ne_gcc_qupv3_wrap2_core_clk, BIT(23) },
+	{ &ne_gcc_qupv3_wrap2_core_2x_clk, BIT(24) },
+	{ &ne_gcc_qupv3_wrap2_s0_clk, BIT(25) },
+	{ &ne_gcc_qupv3_wrap2_s1_clk, BIT(26) },
+	{ &ne_gcc_qupv3_wrap2_s2_clk, BIT(27) },
+	{ &ne_gcc_qupv3_wrap2_s3_clk, BIT(28) },
+	{ &ne_gcc_qupv3_wrap2_s4_clk, BIT(29) },
+	{ &ne_gcc_qupv3_wrap2_s5_clk, BIT(30) },
+	{ &ne_gcc_qupv3_wrap2_s6_clk, BIT(31) },
+};
+
+/* Blocks SecaAU does not have in NE_GCC */
+static const unsigned int ne_gcc_seca_absent_clks[] = {
+	NE_GCC_AGGRE_NOC_UFS_PHY_AXI_CLK,
+	NE_GCC_GPU_2_GPLL0_CLK_SRC,
+	NE_GCC_GPU_2_GPLL0_DIV_CLK_SRC,
+	NE_GCC_GPU_2_HSCNOC_GFX_CLK,
+	NE_GCC_GPU_2_SMMU_VOTE_CLK,
+	NE_GCC_UFS_PHY_AHB_CLK,
+	NE_GCC_UFS_PHY_AXI_CLK,
+	NE_GCC_UFS_PHY_AXI_CLK_SRC,
+	NE_GCC_UFS_PHY_ICE_CORE_CLK,
+	NE_GCC_UFS_PHY_ICE_CORE_CLK_SRC,
+	NE_GCC_UFS_PHY_PHY_AUX_CLK,
+	NE_GCC_UFS_PHY_PHY_AUX_CLK_SRC,
+	NE_GCC_UFS_PHY_RX_SYMBOL_0_CLK,
+	NE_GCC_UFS_PHY_RX_SYMBOL_0_CLK_SRC,
+	NE_GCC_UFS_PHY_RX_SYMBOL_1_CLK,
+	NE_GCC_UFS_PHY_RX_SYMBOL_1_CLK_SRC,
+	NE_GCC_UFS_PHY_TX_SYMBOL_0_CLK,
+	NE_GCC_UFS_PHY_TX_SYMBOL_0_CLK_SRC,
+	NE_GCC_UFS_PHY_UNIPRO_CORE_CLK,
+	NE_GCC_UFS_PHY_UNIPRO_CORE_CLK_SRC,
+};
+
+static void ne_gcc_seca_fixup(void)
+{
+	unsigned int i;
+
+	for (i = 0; i < ARRAY_SIZE(ne_gcc_seca_wrap2_votes); i++) {
+		struct clk_regmap *clkr = &ne_gcc_seca_wrap2_votes[i].clk->clkr;
+
+		clkr->enable_reg = 0x57000;
+		clkr->enable_mask = ne_gcc_seca_wrap2_votes[i].mask;
+	}
+
+	for (i = 0; i < ARRAY_SIZE(ne_gcc_seca_absent_clks); i++)
+		ne_gcc_nord_clocks[ne_gcc_seca_absent_clks[i]] = NULL;
+
+	ne_gcc_nord_gdscs[NE_GCC_UFS_MEM_PHY_GDSC] = NULL;
+	ne_gcc_nord_gdscs[NE_GCC_UFS_PHY_GDSC] = NULL;
+}
+
+struct ne_gcc_variant {
+	const struct qcom_cc_desc *desc;
+	void (*fixup)(void);
+};
+
+static const struct ne_gcc_variant ne_gcc_nord_variant = {
+	.desc = &ne_gcc_nord_desc,
+};
+
+static const struct ne_gcc_variant ne_gcc_seca_variant = {
+	.desc = &ne_gcc_seca_desc,
+	.fixup = ne_gcc_seca_fixup,
+};
+
 static const struct of_device_id ne_gcc_nord_match_table[] = {
-	{ .compatible = "qcom,nord-negcc" },
+	{ .compatible = "qcom,nord-negcc", .data = &ne_gcc_nord_variant },
+	{ .compatible = "qcom,seca-negcc", .data = &ne_gcc_seca_variant },
 	{ }
 };
 MODULE_DEVICE_TABLE(of, ne_gcc_nord_match_table);
 
 static int ne_gcc_nord_probe(struct platform_device *pdev)
 {
-	return qcom_cc_probe(pdev, &ne_gcc_nord_desc);
+	const struct ne_gcc_variant *variant = device_get_match_data(&pdev->dev);
+
+	if (variant->fixup)
+		variant->fixup();
+
+	return qcom_cc_probe(pdev, variant->desc);
 }
 
 static struct platform_driver ne_gcc_nord_driver = {
