@@ -4,20 +4,23 @@
 $id: http://devicetree.org/schemas/clock/qcom,nord-negcc.yaml#
 $schema: http://devicetree.org/meta-schemas/core.yaml#
 
-title: Qualcomm Global North East Clock & Reset Controller on Nord SoC
+title: Qualcomm Global North East Clock & Reset Controller on Nord and SecaAU SoCs
 
 maintainers:
   - Taniya Das <taniya.das@oss.qualcomm.com>
 
 description: |
   Qualcomm global clock control (NE) module provides the clocks, resets
-  and power domains on Nord SoC.
+  and power domains on Nord and SecaAU SoCs. SecaAU has no UFS block in
+  this controller, so its UFS symbol clock inputs are left unconnected.
 
   See also: include/dt-bindings/clock/qcom,nord-negcc.h
 
 properties:
   compatible:
-    const: qcom,nord-negcc
+    enum:
+      - qcom,nord-negcc
+      - qcom,seca-negcc
 
   clocks:
     items:
