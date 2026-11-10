@@ -328,6 +328,17 @@ config CLK_NORD_VIDEOCC
 	  Say Y if you want to support video devices and functionality such as
 	  video encode/decode.
 
+config CLK_SECA_NWGCC
+	tristate "SecaAU North West Global Clock Controller"
+	depends on ARM64 || COMPILE_TEST
+	select QCOM_GDSC
+	default ARCH_QCOM
+	help
+	  Support for the North West global clock controller on SecaAU
+	  devices, which carries the UFS controller clocks, resets and
+	  power domains.
+	  Say Y if you want to use UFS storage on SecaAU.
+
 config CLK_SHIKRA_GCC
 	tristate "Shikra Global Clock Controller"
 	depends on ARM64 || COMPILE_TEST
