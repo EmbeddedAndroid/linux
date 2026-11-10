@@ -25,6 +25,10 @@ properties:
               - qcom,nord-cpucp-mbox
               - qcom,sm8750-cpucp-mbox
           - const: qcom,x1e80100-cpucp-mbox
+      - items:
+          - const: qcom,seca-cpucp-mbox
+          - const: qcom,nord-cpucp-mbox
+          - const: qcom,x1e80100-cpucp-mbox
       - enum:
           - qcom,x1e80100-cpucp-mbox
 
