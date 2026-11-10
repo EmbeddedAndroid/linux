@@ -238,5 +238,16 @@ void tpm_optee_remove(struct device *dev)
 }
 EXPORT_SYMBOL_GPL(tpm_optee_remove);
 
+/* Release the TEE resources on shutdown, leaving the chip registered. */
+void tpm_optee_shutdown(struct device *dev)
+{
+	struct tpm_optee_private *pvt_data = dev_get_drvdata(dev);
+
+	tee_shm_free(pvt_data->shm);
+	tee_client_close_session(pvt_data->ctx, pvt_data->session);
+	tee_client_close_context(pvt_data->ctx);
+}
+EXPORT_SYMBOL_GPL(tpm_optee_shutdown);
+
 MODULE_DESCRIPTION("OP-TEE TPM transport core");
 MODULE_LICENSE("GPL");

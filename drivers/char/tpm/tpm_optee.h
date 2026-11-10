@@ -27,5 +27,6 @@ struct tpm_optee_config {
 
 int tpm_optee_probe(struct device *dev, const struct tpm_optee_config *cfg);
 void tpm_optee_remove(struct device *dev);
+void tpm_optee_shutdown(struct device *dev);
 
 #endif /* __TPM_OPTEE_H__ */
