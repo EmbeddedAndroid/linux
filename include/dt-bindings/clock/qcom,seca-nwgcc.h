@@ -1,0 +1,55 @@
+/* SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause) */
+/*
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ */
+
+#ifndef _DT_BINDINGS_CLK_QCOM_NW_GCC_SECA_H
+#define _DT_BINDINGS_CLK_QCOM_NW_GCC_SECA_H
+
+/* NW_GCC clocks */
+#define NW_GCC_AGGRE_NOC_UFS_0_PHY_AXI_CLK			0
+#define NW_GCC_AGGRE_NOC_UFS_1_PHY_AXI_CLK			1
+#define NW_GCC_GPLL0						2
+#define NW_GCC_GPLL3						3
+#define NW_GCC_UFS_0_PHY_AHB_CLK				4
+#define NW_GCC_UFS_0_PHY_AXI_CLK				5
+#define NW_GCC_UFS_0_PHY_AXI_CLK_SRC				6
+#define NW_GCC_UFS_0_PHY_ICE_CORE_CLK				7
+#define NW_GCC_UFS_0_PHY_ICE_CORE_CLK_SRC			8
+#define NW_GCC_UFS_0_PHY_PHY_AUX_CLK				9
+#define NW_GCC_UFS_0_PHY_PHY_AUX_CLK_SRC			10
+#define NW_GCC_UFS_0_PHY_RX_SYMBOL_0_CLK			11
+#define NW_GCC_UFS_0_PHY_RX_SYMBOL_0_CLK_SRC			12
+#define NW_GCC_UFS_0_PHY_RX_SYMBOL_1_CLK			13
+#define NW_GCC_UFS_0_PHY_RX_SYMBOL_1_CLK_SRC			14
+#define NW_GCC_UFS_0_PHY_TX_SYMBOL_0_CLK			15
+#define NW_GCC_UFS_0_PHY_TX_SYMBOL_0_CLK_SRC			16
+#define NW_GCC_UFS_0_PHY_UNIPRO_CORE_CLK			17
+#define NW_GCC_UFS_0_PHY_UNIPRO_CORE_CLK_SRC			18
+#define NW_GCC_UFS_1_PHY_AHB_CLK				19
+#define NW_GCC_UFS_1_PHY_AXI_CLK				20
+#define NW_GCC_UFS_1_PHY_AXI_CLK_SRC				21
+#define NW_GCC_UFS_1_PHY_ICE_CORE_CLK				22
+#define NW_GCC_UFS_1_PHY_ICE_CORE_CLK_SRC			23
+#define NW_GCC_UFS_1_PHY_PHY_AUX_CLK				24
+#define NW_GCC_UFS_1_PHY_PHY_AUX_CLK_SRC			25
+#define NW_GCC_UFS_1_PHY_RX_SYMBOL_0_CLK			26
+#define NW_GCC_UFS_1_PHY_RX_SYMBOL_0_CLK_SRC			27
+#define NW_GCC_UFS_1_PHY_RX_SYMBOL_1_CLK			28
+#define NW_GCC_UFS_1_PHY_RX_SYMBOL_1_CLK_SRC			29
+#define NW_GCC_UFS_1_PHY_TX_SYMBOL_0_CLK			30
+#define NW_GCC_UFS_1_PHY_TX_SYMBOL_0_CLK_SRC			31
+#define NW_GCC_UFS_1_PHY_UNIPRO_CORE_CLK			32
+#define NW_GCC_UFS_1_PHY_UNIPRO_CORE_CLK_SRC			33
+
+/* NW_GCC power domains */
+#define NW_GCC_UFS_0_MEM_PHY_GDSC				0
+#define NW_GCC_UFS_0_PHY_GDSC					1
+#define NW_GCC_UFS_1_MEM_PHY_GDSC				2
+#define NW_GCC_UFS_1_PHY_GDSC					3
+
+/* NW_GCC resets */
+#define NW_GCC_UFS_0_PHY_BCR					0
+#define NW_GCC_UFS_1_PHY_BCR					1
+
+#endif
