@@ -124,6 +124,13 @@
 		};
 	};
 
+	firmware: firmware {
+		scm {
+			compatible = "qcom,scm-seca",
+				     "qcom,scm";
+		};
+	};
+
 	memory@80000000 {
 		device_type = "memory";
 		/* filled in by the bootloader */
