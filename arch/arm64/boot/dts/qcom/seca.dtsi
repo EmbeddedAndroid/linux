@@ -44,6 +44,8 @@
 			compatible = "qcom,oryon-1-5";
 			reg = <0x0 0x0>;
 			enable-method = "psci";
+			power-domains = <&cpu0_pd>;
+			power-domain-names = "psci";
 		};
 
 		cpu1: cpu@100 {
@@ -51,6 +53,8 @@
 			compatible = "qcom,oryon-1-5";
 			reg = <0x0 0x100>;
 			enable-method = "psci";
+			power-domains = <&cpu1_pd>;
+			power-domain-names = "psci";
 		};
 
 		cpu2: cpu@200 {
@@ -58,6 +62,8 @@
 			compatible = "qcom,oryon-1-5";
 			reg = <0x0 0x200>;
 			enable-method = "psci";
+			power-domains = <&cpu2_pd>;
+			power-domain-names = "psci";
 		};
 
 		cpu3: cpu@300 {
@@ -65,6 +71,8 @@
 			compatible = "qcom,oryon-1-5";
 			reg = <0x0 0x300>;
 			enable-method = "psci";
+			power-domains = <&cpu3_pd>;
+			power-domain-names = "psci";
 		};
 
 		cpu4: cpu@400 {
@@ -72,6 +80,8 @@
 			compatible = "qcom,oryon-1-5";
 			reg = <0x0 0x400>;
 			enable-method = "psci";
+			power-domains = <&cpu4_pd>;
+			power-domain-names = "psci";
 		};
 
 		cpu5: cpu@500 {
@@ -79,6 +89,8 @@
 			compatible = "qcom,oryon-1-5";
 			reg = <0x0 0x500>;
 			enable-method = "psci";
+			power-domains = <&cpu5_pd>;
+			power-domain-names = "psci";
 		};
 
 		cpu6: cpu@10000 {
@@ -86,6 +98,8 @@
 			compatible = "qcom,oryon-1-5";
 			reg = <0x0 0x10000>;
 			enable-method = "psci";
+			power-domains = <&cpu6_pd>;
+			power-domain-names = "psci";
 		};
 
 		cpu7: cpu@10100 {
@@ -93,6 +107,8 @@
 			compatible = "qcom,oryon-1-5";
 			reg = <0x0 0x10100>;
 			enable-method = "psci";
+			power-domains = <&cpu7_pd>;
+			power-domain-names = "psci";
 		};
 
 		cpu8: cpu@10200 {
@@ -100,6 +116,8 @@
 			compatible = "qcom,oryon-1-5";
 			reg = <0x0 0x10200>;
 			enable-method = "psci";
+			power-domains = <&cpu8_pd>;
+			power-domain-names = "psci";
 		};
 
 		cpu9: cpu@10300 {
@@ -107,6 +125,8 @@
 			compatible = "qcom,oryon-1-5";
 			reg = <0x0 0x10300>;
 			enable-method = "psci";
+			power-domains = <&cpu9_pd>;
+			power-domain-names = "psci";
 		};
 
 		cpu10: cpu@10400 {
@@ -114,6 +134,8 @@
 			compatible = "qcom,oryon-1-5";
 			reg = <0x0 0x10400>;
 			enable-method = "psci";
+			power-domains = <&cpu10_pd>;
+			power-domain-names = "psci";
 		};
 
 		cpu11: cpu@10500 {
@@ -121,6 +143,39 @@
 			compatible = "qcom,oryon-1-5";
 			reg = <0x0 0x10500>;
 			enable-method = "psci";
+			power-domains = <&cpu11_pd>;
+			power-domain-names = "psci";
+		};
+
+		idle-states {
+			entry-method = "psci";
+
+			core_off_c4: cluster-c4 {
+				compatible = "arm,idle-state";
+				idle-state-name = "retention";
+				entry-latency-us = <93>;
+				exit-latency-us = <129>;
+				min-residency-us = <560>;
+				arm,psci-suspend-param = <0x00000003>;
+			};
+		};
+
+		domain-idle-states {
+			cluster_pwr_dn: cluster-sleep-0 {
+				compatible = "domain-idle-state";
+				arm,psci-suspend-param = <0x01000053>;
+				entry-latency-us = <2150>;
+				exit-latency-us = <1983>;
+				min-residency-us = <9144>;
+			};
+
+			domain_ss3: domain-sleep-0 {
+				compatible = "domain-idle-state";
+				arm,psci-suspend-param = <0x02000153>;
+				entry-latency-us = <2800>;
+				exit-latency-us = <4400>;
+				min-residency-us = <10150>;
+			};
 		};
 	};
 
@@ -140,6 +195,95 @@
 	psci {
 		compatible = "arm,psci-1.0";
 		method = "smc";
+
+		cpu0_pd: power-domain-cpu0 {
+			#power-domain-cells = <0>;
+			power-domains = <&cluster0_pd>;
+			domain-idle-states = <&core_off_c4>;
+		};
+
+		cpu1_pd: power-domain-cpu1 {
+			#power-domain-cells = <0>;
+			power-domains = <&cluster0_pd>;
+			domain-idle-states = <&core_off_c4>;
+		};
+
+		cpu2_pd: power-domain-cpu2 {
+			#power-domain-cells = <0>;
+			power-domains = <&cluster0_pd>;
+			domain-idle-states = <&core_off_c4>;
+		};
+
+		cpu3_pd: power-domain-cpu3 {
+			#power-domain-cells = <0>;
+			power-domains = <&cluster0_pd>;
+			domain-idle-states = <&core_off_c4>;
+		};
+
+		cpu4_pd: power-domain-cpu4 {
+			#power-domain-cells = <0>;
+			power-domains = <&cluster0_pd>;
+			domain-idle-states = <&core_off_c4>;
+		};
+
+		cpu5_pd: power-domain-cpu5 {
+			#power-domain-cells = <0>;
+			power-domains = <&cluster0_pd>;
+			domain-idle-states = <&core_off_c4>;
+		};
+
+		cpu6_pd: power-domain-cpu6 {
+			#power-domain-cells = <0>;
+			power-domains = <&cluster1_pd>;
+			domain-idle-states = <&core_off_c4>;
+		};
+
+		cpu7_pd: power-domain-cpu7 {
+			#power-domain-cells = <0>;
+			power-domains = <&cluster1_pd>;
+			domain-idle-states = <&core_off_c4>;
+		};
+
+		cpu8_pd: power-domain-cpu8 {
+			#power-domain-cells = <0>;
+			power-domains = <&cluster1_pd>;
+			domain-idle-states = <&core_off_c4>;
+		};
+
+		cpu9_pd: power-domain-cpu9 {
+			#power-domain-cells = <0>;
+			power-domains = <&cluster1_pd>;
+			domain-idle-states = <&core_off_c4>;
+		};
+
+		cpu10_pd: power-domain-cpu10 {
+			#power-domain-cells = <0>;
+			power-domains = <&cluster1_pd>;
+			domain-idle-states = <&core_off_c4>;
+		};
+
+		cpu11_pd: power-domain-cpu11 {
+			#power-domain-cells = <0>;
+			power-domains = <&cluster1_pd>;
+			domain-idle-states = <&core_off_c4>;
+		};
+
+		cluster0_pd: power-domain-cluster0 {
+			#power-domain-cells = <0>;
+			power-domains = <&system_pd>;
+			domain-idle-states = <&cluster_pwr_dn>;
+		};
+
+		cluster1_pd: power-domain-cluster1 {
+			#power-domain-cells = <0>;
+			power-domains = <&system_pd>;
+			domain-idle-states = <&cluster_pwr_dn>;
+		};
+
+		system_pd: power-domain-system {
+			#power-domain-cells = <0>;
+			domain-idle-states = <&domain_ss3>;
+		};
 	};
 
 	reserved-memory {
