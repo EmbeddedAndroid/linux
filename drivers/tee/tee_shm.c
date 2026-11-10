@@ -297,6 +297,9 @@ struct tee_shm *tee_shm_alloc_dma_mem(struct tee_context *ctx,
 	if (!page)
 		goto err_put_teedev;
 
+	dma_sync_single_for_device(&teedev->dev, dma_addr,
+				   page_count * PAGE_SIZE, DMA_BIDIRECTIONAL);
+
 	dma_mem = kzalloc_obj(*dma_mem);
 	if (!dma_mem)
 		goto err_free_pages;
