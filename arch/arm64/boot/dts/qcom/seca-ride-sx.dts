@@ -1,0 +1,47 @@
+// SPDX-License-Identifier: BSD-3-Clause
+/*
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ */
+
+/dts-v1/;
+
+#include <dt-bindings/input/linux-event-codes.h>
+#include "seca.dtsi"
+
+/ {
+	model = "Qualcomm Technologies, Inc. SecaAU Ride SX";
+	compatible = "qcom,seca-ride-sx", "qcom,seca";
+
+	aliases {
+		serial0 = &uart15;
+	};
+
+	chosen {
+		stdout-path = "serial0:115200n8";
+	};
+
+	gpio-keys {
+		compatible = "gpio-keys";
+
+		pinctrl-0 = <&key_vol_down_default>;
+		pinctrl-names = "default";
+
+		key-volume-down {
+			label = "Volume Down";
+			gpios = <&tlmm 136 GPIO_ACTIVE_HIGH>;
+			linux,code = <KEY_VOLUMEDOWN>;
+		};
+	};
+};
+
+&tlmm {
+	key_vol_down_default: key-vol-down-default-state {
+		pins = "gpio136";
+		function = "gpio";
+		bias-pull-down;
+	};
+};
+
+&uart15 {
+	status = "okay";
+};
