@@ -112,4 +112,7 @@ enum qcom_socinfo_feature_code {
 #define SOCINFO_PCn(n)			((n) + 1)
 #define SOCINFO_PC_RESERVE		(BIT(31) - 1)
 
+/* SoC IDs */
+#define QCOM_ID_QAM8787P		742
+
 #endif
