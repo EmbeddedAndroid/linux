@@ -86,6 +86,7 @@ struct arm_smmu_pkvm_params arm_smmu_pkvm_params;
 #define SMMU_SCTLR_TRE			BIT(1)
 #define SMMU_SCTLR_AFE			BIT(2)
 #define SMMU_SCTLR_CFRE			BIT(5)
+#define SMMU_SCTLR_HUPCF		BIT(8)
 #define SMMU_CB_TTBR0			0x20
 #define SMMU_CB_TCR			0x30
 #define SMMU_CB_FSR			0x58
@@ -826,7 +827,11 @@ static int smmu_init(void)
 
 	hyp_spin_lock_init(&smmu.lock);
 
-	/* Shadow bank: faults abort the transaction and are not signalled */
+	/*
+	 * Shadow bank: faults abort the transaction and are not signalled.
+	 * Every host bank nests here, so a fault left outstanding must not
+	 * hold up the other masters' transactions (HUPCF).
+	 */
 	writel_relaxed(0, smmu.cb + SMMU_CB_SCTLR);
 	writel_relaxed(SMMU_CBA2R_VA64, smmu.gr1 + SMMU_GR1_CBA2R(smmu.cb_shadow));
 	writel_relaxed(FIELD_PREP(SMMU_CBAR_TYPE, SMMU_CBAR_TYPE_S2) | GUARD_VMID,
@@ -835,8 +840,8 @@ static int smmu_init(void)
 	writel_relaxed(GUARD_TCR, smmu.cb + SMMU_CB_TCR);
 	writel_relaxed(~0U, smmu.cb + SMMU_CB_FSR);
 	wmb();
-	writel_relaxed(SMMU_SCTLR_CFRE | SMMU_SCTLR_AFE | SMMU_SCTLR_TRE |
-		       SMMU_SCTLR_M, smmu.cb + SMMU_CB_SCTLR);
+	writel_relaxed(SMMU_SCTLR_HUPCF | SMMU_SCTLR_CFRE | SMMU_SCTLR_AFE |
+		       SMMU_SCTLR_TRE | SMMU_SCTLR_M, smmu.cb + SMMU_CB_SCTLR);
 
 	/* Protected banks: stage 2 only, empty until the host maps lent memory */
 	for (i = 0; i < smmu.nr_banks; i++) {
@@ -851,8 +856,9 @@ static int smmu_init(void)
 		writel_relaxed(BANK_TCR, smmu.bank_cb[i] + SMMU_CB_TCR);
 		writel_relaxed(~0U, smmu.bank_cb[i] + SMMU_CB_FSR);
 		wmb();
-		writel_relaxed(SMMU_SCTLR_CFRE | SMMU_SCTLR_AFE | SMMU_SCTLR_TRE |
-			       SMMU_SCTLR_M, smmu.bank_cb[i] + SMMU_CB_SCTLR);
+		writel_relaxed(SMMU_SCTLR_HUPCF | SMMU_SCTLR_CFRE | SMMU_SCTLR_AFE |
+			       SMMU_SCTLR_TRE | SMMU_SCTLR_M,
+			       smmu.bank_cb[i] + SMMU_CB_SCTLR);
 		writel_relaxed(FIELD_PREP(SMMU_S2CR_CBNDX, cbn),
 			       smmu.gr0 + SMMU_GR0_S2CR(smr));
 		writel_relaxed(SMMU_SMR_VALID | p->banks[i].smr,
