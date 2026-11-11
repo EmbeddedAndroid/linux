@@ -28,6 +28,7 @@ properties:
               - qcom,hawi-fastrpc
               - qcom,maili-fastrpc
               - qcom,nord-fastrpc
+              - qcom,seca-fastrpc
           - const: qcom,kaanapali-fastrpc
 
   label:
