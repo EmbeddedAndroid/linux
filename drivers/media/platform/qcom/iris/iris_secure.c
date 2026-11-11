@@ -16,10 +16,13 @@
  */
 
 #include <linux/dma-buf.h>
+#include <linux/dma-map-ops.h>
 #include <linux/dma-mapping.h>
 #include <linux/genalloc.h>
+#include <linux/iommu.h>
 #include <linux/moduleparam.h>
 #include <linux/platform_device.h>
+#include <linux/slab.h>
 #include <linux/tee_core.h>
 #include <media/v4l2-mem2mem.h>
 #include <media/videobuf2-dma-contig.h>
@@ -44,6 +47,23 @@ static bool secure_test_skip_heap_check;
 module_param(secure_test_skip_heap_check, bool, 0644);
 MODULE_PARM_DESC(secure_test_skip_heap_check,
 		 "Test only: let the hypervisor and the SMMU refuse buffers of the wrong kind");
+
+/*
+ * Test hook: aim the first page of a non-secure session's buffers at a
+ * physical page through the codec's own IOMMU domain, on the input queue
+ * (the codec reads it) or with secure_test_dma_write on the output queue
+ * (the codec writes it). The host stage 1 maps any address; the shadow
+ * stage 2 of the hypervisor must keep the codec out of memory the host
+ * does not own.
+ */
+static unsigned long secure_test_dma_target;
+module_param(secure_test_dma_target, ulong, 0600);
+MODULE_PARM_DESC(secure_test_dma_target,
+		 "Test only: physical page that non-secure buffers start at");
+static bool secure_test_dma_write;
+module_param(secure_test_dma_write, bool, 0600);
+MODULE_PARM_DESC(secure_test_dma_write,
+		 "Test only: aim output buffers (codec writes) instead of input buffers");
 
 static bool iris_secure_supported(struct iris_core *core)
 {
@@ -167,6 +187,51 @@ bool iris_secure_buf_refused(struct iris_inst *inst, struct vb2_buffer *vb2)
 
 	return !inst->secure && dbuf && !secure_test_skip_heap_check &&
 	       tee_heap_dma_buf_id(dbuf) >= 0;
+}
+
+void iris_secure_test_aim(struct iris_inst *inst, struct vb2_buffer *vb2,
+			  struct iris_buffer *buf)
+{
+	phys_addr_t target = READ_ONCE(secure_test_dma_target) & PAGE_MASK;
+	bool write = READ_ONCE(secure_test_dma_write);
+	struct vb2_queue *q = vb2->vb2_queue;
+	struct device *dev = q->alloc_devs[0] ?: q->dev;
+	struct dma_buf *dbuf = vb2->planes[0].dbuf;
+	dma_addr_t addr = buf->device_addr;
+	struct iommu_domain *dom;
+	size_t size, off, n;
+	phys_addr_t *pa;
+	int prot;
+
+	if (!target || inst->secure || buf->type != (write ? BUF_OUTPUT : BUF_INPUT))
+		return;
+
+	dom = iommu_get_domain_for_dev(dev);
+	size = PAGE_ALIGN(dbuf ? dbuf->size : vb2_plane_size(vb2, 0));
+	pa = kvmalloc_array(size >> PAGE_SHIFT, sizeof(*pa), GFP_KERNEL);
+	if (!dom || !pa || !PAGE_ALIGNED(addr))
+		goto err;
+
+	/*
+	 * The buffer may be mapped with blocks, which do not split: remap it
+	 * page by page, the first page to the target.
+	 */
+	for (off = 0, n = 0; off < size; off += PAGE_SIZE, n++)
+		pa[n] = iommu_iova_to_phys(dom, addr + off);
+	if (iommu_unmap(dom, addr, size) != size)
+		goto err;
+	prot = IOMMU_READ | IOMMU_WRITE | (dev_is_dma_coherent(dev) ? IOMMU_CACHE : 0);
+	for (off = 0, n = 0; off < size; off += PAGE_SIZE, n++)
+		if (iommu_map(dom, addr + off, n ? pa[n] : target, PAGE_SIZE,
+			      n || write ? prot : IOMMU_READ, GFP_KERNEL))
+			goto err;
+	kvfree(pa);
+	dev_info(inst->core->dev, "test: %s buffer %pad page 0 aimed at %pa\n",
+		 write ? "output" : "input", &addr, &target);
+	return;
+err:
+	kvfree(pa);
+	dev_err(inst->core->dev, "test: cannot aim %pad at %pa\n", &addr, &target);
 }
 
 int iris_secure_alloc_internal(struct iris_inst *inst, struct iris_buffer *buf)

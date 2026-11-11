@@ -19,6 +19,8 @@ int iris_secure_buf_init(struct iris_inst *inst, struct vb2_buffer *vb2,
 			 struct iris_buffer *buf);
 void iris_secure_buf_cleanup(struct iris_inst *inst, struct iris_buffer *buf);
 bool iris_secure_buf_refused(struct iris_inst *inst, struct vb2_buffer *vb2);
+void iris_secure_test_aim(struct iris_inst *inst, struct vb2_buffer *vb2,
+			  struct iris_buffer *buf);
 int iris_secure_alloc_internal(struct iris_inst *inst, struct iris_buffer *buf);
 void iris_secure_free_internal(struct iris_inst *inst, struct iris_buffer *buf);
 

@@ -216,6 +216,10 @@ static int arm_smmu_pkvm_show(struct seq_file *m, void *v)
 	seq_printf(m, "faults %llu fsr %#llx far %#llx fsynr0 %#llx cbfrsynra %#llx\n",
 		   fsr >> 32, fsr & U32_MAX, far, synr & U32_MAX, synr >> 32);
 	seq_printf(m, "tables %llu\n", tables);
+	for (i = 0; i < 2; i++)
+		seq_printf(m, "probe %s pa %#llx sum %#llx\n", i ? "pool" : "data",
+			   kvm_call_hyp_nvhe(__pkvm_arm_smmu_fault, ARM_SMMU_PKVM_PROBE + i),
+			   kvm_call_hyp_nvhe(__pkvm_arm_smmu_fault, ARM_SMMU_PKVM_PROBE_SUM + i));
 	for (i = 0; i < smmu_pkvm.nr_banks; i++) {
 		u64 f = kvm_call_hyp_nvhe(__pkvm_arm_smmu_fault,
 					  ARM_SMMU_PKVM_BANK_FAULT + i);

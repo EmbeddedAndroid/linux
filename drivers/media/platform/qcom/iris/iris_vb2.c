@@ -103,6 +103,7 @@ int iris_vb2_buf_init(struct vb2_buffer *vb2)
 		return -EINVAL;
 
 	buf->device_addr = vb2_dma_contig_plane_dma_addr(vb2, 0);
+	iris_secure_test_aim(inst, vb2, buf);
 
 	return 0;
 }

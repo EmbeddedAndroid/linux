@@ -48,7 +48,9 @@ enum arm_smmu_pkvm_fault_field {
 	ARM_SMMU_PKVM_FAR,
 	ARM_SMMU_PKVM_SYNR,
 	ARM_SMMU_PKVM_TABLES,
-	ARM_SMMU_PKVM_BANK_FAULT,	/* + bank: FSR << 32 | FAR */
+	ARM_SMMU_PKVM_PROBE,		/* + probe: physical address */
+	ARM_SMMU_PKVM_PROBE_SUM = ARM_SMMU_PKVM_PROBE + 2,	/* + probe */
+	ARM_SMMU_PKVM_BANK_FAULT = ARM_SMMU_PKVM_PROBE_SUM + 2,	/* + bank: FSR << 32 | FAR */
 };
 
 #ifdef __KVM_NVHE_HYPERVISOR__

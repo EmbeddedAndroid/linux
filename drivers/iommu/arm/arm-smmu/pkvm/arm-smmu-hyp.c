@@ -156,6 +156,31 @@ struct smmu_hyp {
 
 static struct smmu_hyp smmu;
 
+/*
+ * Test probes for host DMA aimed at memory the host does not own: a page
+ * of hypervisor data and the shadow bank's level 1 table, in the IOMMU
+ * pool. The host reads their physical addresses and checksums.
+ */
+#define NR_PROBES			2
+static u64 probe_data[PTRS] __aligned(PAGE_SIZE);
+
+static u64 *probe_page(u32 n)
+{
+	return n ? smmu.l1 : probe_data;
+}
+
+static u64 probe_sum(u32 n)
+{
+	u64 *p = probe_page(n), sum = 0;
+	int i;
+
+	/* Clean lines only: a DMA write that landed is read from memory */
+	kvm_flush_dcache_to_poc(p, PAGE_SIZE);
+	for (i = 0; i < PTRS; i++)
+		sum = (sum ^ READ_ONCE(p[i])) * 0x100000001b3ULL;
+	return sum;
+}
+
 static void flush_pte(u64 *ptep)
 {
 	kvm_flush_dcache_to_poc(ptep, sizeof(*ptep));
@@ -715,6 +740,12 @@ u64 arm_smmu_pkvm_fault(u32 field)
 	case ARM_SMMU_PKVM_TABLES:
 		ret = smmu.nr_tables;
 		break;
+	case ARM_SMMU_PKVM_PROBE ... ARM_SMMU_PKVM_PROBE + NR_PROBES - 1:
+		ret = hyp_virt_to_phys(probe_page(field - ARM_SMMU_PKVM_PROBE));
+		break;
+	case ARM_SMMU_PKVM_PROBE_SUM ... ARM_SMMU_PKVM_PROBE_SUM + NR_PROBES - 1:
+		ret = probe_sum(field - ARM_SMMU_PKVM_PROBE_SUM);
+		break;
 	default:
 		if (field - ARM_SMMU_PKVM_BANK_FAULT < smmu.nr_banks) {
 			void __iomem *cb = smmu.bank_cb[field - ARM_SMMU_PKVM_BANK_FAULT];
@@ -820,6 +851,9 @@ static int smmu_init(void)
 	smmu.l1 = new_table();
 	if (!smmu.l1)
 		return -ENOMEM;
+	for (i = 0; i < PTRS; i++)
+		probe_data[i] = (i + 1) * 0x9e3779b97f4a7c15ULL;
+	flush_table(probe_data);
 	ret = smmu_initial_map();
 	if (ret)
 		return ret;
