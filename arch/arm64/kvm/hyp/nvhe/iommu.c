@@ -46,11 +46,13 @@ static int pkvm_iommu_snapshot_walker(const struct kvm_pgtable_visit_ctx *ctx,
 			kvm_granule_size(ctx->level);
 	end = min(ctx->end, block_end);
 	/*
-	 * Annotated PTEs stay unmapped. Everything else is mapped, including
-	 * PTEs the host has not faulted in yet (0) to avoid page faults.
+	 * Annotated PTEs are unmapped: the driver may have mapped them before
+	 * the snapshot to keep DMA running across its init. Everything else
+	 * is mapped, including PTEs the host has not faulted in yet (0) to
+	 * avoid page faults.
 	 */
 	if (pte && !kvm_pte_valid(pte))
-		return 0;
+		return pkvm_iommu_ops->host_stage2_idmap(start, end, 0);
 
 	if (kvm_pte_valid(pte))
 		prot = pkvm_to_iommu_prot(kvm_pgtable_stage2_pte_prot(pte));
