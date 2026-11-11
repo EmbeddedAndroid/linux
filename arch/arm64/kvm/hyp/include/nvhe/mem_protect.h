@@ -51,6 +51,8 @@ int __pkvm_hyp_donate_host(u64 pfn, u64 nr_pages);
 int __pkvm_host_share_ffa(u64 pfn, u64 nr_pages);
 int __pkvm_host_lend_ffa(u64 pfn, u64 nr_pages);
 int __pkvm_host_reclaim_lent_ffa(u64 pfn, u64 nr_pages);
+int __pkvm_host_ffa_lent_set_mapped(u64 phys, u64 size, bool map);
+int __pkvm_host_ffa_lent_hold(u64 pfn, u64 nr_pages, bool hold);
 int __pkvm_host_unshare_ffa(u64 pfn, u64 nr_pages);
 int __pkvm_host_donate_guest(u64 pfn, u64 gfn, struct pkvm_hyp_vcpu *vcpu);
 int __pkvm_vcpu_in_poison_fault(struct pkvm_hyp_vcpu *hyp_vcpu);

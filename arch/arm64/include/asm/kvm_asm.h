@@ -123,6 +123,8 @@ enum __kvm_host_smccc_func {
 	__KVM_HOST_SMCCC_FUNC___pkvm_vcpu_sync_state,
 	__KVM_HOST_SMCCC_FUNC___pkvm_tlb_flush_vmid,
 	__KVM_HOST_SMCCC_FUNC___pkvm_arm_smmu_fault,
+	__KVM_HOST_SMCCC_FUNC___pkvm_arm_smmu_bank_map,
+	__KVM_HOST_SMCCC_FUNC___pkvm_arm_smmu_bank_unmap,
 
 	MARKER(__KVM_HOST_SMCCC_FUNC_MAX)
 };

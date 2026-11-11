@@ -449,6 +449,28 @@ static int ffa_host_unshare_ranges(struct ffa_mem_region_addr_range *ranges,
 	return ret;
 }
 
+/* Hold (@hold) or release lent ranges for a reclaim; returns how many it did */
+static u32 ffa_host_hold_ranges(struct ffa_mem_region_addr_range *ranges,
+				u32 nranges, bool hold)
+{
+	u32 i;
+
+	for (i = 0; i < nranges; ++i) {
+		struct ffa_mem_region_addr_range *range = &ranges[i];
+		u64 sz = (u64)range->pg_cnt * FFA_PAGE_SIZE;
+
+		if (!PAGE_ALIGNED(sz | range->address))
+			break;
+		if (__pkvm_host_ffa_lent_hold(hyp_phys_to_pfn(range->address),
+					      sz / PAGE_SIZE, hold)) {
+			WARN_ON(!hold);
+			break;
+		}
+	}
+
+	return i;
+}
+
 /*
  * FFA_MEM_RECLAIM does not say whether the handle was shared or lent, but
  * all the ranges of a handle went through the same transition: the first
@@ -681,6 +703,7 @@ static void do_ffa_mem_reclaim(struct arm_smccc_1_2_regs *res,
 	struct ffa_mem_region_attributes *ep_mem_access;
 	struct ffa_composite_mem_region *reg;
 	struct ffa_mem_region *buf;
+	u32 nheld;
 	int ret = 0;
 	u64 handle;
 
@@ -756,9 +779,19 @@ static void do_ffa_mem_reclaim(struct arm_smccc_1_2_regs *res,
 		goto out_unlock;
 	}
 
-	ffa_mem_reclaim(res, handle_lo, handle_hi, flags);
-	if (res->a0 != FFA_SUCCESS)
+	/* Lent memory a device still reaches through a hypervisor bank stays lent */
+	nheld = ffa_host_hold_ranges(reg->constituents, reg->addr_range_cnt, true);
+	if (nheld != reg->addr_range_cnt) {
+		ffa_host_hold_ranges(reg->constituents, nheld, false);
+		ret = FFA_RET_DENIED;
 		goto out_unlock;
+	}
+
+	ffa_mem_reclaim(res, handle_lo, handle_hi, flags);
+	if (res->a0 != FFA_SUCCESS) {
+		ffa_host_hold_ranges(reg->constituents, nheld, false);
+		goto out_unlock;
+	}
 
 	/* If the SPMD was happy, then we should be too. */
 	WARN_ON(ffa_host_reclaim_ranges(reg->constituents,

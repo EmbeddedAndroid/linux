@@ -255,5 +255,9 @@ DECLARE_KVM_HOST_HCALL0(void, __pkvm_vcpu_sync_state)
 DECLARE_KVM_HOST_HCALL(void, __pkvm_tlb_flush_vmid,
 	pkvm_handle_t, handle)
 DECLARE_KVM_HOST_HCALL(u64, __pkvm_arm_smmu_fault, u32, field)
+DECLARE_KVM_HOST_HCALL(int, __pkvm_arm_smmu_bank_map,
+	u32, bank, u32, iova, u64, pfn, u32, nr_pages)
+DECLARE_KVM_HOST_HCALL(int, __pkvm_arm_smmu_bank_unmap,
+	u32, bank, u32, iova, u32, nr_pages)
 
 #endif /* __ARM64_KVM_HCALL_H__ */

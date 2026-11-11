@@ -1179,6 +1179,26 @@ DEFINE_KVM_HOST_HCALL(u64, __pkvm_arm_smmu_fault, u32, field)
 #endif
 }
 
+DEFINE_KVM_HOST_HCALL(int, __pkvm_arm_smmu_bank_map,
+	u32, bank, u32, iova, u64, pfn, u32, nr_pages)
+{
+#ifdef CONFIG_ARM_SMMU_PKVM
+	return arm_smmu_pkvm_bank_map(bank, iova, pfn, nr_pages);
+#else
+	return -ENODEV;
+#endif
+}
+
+DEFINE_KVM_HOST_HCALL(int, __pkvm_arm_smmu_bank_unmap,
+	u32, bank, u32, iova, u32, nr_pages)
+{
+#ifdef CONFIG_ARM_SMMU_PKVM
+	return arm_smmu_pkvm_bank_unmap(bank, iova, nr_pages);
+#else
+	return -ENODEV;
+#endif
+}
+
 DEFINE_KVM_HOST_HCALL(void, __pkvm_tlb_flush_vmid,
 	pkvm_handle_t, handle)
 {
@@ -1627,6 +1647,8 @@ static const hcall_t host_hcall[] = {
 	HANDLE_FUNC(__pkvm_vcpu_sync_state),
 	HANDLE_FUNC(__pkvm_tlb_flush_vmid),
 	HANDLE_FUNC(__pkvm_arm_smmu_fault),
+	HANDLE_FUNC(__pkvm_arm_smmu_bank_map),
+	HANDLE_FUNC(__pkvm_arm_smmu_bank_unmap),
 };
 
 static void handle_host_hcall(struct kvm_cpu_context *host_ctxt)

@@ -1401,7 +1401,16 @@ int __pkvm_host_lend_ffa(u64 pfn, u64 nr_pages)
 	return ret;
 }
 
-static int __host_check_ffa_lent_range(u64 phys, u64 size)
+/*
+ * Lent pages carry in their annotation whether a hypervisor-owned IOMMU
+ * bank maps them (PKVM_FFA_LENT_MAPPED): they cannot be reclaimed then;
+ * or whether a reclaim is in flight (PKVM_FFA_LENT_RECLAIMING): no bank
+ * can map them then.
+ */
+#define PKVM_FFA_LENT_MAPPED		1ULL
+#define PKVM_FFA_LENT_RECLAIMING	2ULL
+
+static int __host_check_ffa_lent_range_meta(u64 phys, u64 size, u64 meta)
 {
 	u64 addr;
 
@@ -1415,9 +1424,63 @@ static int __host_check_ffa_lent_range(u64 phys, u64 size)
 
 		if (!host_stage2_pte_is_owned_by(pte, PKVM_ID_FFA))
 			return -EPERM;
+		if (FIELD_GET(KVM_HOST_DONATION_PTE_EXTRA_MASK, pte) != meta)
+			return -EBUSY;
 	}
 
 	return 0;
+}
+
+static int __host_check_ffa_lent_range(u64 phys, u64 size)
+{
+	return __host_check_ffa_lent_range_meta(phys, size, 0);
+}
+
+/*
+ * Mark lent pages as mapped (@map) or no longer mapped in a hypervisor
+ * IOMMU bank. Called with the host component locked.
+ */
+int __pkvm_host_ffa_lent_set_mapped(u64 phys, u64 size, bool map)
+{
+	int ret;
+
+	hyp_assert_lock_held(&host_mmu.lock);
+
+	ret = __host_check_ffa_lent_range_meta(phys, size,
+					       map ? 0 : PKVM_FFA_LENT_MAPPED);
+	if (ret)
+		return ret;
+
+	return host_stage2_set_owner_metadata_locked(phys, size, PKVM_ID_FFA,
+						     map ? PKVM_FFA_LENT_MAPPED : 0);
+}
+
+/*
+ * Hold lent pages (@hold) for an FFA_MEM_RECLAIM before the SPMC sees it,
+ * so that no IOMMU bank maps them between the check and the reclaim, or
+ * release them if the SPMC refused it. -EBUSY if a bank maps them. A range
+ * the host shared rather than lent is left alone.
+ */
+int __pkvm_host_ffa_lent_hold(u64 pfn, u64 nr_pages, bool hold)
+{
+	u64 phys = hyp_pfn_to_phys(pfn);
+	u64 size = PAGE_SIZE * nr_pages;
+	int ret;
+
+	if (!pfn_range_is_valid(pfn, nr_pages))
+		return -EINVAL;
+
+	host_lock_component();
+	ret = __host_check_ffa_lent_range_meta(phys, size,
+					       hold ? 0 : PKVM_FFA_LENT_RECLAIMING);
+	if (!ret)
+		ret = host_stage2_set_owner_metadata_locked(phys, size, PKVM_ID_FFA,
+							    hold ? PKVM_FFA_LENT_RECLAIMING : 0);
+	else if (ret == -EPERM)
+		ret = 0;
+	host_unlock_component();
+
+	return ret;
 }
 
 int __pkvm_host_reclaim_lent_ffa(u64 pfn, u64 nr_pages)
@@ -1430,7 +1493,10 @@ int __pkvm_host_reclaim_lent_ffa(u64 pfn, u64 nr_pages)
 		return -EINVAL;
 
 	host_lock_component();
-	ret = __host_check_ffa_lent_range(phys, size);
+	/* Held for an FFA_MEM_RECLAIM, or not yet seen by the SPMC */
+	ret = __host_check_ffa_lent_range_meta(phys, size, PKVM_FFA_LENT_RECLAIMING);
+	if (ret == -EBUSY)
+		ret = __host_check_ffa_lent_range(phys, size);
 	if (!ret)
 		ret = host_stage2_set_owner_locked(phys, size, PKVM_ID_HOST);
 	host_unlock_component();
