@@ -5,6 +5,7 @@
 
 #include <linux/dma-buf.h>
 #include <linux/dma-heap.h>
+#include <linux/fcntl.h>
 #include <linux/genalloc.h>
 #include <linux/module.h>
 #include <linux/scatterlist.h>
@@ -337,6 +338,46 @@ void tee_device_put_all_dma_heaps(struct tee_device *teedev)
 }
 EXPORT_SYMBOL_GPL(tee_device_put_all_dma_heaps);
 
+/**
+ * tee_heap_dma_buf_id() - The protected heap a DMA-buf comes from
+ * @dmabuf:	DMA-buf to check
+ *
+ * Lets an importing driver refuse to put a protected buffer in an
+ * unprotected context, or the reverse.
+ *
+ * Return: the heap id, or -EINVAL if @dmabuf is not from a TEE heap.
+ */
+int tee_heap_dma_buf_id(struct dma_buf *dmabuf)
+{
+	struct tee_heap_buffer *buf;
+
+	if (dmabuf->ops != &tee_heap_buf_ops)
+		return -EINVAL;
+	buf = dmabuf->priv;
+	return buf->heap->id;
+}
+EXPORT_SYMBOL_GPL(tee_heap_dma_buf_id);
+
+/**
+ * tee_heap_alloc() - Allocate a protected buffer for a device driver
+ * @id:		heap to allocate from
+ * @len:	size in bytes
+ *
+ * For the internal buffers a device needs while it works on protected
+ * data, which no user space process ever sees.
+ *
+ * Return: a DMA-buf, or an ERR_PTR() if the heap is absent or full.
+ */
+struct dma_buf *tee_heap_alloc(enum tee_dma_heap_id id, size_t len)
+{
+	struct tee_dma_heap *h = xa_load(&tee_dma_heap, id);
+
+	if (!h || !h->heap)
+		return ERR_PTR(-ENODEV);
+	return tee_dma_heap_alloc(h->heap, len, O_RDWR | O_CLOEXEC, 0);
+}
+EXPORT_SYMBOL_GPL(tee_heap_alloc);
+
 int tee_heap_update_from_dma_buf(struct tee_device *teedev,
 				 struct dma_buf *dmabuf, size_t *offset,
 				 struct tee_shm *shm,
@@ -386,6 +427,19 @@ int tee_heap_update_from_dma_buf(struct tee_device *teedev __always_unused,
 {
 	return -EINVAL;
 }
+
+int tee_heap_dma_buf_id(struct dma_buf *dmabuf __always_unused)
+{
+	return -EINVAL;
+}
+EXPORT_SYMBOL_GPL(tee_heap_dma_buf_id);
+
+struct dma_buf *tee_heap_alloc(enum tee_dma_heap_id id __always_unused,
+			       size_t len __always_unused)
+{
+	return ERR_PTR(-ENODEV);
+}
+EXPORT_SYMBOL_GPL(tee_heap_alloc);
 #endif
 
 static struct tee_protmem_static_pool *

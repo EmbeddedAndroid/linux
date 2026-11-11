@@ -215,6 +215,10 @@ int tee_device_register(struct tee_device *teedev);
  */
 void tee_device_unregister(struct tee_device *teedev);
 
+struct dma_buf;
+int tee_heap_dma_buf_id(struct dma_buf *dmabuf);
+struct dma_buf *tee_heap_alloc(enum tee_dma_heap_id id, size_t len);
+
 int tee_device_register_dma_heap(struct tee_device *teedev,
 				 enum tee_dma_heap_id id,
 				 struct tee_protmem_pool *pool);
