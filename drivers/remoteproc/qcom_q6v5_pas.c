@@ -560,6 +560,15 @@ static int qcom_pas_attach(struct rproc *rproc)
 	pas->q6v5.running = true;
 	ret = irq_get_irqchip_state(pas->q6v5.fatal_irq,
 				    IRQCHIP_STATE_LINE_LEVEL, &crash_state);
+	/*
+	 * smp2p reports -ENODEV for the state of an entry the remote has not
+	 * published yet: the bootloader did not start the subsystem, so load
+	 * and start it.
+	 */
+	if (ret == -ENODEV) {
+		dev_info(pas->dev, "Subsystem not started by the bootloader. Falling back to start.\n");
+		goto unroll_attach;
+	}
 	if (ret)
 		goto disable_running;
 
@@ -599,7 +608,7 @@ static int qcom_pas_attach(struct rproc *rproc)
 
 unroll_attach:
 	pas->rproc->state = RPROC_OFFLINE;
-	ret = -EINVAL;
+	ret = -EAGAIN;
 disable_running:
 	pas->q6v5.running = false;
 
