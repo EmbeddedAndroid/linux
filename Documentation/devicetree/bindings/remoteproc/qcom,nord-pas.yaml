@@ -18,6 +18,7 @@ properties:
     oneOf:
       - enum:
           - qcom,nord-adsp-pas
+          - qcom,nord-adsp1-pas
           - qcom,nord-cdsp0-pas
           - qcom,nord-cdsp1-pas
           - qcom,nord-cdsp2-pas
@@ -25,6 +26,9 @@ properties:
       - items:
           - const: qcom,seca-adsp-pas
           - const: qcom,nord-adsp-pas
+      - items:
+          - const: qcom,seca-adsp1-pas
+          - const: qcom,nord-adsp1-pas
       - items:
           - const: qcom,seca-cdsp0-pas
           - const: qcom,nord-cdsp0-pas
@@ -110,7 +114,9 @@ allOf:
       properties:
         compatible:
           contains:
-            const: qcom,nord-adsp-pas
+            enum:
+              - qcom,nord-adsp-pas
+              - qcom,nord-adsp1-pas
     then:
       properties:
         power-domains:
