@@ -1939,20 +1939,27 @@ int rproc_boot(struct rproc *rproc)
 		dev_info(dev, "attaching to %s\n", rproc->name);
 
 		ret = rproc_attach(rproc);
-	} else {
-		dev_info(dev, "powering up %s\n", rproc->name);
-
-		/* load firmware */
-		ret = request_firmware(&firmware_p, rproc->firmware, dev);
-		if (ret < 0) {
-			dev_err(dev, "request_firmware failed: %d\n", ret);
+		/*
+		 * -EAGAIN from the driver's attach means the processor is not
+		 * running after all: load and start it instead.
+		 */
+		if (ret != -EAGAIN)
 			goto downref_rproc;
-		}
-
-		ret = rproc_fw_boot(rproc, firmware_p);
-
-		release_firmware(firmware_p);
+		rproc->state = RPROC_OFFLINE;
 	}
+
+	dev_info(dev, "powering up %s\n", rproc->name);
+
+	/* load firmware */
+	ret = request_firmware(&firmware_p, rproc->firmware, dev);
+	if (ret < 0) {
+		dev_err(dev, "request_firmware failed: %d\n", ret);
+		goto downref_rproc;
+	}
+
+	ret = rproc_fw_boot(rproc, firmware_p);
+
+	release_firmware(firmware_p);
 
 downref_rproc:
 	if (ret)

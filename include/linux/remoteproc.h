@@ -71,7 +71,9 @@ enum rsc_handling_status {
  * @unprepare:	unprepare device after stop
  * @start:	power on the device and boot it
  * @stop:	power off the device
- * @attach:	attach to a device that his already powered up
+ * @attach:	attach to a device that his already powered up; return -EAGAIN
+ *		if it turns out not to be running, so that it is loaded and
+ *		started instead
  * @detach:	detach from a device, leaving it powered up
  * @kick:	kick a virtqueue (virtqueue id given as a parameter)
  * @da_to_va:	optional platform hook to perform address translations
