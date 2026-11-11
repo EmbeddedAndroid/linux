@@ -45,6 +45,7 @@ properties:
           - qcom,sdx75-aoss-qmp
           - qcom,sdm670-aoss-qmp
           - qcom,sdm845-aoss-qmp
+          - qcom,seca-aoss-qmp
           - qcom,sm6350-aoss-qmp
           - qcom,sm7150-aoss-qmp
           - qcom,sm8150-aoss-qmp
