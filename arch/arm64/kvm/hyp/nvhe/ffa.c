@@ -371,7 +371,7 @@ out:
 }
 
 static u32 __ffa_host_share_ranges(struct ffa_mem_region_addr_range *ranges,
-				   u32 nranges)
+				   u32 nranges, bool lend)
 {
 	u32 i;
 
@@ -383,7 +383,8 @@ static u32 __ffa_host_share_ranges(struct ffa_mem_region_addr_range *ranges,
 		if (!PAGE_ALIGNED(sz | range->address))
 			break;
 
-		if (__pkvm_host_share_ffa(pfn, sz / PAGE_SIZE))
+		if (lend ? __pkvm_host_lend_ffa(pfn, sz / PAGE_SIZE) :
+			   __pkvm_host_share_ffa(pfn, sz / PAGE_SIZE))
 			break;
 	}
 
@@ -391,7 +392,7 @@ static u32 __ffa_host_share_ranges(struct ffa_mem_region_addr_range *ranges,
 }
 
 static u32 __ffa_host_unshare_ranges(struct ffa_mem_region_addr_range *ranges,
-				     u32 nranges)
+				     u32 nranges, bool lend)
 {
 	u32 i;
 
@@ -403,7 +404,8 @@ static u32 __ffa_host_unshare_ranges(struct ffa_mem_region_addr_range *ranges,
 		if (!PAGE_ALIGNED(sz | range->address))
 			break;
 
-		if (__pkvm_host_unshare_ffa(pfn, sz / PAGE_SIZE))
+		if (lend ? __pkvm_host_reclaim_lent_ffa(pfn, sz / PAGE_SIZE) :
+			   __pkvm_host_unshare_ffa(pfn, sz / PAGE_SIZE))
 			break;
 	}
 
@@ -411,13 +413,13 @@ static u32 __ffa_host_unshare_ranges(struct ffa_mem_region_addr_range *ranges,
 }
 
 static int ffa_host_share_ranges(struct ffa_mem_region_addr_range *ranges,
-				 u32 nranges)
+				 u32 nranges, bool lend)
 {
-	u32 nshared = __ffa_host_share_ranges(ranges, nranges);
+	u32 nshared = __ffa_host_share_ranges(ranges, nranges, lend);
 	int ret = 0;
 
 	if (nshared != nranges) {
-		WARN_ON(__ffa_host_unshare_ranges(ranges, nshared) != nshared);
+		WARN_ON(__ffa_host_unshare_ranges(ranges, nshared, lend) != nshared);
 		ret = FFA_RET_DENIED;
 	}
 
@@ -425,17 +427,49 @@ static int ffa_host_share_ranges(struct ffa_mem_region_addr_range *ranges,
 }
 
 static int ffa_host_unshare_ranges(struct ffa_mem_region_addr_range *ranges,
-				   u32 nranges)
+				   u32 nranges, bool lend)
 {
-	u32 nunshared = __ffa_host_unshare_ranges(ranges, nranges);
+	u32 nunshared = __ffa_host_unshare_ranges(ranges, nranges, lend);
 	int ret = 0;
 
 	if (nunshared != nranges) {
-		WARN_ON(__ffa_host_share_ranges(ranges, nunshared) != nunshared);
+		WARN_ON(__ffa_host_share_ranges(ranges, nunshared, lend) != nunshared);
 		ret = FFA_RET_DENIED;
 	}
 
 	return ret;
+}
+
+/*
+ * RECLAIM doesn't say shared or lent; the first non-empty range tells, as
+ * an empty one passes either way.
+ */
+static int ffa_host_reclaim_ranges(struct ffa_mem_region_addr_range *ranges,
+				   u32 nranges)
+{
+	u32 first = 0, n;
+	bool lend = false;
+
+	while (first < nranges && !ranges[first].pg_cnt)
+		first++;
+	if (first == nranges)
+		return 0;
+
+	n = __ffa_host_unshare_ranges(ranges, first + 1, false);
+	if (n != first + 1) {
+		lend = true;
+		n = __ffa_host_unshare_ranges(ranges, first + 1, true);
+	}
+
+	if (n == first + 1)
+		n += __ffa_host_unshare_ranges(ranges + n, nranges - n, lend);
+
+	if (n != nranges) {
+		WARN_ON(__ffa_host_share_ranges(ranges, n, lend) != n);
+		return FFA_RET_DENIED;
+	}
+
+	return 0;
 }
 
 static void do_ffa_mem_frag_tx(struct arm_smccc_1_2_regs *res,
@@ -468,7 +502,7 @@ static void do_ffa_mem_frag_tx(struct arm_smccc_1_2_regs *res,
 	memcpy(buf, host_buffers.tx, fraglen);
 	nr_ranges = fraglen / sizeof(*buf);
 
-	ret = ffa_host_share_ranges(buf, nr_ranges);
+	ret = ffa_host_share_ranges(buf, nr_ranges, false);
 	if (ret) {
 		/*
 		 * We're effectively aborting the transaction, so we need
@@ -482,7 +516,7 @@ static void do_ffa_mem_frag_tx(struct arm_smccc_1_2_regs *res,
 
 	ffa_mem_frag_tx(res, handle_lo, handle_hi, fraglen, endpoint_id);
 	if (res->a0 != FFA_SUCCESS && res->a0 != FFA_MEM_FRAG_RX)
-		WARN_ON(ffa_host_unshare_ranges(buf, nr_ranges));
+		WARN_ON(ffa_host_unshare_ranges(buf, nr_ranges, false));
 
 out_unlock:
 	hyp_spin_unlock(&host_buffers.lock);
@@ -512,6 +546,7 @@ static void __do_ffa_mem_xfer(const u64 func_id,
 	u32 offset, nr_ranges, checked_offset, em_mem_access_off;
 	struct ffa_mem_region_attributes *ep_mem_access;
 	struct ffa_composite_mem_region *reg;
+	bool lend = func_id == FFA_FN64_MEM_LEND;
 	struct ffa_mem_region *buf;
 	int ret = 0;
 	size_t mem_region_len = FFA_MEM_REGION_SZ(hyp_ffa_version);
@@ -529,6 +564,15 @@ static void __do_ffa_mem_xfer(const u64 func_id,
 
 	if (fraglen < mem_region_len + ffa_emad_size_get(hyp_ffa_version)) {
 		ret = FFA_RET_INVALID_PARAMETERS;
+		goto out;
+	}
+
+	/*
+	 * FRAG_TX carries only the handle, and pages lent by earlier
+	 * fragments could not be given back if a later one failed.
+	 */
+	if (lend && fraglen != len) {
+		ret = FFA_RET_DENIED;
 		goto out;
 	}
 
@@ -577,7 +621,14 @@ static void __do_ffa_mem_xfer(const u64 func_id,
 	}
 
 	nr_ranges /= sizeof(reg->constituents[0]);
-	ret = ffa_host_share_ranges(reg->constituents, nr_ranges);
+
+	/* RECLAIM gives back the addr_range_cnt ranges and no others. */
+	if (lend && nr_ranges != reg->addr_range_cnt) {
+		ret = FFA_RET_INVALID_PARAMETERS;
+		goto out_unlock;
+	}
+
+	ret = ffa_host_share_ranges(reg->constituents, nr_ranges, lend);
 	if (ret)
 		goto out_unlock;
 
@@ -600,7 +651,7 @@ out:
 	return;
 
 err_unshare:
-	WARN_ON(ffa_host_unshare_ranges(reg->constituents, nr_ranges));
+	WARN_ON(ffa_host_unshare_ranges(reg->constituents, nr_ranges, lend));
 	goto out_unlock;
 }
 
@@ -701,7 +752,7 @@ static void do_ffa_mem_reclaim(struct arm_smccc_1_2_regs *res,
 		goto out_unlock;
 
 	/* If the SPMD was happy, then we should be too. */
-	WARN_ON(ffa_host_unshare_ranges(reg->constituents,
+	WARN_ON(ffa_host_reclaim_ranges(reg->constituents,
 					reg->addr_range_cnt));
 out_unlock:
 	hyp_spin_unlock(&host_buffers.lock);
