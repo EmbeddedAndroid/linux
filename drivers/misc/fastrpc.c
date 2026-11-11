@@ -1355,7 +1355,6 @@ static int fastrpc_internal_invoke(struct fastrpc_user *fl,  u32 kernel,
 				   struct fastrpc_invoke_args *args)
 {
 	struct fastrpc_invoke_ctx *ctx = NULL;
-	struct fastrpc_buf *buf, *b;
 
 	int err = 0;
 
@@ -1418,12 +1417,16 @@ bail:
 	}
 
 	if (err == -ERESTARTSYS) {
+		unsigned long flags;
+		LIST_HEAD(mmaps);
+
 		spin_lock(&fl->lock);
-		list_for_each_entry_safe(buf, b, &fl->mmaps, node) {
-			list_del(&buf->node);
-			list_add_tail(&buf->node, &fl->cctx->invoke_interrupted_mmaps);
-		}
+		list_splice_init(&fl->mmaps, &mmaps);
 		spin_unlock(&fl->lock);
+
+		spin_lock_irqsave(&fl->cctx->lock, flags);
+		list_splice_tail(&mmaps, &fl->cctx->invoke_interrupted_mmaps);
+		spin_unlock_irqrestore(&fl->cctx->lock, flags);
 	}
 
 	if (err)
@@ -2688,8 +2691,10 @@ static void fastrpc_rpmsg_remove(struct rpmsg_device *rpdev)
 	if (cctx->secure_fdevice)
 		misc_deregister(&cctx->secure_fdevice->miscdev);
 
+	spin_lock_irqsave(&cctx->lock, flags);
 	list_for_each_entry_safe(buf, b, &cctx->invoke_interrupted_mmaps, node)
 		list_del(&buf->node);
+	spin_unlock_irqrestore(&cctx->lock, flags);
 
 	if (cctx->remote_heap_size && cctx->vmcount) {
 		u64 src_perms = 0;
