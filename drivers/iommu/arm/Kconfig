@@ -50,6 +50,19 @@ config ARM_SMMU_MMU_500_CPRE_ERRATA
 	  prefetch enablement are not applicable on the platform.
 	  Refer silicon-errata.rst for info on errata IDs.
 
+config ARM_SMMU_PKVM
+	bool "Arm MMU-500 DMA isolation in the pKVM hypervisor"
+	depends on ARM_SMMU=y && KVM && OF
+	help
+	  Under pKVM, let the hypervisor own the global registers of the
+	  application MMU-500 and nest every host context bank on a stage 2
+	  that shadows the host stage-2, so that memory the host gave away
+	  (to the hypervisor, a protected guest, or the secure world through
+	  FFA_MEM_LEND) cannot be reached by host-programmed DMA. Needs
+	  kvm-arm.iommu_pgt_mem on the command line.
+
+	  If unsure, say N.
+
 config ARM_SMMU_QCOM
 	def_tristate y
 	depends on ARCH_QCOM

@@ -23,6 +23,8 @@
 #include <nvhe/alloc.h>
 #include <nvhe/ffa.h>
 #include <nvhe/mem_protect.h>
+
+#include "../../../../../drivers/iommu/arm/arm-smmu/arm-smmu-pkvm.h"
 #include <nvhe/mm.h>
 #include <nvhe/pkvm.h>
 #include <nvhe/trace.h>
@@ -1168,6 +1170,15 @@ DEFINE_KVM_HOST_HCALL(void, __kvm_tlb_flush_vmid,
 	__kvm_tlb_flush_vmid(kern_hyp_va_host(mmu));
 }
 
+DEFINE_KVM_HOST_HCALL(u64, __pkvm_arm_smmu_fault, u32, field)
+{
+#ifdef CONFIG_ARM_SMMU_PKVM
+	return arm_smmu_pkvm_fault(field);
+#else
+	return -ENODEV;
+#endif
+}
+
 DEFINE_KVM_HOST_HCALL(void, __pkvm_tlb_flush_vmid,
 	pkvm_handle_t, handle)
 {
@@ -1615,6 +1626,7 @@ static const hcall_t host_hcall[] = {
 	HANDLE_FUNC(__pkvm_vcpu_put),
 	HANDLE_FUNC(__pkvm_vcpu_sync_state),
 	HANDLE_FUNC(__pkvm_tlb_flush_vmid),
+	HANDLE_FUNC(__pkvm_arm_smmu_fault),
 };
 
 static void handle_host_hcall(struct kvm_cpu_context *host_ctxt)

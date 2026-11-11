@@ -31,6 +31,8 @@ hyp-obj-y += ../vgic-v3-sr.o ../aarch32.o ../vgic-v2-cpuif-proxy.o ../entry.o \
 hyp-obj-y += ../../../kernel/smccc-call.o
 hyp-obj-$(CONFIG_LIST_HARDENED) += list_debug.o
 hyp-obj-$(CONFIG_NVHE_EL2_TRACING) += clock.o trace.o events.o
+HYP_SMMU_DRV_PATH := ../../../../../drivers/iommu/arm/arm-smmu
+hyp-obj-$(CONFIG_ARM_SMMU_PKVM) += $(HYP_SMMU_DRV_PATH)/pkvm/arm-smmu-hyp.o
 hyp-obj-y += $(lib-objs)
 
 # Path to simple_ring_buffer.c

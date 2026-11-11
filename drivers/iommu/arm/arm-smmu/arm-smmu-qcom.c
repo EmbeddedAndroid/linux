@@ -470,6 +470,13 @@ static int qcom_smmu_cfg_probe(struct arm_smmu_device *smmu)
 			smmu->num_context_banks = 13;
 	}
 
+	/* Under pKVM the hypervisor may keep the top context bank */
+	reg = arm_smmu_pkvm_host_cbs(smmu->ioaddr, smmu->num_context_banks);
+	if (reg != smmu->num_context_banks) {
+		smmu->num_context_banks = reg;
+		dev_notice(smmu->dev, "\t%u context banks left by the hypervisor\n", reg);
+	}
+
 	/*
 	 * Some platforms support more than the Arm SMMU architected maximum of
 	 * 128 stream matching groups. The additional registers appear to have

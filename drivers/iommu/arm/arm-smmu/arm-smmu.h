@@ -561,4 +561,14 @@ void arm_smmu_read_context_fault_info(struct arm_smmu_device *smmu, int idx,
 void arm_smmu_print_context_fault_info(struct arm_smmu_device *smmu, int idx,
 				       const struct arm_smmu_context_fault_info *cfi);
 
+#ifdef CONFIG_ARM_SMMU_PKVM
+unsigned int arm_smmu_pkvm_host_cbs(phys_addr_t base, unsigned int nr_cb);
+#else
+static inline unsigned int arm_smmu_pkvm_host_cbs(phys_addr_t base,
+						  unsigned int nr_cb)
+{
+	return nr_cb;
+}
+#endif
+
 #endif /* _ARM_SMMU_H */
