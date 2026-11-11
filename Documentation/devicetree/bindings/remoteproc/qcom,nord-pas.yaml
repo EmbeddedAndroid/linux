@@ -15,12 +15,22 @@ description:
 
 properties:
   compatible:
-    enum:
-      - qcom,nord-adsp-pas
-      - qcom,nord-cdsp0-pas
-      - qcom,nord-cdsp1-pas
-      - qcom,nord-cdsp2-pas
-      - qcom,nord-cdsp3-pas
+    oneOf:
+      - enum:
+          - qcom,nord-adsp-pas
+          - qcom,nord-cdsp0-pas
+          - qcom,nord-cdsp1-pas
+          - qcom,nord-cdsp2-pas
+          - qcom,nord-cdsp3-pas
+      - items:
+          - const: qcom,seca-adsp-pas
+          - const: qcom,nord-adsp-pas
+      - items:
+          - const: qcom,seca-cdsp0-pas
+          - const: qcom,nord-cdsp0-pas
+      - items:
+          - const: qcom,seca-cdsp1-pas
+          - const: qcom,nord-cdsp1-pas
 
   power-domains:
     minItems: 2
@@ -99,8 +109,8 @@ allOf:
   - if:
       properties:
         compatible:
-          enum:
-            - qcom,nord-adsp-pas
+          contains:
+            const: qcom,nord-adsp-pas
     then:
       properties:
         power-domains:
