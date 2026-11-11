@@ -3680,6 +3680,19 @@
 				iommus = <&apps_smmu 0x1947 0x0>;
 			};
 
+			secure-non-pixel {
+				iommus = <&apps_smmu 0x1944 0x0>;
+				iommu-ranges = <0x01000000 0x24800000>;
+			};
+
+			secure-pixel {
+				iommus = <&apps_smmu 0x1943 0x0>;
+			};
+
+			secure-bitstream {
+				iommus = <&apps_smmu 0x1941 0x4>;
+			};
+
 			iris_opp_table: opp-table {
 				compatible = "operating-points-v2";
 
