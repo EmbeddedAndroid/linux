@@ -903,6 +903,8 @@
 			power-domain-names = "cx",
 					     "mx";
 
+			iommus = <&apps_smmu_2 0x9e0 0x0>;
+
 			memory-region = <&hpass_dsp0_mem>,
 					<&hpass_dsp0_dtb_mem>;
 
@@ -948,6 +950,8 @@
 					<&rpmhpd RPMHPD_MX>;
 			power-domain-names = "cx",
 					     "mx";
+
+			iommus = <&apps_smmu_2 0xa08 0x0>;
 
 			memory-region = <&hpass_dsp1_mem>,
 					<&hpass_dsp1_dtb_mem>;
