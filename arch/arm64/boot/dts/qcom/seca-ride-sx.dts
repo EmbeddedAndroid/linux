@@ -41,6 +41,13 @@
 	status = "okay";
 };
 
+&remoteproc_adsp1 {
+	firmware-name = "qcom/seca/adsp1.mbn",
+			"qcom/seca/adsp1_dtbs.elf";
+
+	status = "okay";
+};
+
 &tlmm {
 	key_vol_down_default: key-vol-down-default-state {
 		pins = "gpio136";
