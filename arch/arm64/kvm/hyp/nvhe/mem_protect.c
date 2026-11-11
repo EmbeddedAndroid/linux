@@ -633,6 +633,7 @@ int host_stage2_set_owner_locked(phys_addr_t addr, u64 size, u8 owner_id)
 			__host_update_page_state(addr, size, PKVM_PAGE_OWNED);
 		break;
 	case PKVM_ID_HYP:
+	case PKVM_ID_FFA:
 		ret = host_stage2_set_owner_metadata_locked(addr, size,
 							    owner_id, 0);
 		break;
@@ -641,7 +642,7 @@ int host_stage2_set_owner_locked(phys_addr_t addr, u64 size, u8 owner_id)
 	return ret;
 }
 
-bool host_stage2_pte_is_hyp_owned(kvm_pte_t pte)
+static bool host_stage2_pte_is_owned_by(kvm_pte_t pte, u8 owner_id)
 {
 	if (kvm_pte_valid(pte))
 		return false;
@@ -650,7 +651,12 @@ bool host_stage2_pte_is_hyp_owned(kvm_pte_t pte)
 	    KVM_HOST_INVALID_PTE_TYPE_DONATION)
 		return false;
 
-	return FIELD_GET(KVM_HOST_DONATION_PTE_OWNER_MASK, pte) == PKVM_ID_HYP;
+	return FIELD_GET(KVM_HOST_DONATION_PTE_OWNER_MASK, pte) == owner_id;
+}
+
+bool host_stage2_pte_is_hyp_owned(kvm_pte_t pte)
+{
+	return host_stage2_pte_is_owned_by(pte, PKVM_ID_HYP);
 }
 
 #define KVM_HOST_PTE_OWNER_GUEST_HANDLE_MASK	GENMASK(15, 0)
@@ -1250,6 +1256,66 @@ int __pkvm_host_share_ffa(u64 pfn, u64 nr_pages)
 	ret = __host_check_page_state_range(phys, size, PKVM_PAGE_OWNED);
 	if (!ret)
 		ret = __host_set_page_state_range(phys, size, PKVM_PAGE_SHARED_OWNED);
+	host_unlock_component();
+
+	return ret;
+}
+
+/*
+ * FFA_MEM_LEND takes the pages away from the host until it reclaims them:
+ * they leave the host stage-2, owned by PKVM_ID_FFA, and a host access
+ * gets an abort.
+ */
+int __pkvm_host_lend_ffa(u64 pfn, u64 nr_pages)
+{
+	u64 phys = hyp_pfn_to_phys(pfn);
+	u64 size = PAGE_SIZE * nr_pages;
+	int ret;
+
+	if (!pfn_range_is_valid(pfn, nr_pages))
+		return -EINVAL;
+
+	host_lock_component();
+	ret = __host_check_page_state_range(phys, size, PKVM_PAGE_OWNED);
+	if (!ret)
+		ret = host_stage2_set_owner_locked(phys, size, PKVM_ID_FFA);
+	host_unlock_component();
+
+	return ret;
+}
+
+static int __host_check_ffa_lent_range(u64 phys, u64 size)
+{
+	u64 addr;
+
+	for (addr = phys; addr < phys + size; addr += PAGE_SIZE) {
+		kvm_pte_t pte;
+		int ret;
+
+		ret = kvm_pgtable_get_leaf(&host_mmu.pgt, addr, &pte, NULL, 0);
+		if (ret)
+			return ret;
+
+		if (!host_stage2_pte_is_owned_by(pte, PKVM_ID_FFA))
+			return -EPERM;
+	}
+
+	return 0;
+}
+
+int __pkvm_host_reclaim_lent_ffa(u64 pfn, u64 nr_pages)
+{
+	u64 phys = hyp_pfn_to_phys(pfn);
+	u64 size = PAGE_SIZE * nr_pages;
+	int ret;
+
+	if (!pfn_range_is_valid(pfn, nr_pages))
+		return -EINVAL;
+
+	host_lock_component();
+	ret = __host_check_ffa_lent_range(phys, size);
+	if (!ret)
+		ret = host_stage2_set_owner_locked(phys, size, PKVM_ID_HOST);
 	host_unlock_component();
 
 	return ret;
@@ -1864,6 +1930,22 @@ void pkvm_ownership_selftest(void *base)
 	selftest_state.hyp = PKVM_NOPAGE;
 	assert_transition_res(0,	__pkvm_host_unshare_ffa, pfn, 1);
 	assert_transition_res(-EPERM,	__pkvm_host_unshare_ffa, pfn, 1);
+	assert_transition_res(-EPERM,	__pkvm_host_reclaim_lent_ffa, pfn, 1);
+
+	selftest_state.host = PKVM_NOPAGE;
+	assert_transition_res(0,	__pkvm_host_lend_ffa, pfn, 1);
+	assert_transition_res(-EPERM,	__pkvm_host_lend_ffa, pfn, 1);
+	assert_transition_res(-EPERM,	__pkvm_host_share_ffa, pfn, 1);
+	assert_transition_res(-EPERM,	__pkvm_host_unshare_ffa, pfn, 1);
+	assert_transition_res(-EPERM,	__pkvm_host_donate_hyp, pfn, 1);
+	assert_transition_res(-EPERM,	__pkvm_host_share_hyp, pfn);
+	assert_transition_res(-EPERM,	__pkvm_hyp_donate_host, pfn, 1);
+	assert_transition_res(-EPERM,	__pkvm_host_share_guest, pfn, gfn, 1, vcpu, prot);
+	assert_transition_res(-EPERM,   __pkvm_host_donate_guest, pfn, gfn, vcpu);
+
+	selftest_state.host = PKVM_PAGE_OWNED;
+	assert_transition_res(0,	__pkvm_host_reclaim_lent_ffa, pfn, 1);
+	assert_transition_res(-EPERM,	__pkvm_host_reclaim_lent_ffa, pfn, 1);
 
 	selftest_state.host = PKVM_PAGE_SHARED_OWNED;
 	selftest_state.guest[0] = PKVM_PAGE_SHARED_BORROWED;
