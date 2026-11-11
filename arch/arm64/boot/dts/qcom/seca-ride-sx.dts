@@ -32,6 +32,26 @@
 			linux,code = <KEY_VOLUMEDOWN>;
 		};
 	};
+
+	/*
+	 * The boot firmware owns the eUSB2 PHY rails: cmd-db offers no PMIC
+	 * LDO resources to the application processor on this platform.
+	 */
+	vreg_usb0_0p9: regulator-usb0-0p9 {
+		compatible = "regulator-fixed";
+		regulator-name = "vreg_usb0_0p9";
+		regulator-min-microvolt = <904000>;
+		regulator-max-microvolt = <904000>;
+		regulator-always-on;
+	};
+
+	vreg_usb0_1p2: regulator-usb0-1p2 {
+		compatible = "regulator-fixed";
+		regulator-name = "vreg_usb0_1p2";
+		regulator-min-microvolt = <1200000>;
+		regulator-max-microvolt = <1200000>;
+		regulator-always-on;
+	};
 };
 
 &remoteproc_adsp {
@@ -67,5 +87,20 @@
 };
 
 &ufs_mem_phy {
+	status = "okay";
+};
+
+&usb_0 {
+	dr_mode = "peripheral";
+	maximum-speed = "high-speed";
+	qcom,select-utmi-as-pipe-clk;
+
+	status = "okay";
+};
+
+&usb_0_hsphy {
+	vdd-supply = <&vreg_usb0_0p9>;
+	vdda12-supply = <&vreg_usb0_1p2>;
+
 	status = "okay";
 };
