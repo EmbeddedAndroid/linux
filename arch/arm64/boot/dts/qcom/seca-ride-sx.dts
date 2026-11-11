@@ -47,6 +47,8 @@
 };
 
 &ufs_mem_hc {
+	reset-gpios = <&tlmm 181 GPIO_ACTIVE_LOW>;
+
 	status = "okay";
 };
 
