@@ -670,6 +670,7 @@ static const struct v4l2_file_operations iris_v4l2_file_ops = {
 
 static const struct vb2_ops iris_vb2_ops = {
 	.buf_init                       = iris_vb2_buf_init,
+	.buf_cleanup                    = iris_vb2_buf_cleanup,
 	.queue_setup                    = iris_vb2_queue_setup,
 	.start_streaming                = iris_vb2_start_streaming,
 	.stop_streaming                 = iris_vb2_stop_streaming,

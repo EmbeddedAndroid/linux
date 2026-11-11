@@ -8,6 +8,7 @@
 #include <media/v4l2-mem2mem.h>
 
 #include "iris_ctrls.h"
+#include "iris_secure.h"
 #include "iris_hfi_gen1_defines.h"
 #include "iris_hfi_gen2_defines.h"
 #include "iris_instance.h"
@@ -352,6 +353,35 @@ static const struct v4l2_ctrl_ops iris_ctrl_ops = {
 	.s_ctrl = iris_op_s_ctrl,
 };
 
+/*
+ * Driver-private until V4L2 has a protected-buffer interface: a secure
+ * session decodes and encodes only in protected memory. Set it before
+ * REQBUFS.
+ */
+#define V4L2_CID_IRIS_SECURE	(V4L2_CID_USER_BASE | 0x1f00)
+
+static int iris_secure_s_ctrl(struct v4l2_ctrl *ctrl)
+{
+	struct iris_inst *inst = container_of(ctrl->handler, struct iris_inst, ctrl_handler);
+
+	return iris_secure_set(inst, ctrl->val);
+}
+
+static const struct v4l2_ctrl_ops iris_secure_ctrl_ops = {
+	.s_ctrl = iris_secure_s_ctrl,
+};
+
+static const struct v4l2_ctrl_config iris_secure_ctrl = {
+	.ops	= &iris_secure_ctrl_ops,
+	.id	= V4L2_CID_IRIS_SECURE,
+	.name	= "Secure Session",
+	.type	= V4L2_CTRL_TYPE_BOOLEAN,
+	.min	= 0,
+	.max	= 1,
+	.step	= 1,
+	.def	= 0,
+};
+
 int iris_ctrls_init(struct iris_inst *inst)
 {
 	struct platform_inst_fw_cap *cap = &inst->fw_caps[0];
@@ -369,7 +399,7 @@ int iris_ctrls_init(struct iris_inst *inst)
 	 * V4L2_CID_MIN_BUFFERS_FOR_OUTPUT for encoder
 	 */
 
-	ret = v4l2_ctrl_handler_init(&inst->ctrl_handler, num_ctrls + 1);
+	ret = v4l2_ctrl_handler_init(&inst->ctrl_handler, num_ctrls + 2);
 	if (ret)
 		return ret;
 
@@ -408,6 +438,8 @@ int iris_ctrls_init(struct iris_inst *inst)
 
 		ctrl_idx++;
 	}
+
+	v4l2_ctrl_new_custom(&inst->ctrl_handler, &iris_secure_ctrl, NULL);
 
 	if (inst->domain == DECODER) {
 		v4l2_ctrl_new_std(&inst->ctrl_handler, NULL,

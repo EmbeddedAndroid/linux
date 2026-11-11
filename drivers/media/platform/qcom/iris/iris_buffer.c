@@ -7,6 +7,7 @@
 #include <media/v4l2-mem2mem.h>
 
 #include "iris_buffer.h"
+#include "iris_secure.h"
 #include "iris_instance.h"
 #include "iris_power.h"
 #include "iris_vpu_buffer.h"
@@ -547,6 +548,17 @@ static int iris_create_internal_buffer(struct iris_inst *inst,
 	buffer->buffer_size = buffers->size;
 	buffer->dma_attrs = DMA_ATTR_WRITE_COMBINE | DMA_ATTR_NO_KERNEL_MAPPING;
 
+	if (inst->secure) {
+		int ret = iris_secure_alloc_internal(inst, buffer);
+
+		if (ret) {
+			kfree(buffer);
+			return ret;
+		}
+		list_add_tail(&buffer->list, &buffers->list);
+		return 0;
+	}
+
 	buffer->kvaddr = dma_alloc_attrs(dev, buffer->buffer_size,
 					 &buffer->device_addr, GFP_KERNEL, buffer->dma_attrs);
 	if (!buffer->kvaddr) {
@@ -653,8 +665,11 @@ void iris_destroy_internal_buffer(struct iris_inst *inst, struct iris_buffer *bu
 	struct device *dev = iris_get_cb_dev(inst, buffer->type);
 
 	list_del(&buffer->list);
-	dma_free_attrs(dev, buffer->buffer_size, buffer->kvaddr,
-		       buffer->device_addr, buffer->dma_attrs);
+	if (buffer->sec_dbuf)
+		iris_secure_free_internal(inst, buffer);
+	else
+		dma_free_attrs(dev, buffer->buffer_size, buffer->kvaddr,
+			       buffer->device_addr, buffer->dma_attrs);
 	kfree(buffer);
 }
 

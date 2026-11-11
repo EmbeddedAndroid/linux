@@ -13,6 +13,7 @@
 #include <linux/soc/qcom/ubwc.h>
 
 #include "iris_core.h"
+#include "iris_secure.h"
 #include "iris_ctrls.h"
 #include "iris_vidc.h"
 
@@ -272,6 +273,7 @@ unreg_np_dev:
 
 static void iris_deinit_cb_devs(struct iris_core *core)
 {
+	iris_secure_deinit(core);
 	if (core->fw_dev)
 		platform_device_unregister(to_platform_device(core->fw_dev));
 	if (core->p_dev)
@@ -410,6 +412,8 @@ static int iris_probe(struct platform_device *pdev)
 		return ret;
 
 	ret = iris_init_cb_devs(core);
+	if (!ret)
+		ret = iris_secure_init(core);
 	if (ret)
 		goto err_unresv_iova_region;
 

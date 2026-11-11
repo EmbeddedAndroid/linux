@@ -7,6 +7,7 @@
 #define __IRIS_VB2_H__
 
 int iris_vb2_buf_init(struct vb2_buffer *vb2);
+void iris_vb2_buf_cleanup(struct vb2_buffer *vb2);
 int iris_vb2_queue_setup(struct vb2_queue *q,
 			 unsigned int *num_buffers, unsigned int *num_planes,
 			 unsigned int sizes[], struct device *alloc_devs[]);

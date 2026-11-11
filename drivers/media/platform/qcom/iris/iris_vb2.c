@@ -9,6 +9,7 @@
 
 #include "iris_common.h"
 #include "iris_instance.h"
+#include "iris_secure.h"
 #include "iris_vb2.h"
 #include "iris_vdec.h"
 #include "iris_venc.h"
@@ -92,11 +93,26 @@ exit:
 int iris_vb2_buf_init(struct vb2_buffer *vb2)
 {
 	struct vb2_v4l2_buffer *vbuf = to_vb2_v4l2_buffer(vb2);
+	struct iris_inst *inst = vb2_get_drv_priv(vb2->vb2_queue);
 	struct iris_buffer *buf = to_iris_buffer(vbuf);
+
+	buf->type = iris_v4l2_type_to_driver(vb2->type);
+	if (inst->secure)
+		return iris_secure_buf_init(inst, vb2, buf);
+	if (iris_secure_buf_refused(inst, vb2))
+		return -EINVAL;
 
 	buf->device_addr = vb2_dma_contig_plane_dma_addr(vb2, 0);
 
 	return 0;
+}
+
+void iris_vb2_buf_cleanup(struct vb2_buffer *vb2)
+{
+	struct vb2_v4l2_buffer *vbuf = to_vb2_v4l2_buffer(vb2);
+	struct iris_inst *inst = vb2_get_drv_priv(vb2->vb2_queue);
+
+	iris_secure_buf_cleanup(inst, to_iris_buffer(vbuf));
 }
 
 int iris_vb2_queue_setup(struct vb2_queue *q,
