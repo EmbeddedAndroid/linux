@@ -33,6 +33,7 @@ properties:
               - qcom,milos-tcsr
               - qcom,nord-tcsrcc
               - qcom,sar2130p-tcsr
+              - qcom,seca-tcsrcc
               - qcom,sm8550-tcsr
               - qcom,sm8650-tcsr
               - qcom,sm8750-tcsr
