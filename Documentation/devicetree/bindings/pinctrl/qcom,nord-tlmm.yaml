@@ -17,7 +17,11 @@ allOf:
 
 properties:
   compatible:
-    const: qcom,nord-tlmm
+    oneOf:
+      - const: qcom,nord-tlmm
+      - items:
+          - const: qcom,seca-tlmm
+          - const: qcom,nord-tlmm
 
   reg:
     maxItems: 1
