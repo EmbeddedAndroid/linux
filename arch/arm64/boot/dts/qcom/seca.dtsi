@@ -50,6 +50,13 @@
 			enable-method = "psci";
 			power-domains = <&cpu0_pd>, <&cpu_perf 0>;
 			power-domain-names = "psci", "perf";
+			next-level-cache = <&l2_0>;
+
+			l2_0: l2-cache {
+				compatible = "cache";
+				cache-level = <2>;
+				cache-unified;
+			};
 		};
 
 		cpu1: cpu@100 {
@@ -59,6 +66,7 @@
 			enable-method = "psci";
 			power-domains = <&cpu1_pd>, <&cpu_perf 0>;
 			power-domain-names = "psci", "perf";
+			next-level-cache = <&l2_0>;
 		};
 
 		cpu2: cpu@200 {
@@ -68,6 +76,7 @@
 			enable-method = "psci";
 			power-domains = <&cpu2_pd>, <&cpu_perf 0>;
 			power-domain-names = "psci", "perf";
+			next-level-cache = <&l2_0>;
 		};
 
 		cpu3: cpu@300 {
@@ -77,6 +86,7 @@
 			enable-method = "psci";
 			power-domains = <&cpu3_pd>, <&cpu_perf 0>;
 			power-domain-names = "psci", "perf";
+			next-level-cache = <&l2_0>;
 		};
 
 		cpu4: cpu@400 {
@@ -86,6 +96,7 @@
 			enable-method = "psci";
 			power-domains = <&cpu4_pd>, <&cpu_perf 0>;
 			power-domain-names = "psci", "perf";
+			next-level-cache = <&l2_0>;
 		};
 
 		cpu5: cpu@500 {
@@ -95,6 +106,7 @@
 			enable-method = "psci";
 			power-domains = <&cpu5_pd>, <&cpu_perf 0>;
 			power-domain-names = "psci", "perf";
+			next-level-cache = <&l2_0>;
 		};
 
 		cpu6: cpu@10000 {
@@ -104,6 +116,13 @@
 			enable-method = "psci";
 			power-domains = <&cpu6_pd>, <&cpu_perf 1>;
 			power-domain-names = "psci", "perf";
+			next-level-cache = <&l2_10000>;
+
+			l2_10000: l2-cache {
+				compatible = "cache";
+				cache-level = <2>;
+				cache-unified;
+			};
 		};
 
 		cpu7: cpu@10100 {
@@ -113,6 +132,7 @@
 			enable-method = "psci";
 			power-domains = <&cpu7_pd>, <&cpu_perf 1>;
 			power-domain-names = "psci", "perf";
+			next-level-cache = <&l2_10000>;
 		};
 
 		cpu8: cpu@10200 {
@@ -122,6 +142,7 @@
 			enable-method = "psci";
 			power-domains = <&cpu8_pd>, <&cpu_perf 1>;
 			power-domain-names = "psci", "perf";
+			next-level-cache = <&l2_10000>;
 		};
 
 		cpu9: cpu@10300 {
@@ -131,6 +152,7 @@
 			enable-method = "psci";
 			power-domains = <&cpu9_pd>, <&cpu_perf 1>;
 			power-domain-names = "psci", "perf";
+			next-level-cache = <&l2_10000>;
 		};
 
 		cpu10: cpu@10400 {
@@ -140,6 +162,7 @@
 			enable-method = "psci";
 			power-domains = <&cpu10_pd>, <&cpu_perf 1>;
 			power-domain-names = "psci", "perf";
+			next-level-cache = <&l2_10000>;
 		};
 
 		cpu11: cpu@10500 {
@@ -149,6 +172,61 @@
 			enable-method = "psci";
 			power-domains = <&cpu11_pd>, <&cpu_perf 1>;
 			power-domain-names = "psci", "perf";
+			next-level-cache = <&l2_10000>;
+		};
+
+		cpu-map {
+			cluster0 {
+				core0 {
+					cpu = <&cpu0>;
+				};
+
+				core1 {
+					cpu = <&cpu1>;
+				};
+
+				core2 {
+					cpu = <&cpu2>;
+				};
+
+				core3 {
+					cpu = <&cpu3>;
+				};
+
+				core4 {
+					cpu = <&cpu4>;
+				};
+
+				core5 {
+					cpu = <&cpu5>;
+				};
+			};
+
+			cluster1 {
+				core0 {
+					cpu = <&cpu6>;
+				};
+
+				core1 {
+					cpu = <&cpu7>;
+				};
+
+				core2 {
+					cpu = <&cpu8>;
+				};
+
+				core3 {
+					cpu = <&cpu9>;
+				};
+
+				core4 {
+					cpu = <&cpu10>;
+				};
+
+				core5 {
+					cpu = <&cpu11>;
+				};
+			};
 		};
 
 		idle-states {
