@@ -163,6 +163,13 @@ config IOMMU_SVA
 	select IOMMU_MM_DATA
 	bool
 
+config IOMMU_PROT
+	bool
+	help
+	  Selected by the drivers of hypervisors that own IOMMU streams
+	  on behalf of the kernel, for memory it gave up to the secure
+	  world (see include/linux/iommu-prot.h).
+
 config IOMMU_IOPF
 	bool
 
