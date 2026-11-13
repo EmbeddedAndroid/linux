@@ -61,6 +61,9 @@ struct arm_smmu_pkvm_params arm_smmu_pkvm_params;
 #define SMMU_GR0_TLBGSTATUS		0x74
 #define SMMU_TLBGSTATUS_GSACTIVE	BIT(0)
 #define SMMU_GR0_SMR(n)			(0x800 + ((n) << 2))
+#define SMMU_SMR_VALID			BIT(31)
+#define SMMU_SMR_MASK			GENMASK(30, 16)
+#define SMMU_SMR_ID			GENMASK(15, 0)
 #define SMMU_GR0_S2CR(n)		(0xc00 + ((n) << 2))
 #define SMMU_S2CR_TYPE			GENMASK(17, 16)
 #define SMMU_S2CR_TYPE_TRANS		0
@@ -96,6 +99,10 @@ struct arm_smmu_pkvm_params arm_smmu_pkvm_params;
 /* The hypervisor's VMIDs: host stage-2 banks get the ones below */
 #define HOST_VMIDS			0xfc
 #define GUARD_VMID			0xff
+#define BANK_VMID(b)			(HOST_VMIDS + (b))
+
+/* Bank TCR: as GUARD_TCR, with a 32-bit IOVA (T0SZ 32) */
+#define BANK_TCR	((GUARD_TCR & ~GENMASK(5, 0)) | 32)
 
 /* VTCR format: 36-bit IPA and PA, 4 KiB granule, walk from level 1, WBWA IS */
 #define GUARD_TCR	(BIT(31) | FIELD_PREP(GENMASK(18, 16), 1) |		\
@@ -127,7 +134,7 @@ struct smmu_hyp {
 	void __iomem		*gr0;
 	void __iomem		*gr1;
 	void __iomem		*cb;
-	u32			cb_shadow;	/* first index the host loses */
+	u32			cb_shadow;	/* the bank shadowing the host stage-2 */
 	u32			nr_smr;
 	u32			nr_cb;
 	u32			cbar[SMMU_MAX_ENTRIES];	/* as the host wrote them */
@@ -138,6 +145,12 @@ struct smmu_hyp {
 	u64			far;
 	u32			nr_tables;
 	u64			*l1;
+	u32			cb_host;	/* context banks left to the host */
+	u32			smr_host;	/* stream match groups left to the host */
+	void __iomem		*bank_cb[ARM_SMMU_PKVM_PROT_BANKS];
+	u64			*bank_l1[ARM_SMMU_PKVM_PROT_BANKS];
+	u32			bank_tables[ARM_SMMU_PKVM_PROT_BANKS];
+	u32			bank_smr[ARM_SMMU_PKVM_PROT_BANKS];	/* 0: none */
 };
 
 static struct smmu_hyp smmu;
@@ -328,6 +341,232 @@ next_block:
 	return 0;
 }
 
+/*
+ * Protected banks: stage-2 only tables from a 32-bit IOVA to memory the
+ * host lent to the secure world, page by page.
+ */
+static u64 *bank_pte(u32 b, u32 iova, bool alloc)
+{
+	u64 *t = smmu.bank_l1[b], *e;
+	int lvl;
+
+	for (lvl = 1; lvl < 3; lvl++) {
+		e = &t[(iova >> (39 - 9 * lvl)) & (PTRS - 1)];
+		if ((*e & S2_TYPE_MASK) != S2_TABLE) {
+			if (!alloc || smmu.bank_tables[b] >= arm_smmu_pkvm_params.bank_tables)
+				return NULL;
+			t = new_table();
+			if (!t)
+				return NULL;
+			smmu.bank_tables[b]++;
+			WRITE_ONCE(*e, hyp_virt_to_phys(t) | S2_TABLE);
+			flush_pte(e);
+		}
+		t = table_va(*e);
+	}
+	return &t[(iova >> PAGE_SHIFT) & (PTRS - 1)];
+}
+
+static int bank_tlb_flush(u32 b)
+{
+	dsb(ishst);
+	writel_relaxed(BANK_VMID(b), smmu.gr0 + SMMU_GR0_TLBIVMID);
+	return smmu_tlb_sync();
+}
+
+static u64 *bank_l2e(u32 b, u64 iova)
+{
+	u64 *e = &smmu.bank_l1[b][(iova >> 30) & (PTRS - 1)];
+
+	if ((*e & S2_TYPE_MASK) != S2_TABLE)
+		return NULL;
+	return &table_va(*e)[(iova >> 21) & (PTRS - 1)];
+}
+
+/* Free the level 3 tables of [iova, +nr_pages) that no longer map anything */
+static void bank_free_tables(u32 b, u64 iova, u64 nr_pages)
+{
+	u64 *free[2], addr, end = iova + nr_pages * PAGE_SIZE;
+	int i, n = 0;
+
+	for (addr = ALIGN_DOWN(iova, SZ_2M); addr < end && n < ARRAY_SIZE(free);
+	     addr += SZ_2M) {
+		u64 *e = bank_l2e(b, addr), *t;
+
+		if (!e || (*e & S2_TYPE_MASK) != S2_TABLE)
+			continue;
+		t = table_va(*e);
+		for (i = 0; i < PTRS && !t[i]; i++)
+			;
+		if (i < PTRS)
+			continue;
+		WRITE_ONCE(*e, 0);
+		flush_pte(e);
+		free[n++] = t;
+	}
+	/*
+	 * Until the invalidation completes the walker may still read them; if
+	 * it fails they stay detached and counted, never reused.
+	 */
+	if (!n || bank_tlb_flush(b))
+		return;
+	while (n--) {
+		pkvm_iommu_free_pages(free[n]);
+		smmu.nr_tables--;
+		smmu.bank_tables[b]--;
+	}
+}
+
+/*
+ * Banks translate a 32-bit IOVA. A call maps or unmaps at most
+ * BANK_MAX_PAGES, which bounds the time spent here with the host lock held.
+ */
+#define BANK_MAX_PAGES		512
+
+static bool bank_range_ok(u64 iova, u64 nr_pages)
+{
+	return nr_pages && nr_pages <= BANK_MAX_PAGES && PAGE_ALIGNED(iova) &&
+	       iova + nr_pages * PAGE_SIZE <= SZ_4G;
+}
+
+/* The bank serving @stream (SMR format, mask << 16 | ID), declared at init */
+static int bank_for(u32 stream)
+{
+	u32 smr = SMMU_SMR_VALID | (stream & (SMMU_SMR_MASK | SMMU_SMR_ID));
+	int b;
+
+	if (stream & ~(SMMU_SMR_MASK | SMMU_SMR_ID))
+		return -EINVAL;
+	for (b = 0; b < ARM_SMMU_PKVM_PROT_BANKS; b++)
+		if (smmu.bank_smr[b] == smr)
+			return b;
+	return -ENOENT;
+}
+
+static int smmu_prot_map(u32 stream, u64 iova, u64 pfn, u64 nr_pages, int prot)
+{
+	u64 phys = hyp_pfn_to_phys(pfn), size = nr_pages * PAGE_SIZE;
+	u64 attrs = s2_attrs(prot & (IOMMU_READ | IOMMU_WRITE));
+	int bank, ret = 0;
+	u64 i;
+
+	if (!smmu.ready || !bank_range_ok(iova, nr_pages) ||
+	    !(prot & (IOMMU_READ | IOMMU_WRITE)))
+		return -EINVAL;
+
+	/*
+	 * The host lock serialises bank updates; the lent state update below
+	 * goes through the shadow stage-2 and takes smmu.lock itself.
+	 */
+	hyp_spin_lock(&host_mmu.lock);
+	hyp_spin_lock(&smmu.lock);
+	bank = bank_for(stream);
+	if (bank < 0) {
+		hyp_spin_unlock(&smmu.lock);
+		ret = bank;
+		goto out_host;
+	}
+	for (i = 0; i < nr_pages; i++) {
+		u64 *e = bank_pte(bank, iova + i * PAGE_SIZE, false);
+
+		if (e && (*e & 1)) {
+			ret = -EEXIST;
+			break;
+		}
+	}
+	hyp_spin_unlock(&smmu.lock);
+	/* Only memory the host lent, and not already in a bank */
+	if (!ret)
+		ret = __pkvm_host_ffa_lent_set_mapped(phys, size, true);
+	if (ret)
+		goto out_host;
+	hyp_spin_lock(&smmu.lock);
+	for (i = 0; i < nr_pages; i++) {
+		u64 *e = bank_pte(bank, iova + i * PAGE_SIZE, true);
+
+		if (!e) {
+			ret = -ENOMEM;
+			break;
+		}
+		WRITE_ONCE(*e, (phys + i * PAGE_SIZE) | attrs | S2_PAGE);
+		flush_pte(e);
+	}
+	if (ret) {
+		/* Out of table pages: undo, so that the host can reclaim */
+		while (i--) {
+			u64 *e = bank_pte(bank, iova + i * PAGE_SIZE, false);
+
+			WRITE_ONCE(*e, 0);
+			flush_pte(e);
+		}
+		/* A bank that may still translate keeps the pages held */
+		if (bank_tlb_flush(bank)) {
+			hyp_spin_unlock(&smmu.lock);
+			goto out_host;
+		}
+		bank_free_tables(bank, iova, nr_pages);
+	}
+	hyp_spin_unlock(&smmu.lock);
+	if (ret)
+		__pkvm_host_ffa_lent_set_mapped(phys, size, false);
+out_host:
+	hyp_spin_unlock(&host_mmu.lock);
+	return ret;
+}
+
+/*
+ * Unmap a range of a bank, in runs of physically contiguous pages: each run
+ * is released for reclaim once the bank no longer translates it.
+ */
+static int smmu_prot_unmap(u32 stream, u64 iova, u64 nr_pages)
+{
+	u64 phys, n, *e;
+	int bank, ret = 0;
+	u64 i;
+
+	if (!smmu.ready || !bank_range_ok(iova, nr_pages))
+		return -EINVAL;
+
+	hyp_spin_lock(&host_mmu.lock);
+	hyp_spin_lock(&smmu.lock);
+	bank = bank_for(stream);
+	if (bank < 0) {
+		ret = bank;
+		goto out;
+	}
+	for (i = 0; i < nr_pages; i++) {
+		e = bank_pte(bank, iova + i * PAGE_SIZE, false);
+		if (!e || !(*e & 1)) {
+			ret = -ENOENT;
+			goto out;
+		}
+	}
+	for (i = 0; i < nr_pages; i += n) {
+		e = bank_pte(bank, iova + i * PAGE_SIZE, false);
+		phys = *e & S2_OA_MASK;
+		for (n = 0; i + n < nr_pages; n++) {
+			e = bank_pte(bank, iova + (i + n) * PAGE_SIZE, false);
+			if ((*e & S2_OA_MASK) != phys + n * PAGE_SIZE)
+				break;
+			WRITE_ONCE(*e, 0);
+			flush_pte(e);
+		}
+		ret = bank_tlb_flush(bank);
+		if (ret)
+			goto out;
+		hyp_spin_unlock(&smmu.lock);
+		ret = __pkvm_host_ffa_lent_set_mapped(phys, n * PAGE_SIZE, false);
+		hyp_spin_lock(&smmu.lock);
+		if (ret)
+			goto out;
+	}
+	bank_free_tables(bank, iova, nr_pages);
+out:
+	hyp_spin_unlock(&smmu.lock);
+	hyp_spin_unlock(&host_mmu.lock);
+	return ret;
+}
+
 static int smmu_host_stage2_idmap(phys_addr_t start, phys_addr_t end, int prot)
 {
 	bool flush = false;
@@ -343,7 +582,30 @@ static int smmu_host_stage2_idmap(phys_addr_t start, phys_addr_t end, int prot)
 
 static bool host_cb(u32 n)
 {
-	return n < smmu.cb_shadow;
+	return n < smmu.cb_host;
+}
+
+static bool host_smr(u32 n)
+{
+	return n < smmu.smr_host;
+}
+
+static bool smr_overlaps(u32 a, u32 b)
+{
+	u32 ignore = FIELD_GET(SMMU_SMR_MASK, a) | FIELD_GET(SMMU_SMR_MASK, b);
+
+	return !((FIELD_GET(SMMU_SMR_ID, a) ^ FIELD_GET(SMMU_SMR_ID, b)) & ~ignore);
+}
+
+/* A host stream match that would catch a protected stream */
+static bool smr_is_protected(u32 smr)
+{
+	unsigned int b;
+
+	for (b = 0; b < ARM_SMMU_PKVM_PROT_BANKS; b++)
+		if (smmu.bank_smr[b] && smr_overlaps(smr, smmu.bank_smr[b]))
+			return true;
+	return false;
 }
 
 static u32 nest_cbar(u32 val)
@@ -386,14 +648,23 @@ static u32 gr0_read(u32 off)
 {
 	u32 val;
 
-	if (off >= SMMU_GR0_S2CR(0) && off < SMMU_GR0_S2CR(smmu.nr_smr))
-		return smmu.s2cr[(off - SMMU_GR0_S2CR(0)) >> 2];
+	if (off >= SMMU_GR0_S2CR(0) && off < SMMU_GR0_S2CR(SMMU_MAX_ENTRIES)) {
+		u32 n = (off - SMMU_GR0_S2CR(0)) >> 2;
+
+		return host_smr(n) ? smmu.s2cr[n] : 0;
+	}
+
+	if (off >= SMMU_GR0_SMR(smmu.smr_host) && off < SMMU_GR0_SMR(SMMU_MAX_ENTRIES))
+		return 0;
 
 	val = readl_relaxed(smmu.gr0 + off);
 	switch (off) {
+	case SMMU_GR0_ID0:
+		val = u32_replace_bits(val, smmu.smr_host, SMMU_ID0_NUMSMRG);
+		break;
 	case SMMU_GR0_ID1:
-		val = u32_replace_bits(val, smmu.cb_shadow, SMMU_ID1_NUMCB);
-		val = u32_replace_bits(val, min_t(u32, smmu.cb_shadow,
+		val = u32_replace_bits(val, smmu.cb_host, SMMU_ID1_NUMCB);
+		val = u32_replace_bits(val, min_t(u32, smmu.cb_host,
 						  FIELD_GET(SMMU_ID1_NUMS2CB, val)),
 				       SMMU_ID1_NUMS2CB);
 		break;
@@ -410,9 +681,18 @@ static void gr0_write(u32 off, u32 val)
 		val &= ~(SMMU_sCR0_CLIENTPD | SMMU_sCR0_VMID16EN |
 			 SMMU_sCR0_EXIDENABLE);
 		val |= SMMU_sCR0_USFCFG;
+	} else if (off >= SMMU_GR0_SMR(0) && off < SMMU_GR0_SMR(SMMU_MAX_ENTRIES)) {
+		if (!host_smr((off - SMMU_GR0_SMR(0)) >> 2))
+			return;
+		if ((val & SMMU_SMR_VALID) && smr_is_protected(val))
+			val &= ~SMMU_SMR_VALID;
 	} else if (off >= SMMU_GR0_S2CR(0) &&
-		   off < SMMU_GR0_S2CR(smmu.nr_smr)) {
-		smmu.s2cr[(off - SMMU_GR0_S2CR(0)) >> 2] = val;
+		   off < SMMU_GR0_S2CR(SMMU_MAX_ENTRIES)) {
+		u32 n = (off - SMMU_GR0_S2CR(0)) >> 2;
+
+		if (!host_smr(n))
+			return;
+		smmu.s2cr[n] = val;
 		val = shadow_s2cr(val);
 	}
 
@@ -449,7 +729,7 @@ static void gr1_write(u32 off, u32 val)
 	writel_relaxed(nest_cbar(val), smmu.gr1 + off);
 	/* Streams of a bank that changed kind must follow it */
 	if (was_s2 != (FIELD_GET(SMMU_CBAR_TYPE, val) == SMMU_CBAR_TYPE_S2))
-		for (i = 0; i < smmu.nr_smr; i++)
+		for (i = 0; i < smmu.smr_host; i++)
 			if (FIELD_GET(SMMU_S2CR_CBNDX, smmu.s2cr[i]) == n)
 				writel_relaxed(shadow_s2cr(smmu.s2cr[i]),
 					       smmu.gr0 + SMMU_GR0_S2CR(i));
@@ -530,7 +810,18 @@ static u64 smmu_fault_info(u32 field)
 		ret = smmu.nr_tables;
 		break;
 	default:
-		ret = -EINVAL;
+		if (field - ARM_SMMU_PKVM_BANK_FAULT < ARM_SMMU_PKVM_PROT_BANKS) {
+			void __iomem *cb = smmu.bank_cb[field - ARM_SMMU_PKVM_BANK_FAULT];
+
+			fsr = readl_relaxed(cb + SMMU_CB_FSR);
+			ret = (u64)(fsr & SMMU_FSR_FAULT) << 32 |
+			      lower_32_bits(readq_relaxed(cb + SMMU_CB_FAR));
+			writel_relaxed(fsr, cb + SMMU_CB_FSR);
+		} else if (field - ARM_SMMU_PKVM_BANK_SMR < ARM_SMMU_PKVM_PROT_BANKS) {
+			ret = smmu.bank_smr[field - ARM_SMMU_PKVM_BANK_SMR];
+		} else {
+			ret = -EINVAL;
+		}
 	}
 	hyp_spin_unlock(&smmu.lock);
 	return ret;
@@ -601,15 +892,41 @@ static int smmu_init(void)
 	smmu.nr_cb = FIELD_GET(SMMU_ID1_NUMCB, id1);
 	numpage = 1 << (FIELD_GET(SMMU_ID1_NUMPAGENDXB, id1) + 1);
 	if ((id1 & SMMU_ID1_PAGESIZE) || (id0 & SMMU_ID0_EXIDS) ||
-	    !(id0 & SMMU_ID0_NTS) || smmu.nr_cb < 2 ||
-	    smmu.nr_cb != p->nr_cb_host + 1)
+	    !(id0 & SMMU_ID0_NTS) || smmu.nr_smr <= ARM_SMMU_PKVM_PROT_BANKS ||
+	    smmu.nr_cb != p->nr_cb_host + 1 + ARM_SMMU_PKVM_PROT_BANKS)
 		return -EINVAL;
 	smmu.cb_shadow = smmu.nr_cb - 1;
+	smmu.cb_host = p->nr_cb_host;
+	smmu.smr_host = smmu.nr_smr - ARM_SMMU_PKVM_PROT_BANKS;
 
-	ret = donate_mmio(p->base + (u64)(numpage + smmu.cb_shadow) * PAGE_SIZE,
-			  1, &smmu.cb);
+	if (p->nr_prot > ARM_SMMU_PKVM_PROT_BANKS)
+		return -EINVAL;
+	for (i = 0; i < p->nr_prot; i++) {
+		u32 smr = SMMU_SMR_VALID | (p->prot_smr[i] & (SMMU_SMR_MASK | SMMU_SMR_ID));
+		unsigned int j;
+
+		for (j = 0; j < i; j++)
+			if (smr_overlaps(smmu.bank_smr[j], smr))
+				return -EINVAL;
+		smmu.bank_smr[i] = smr;
+	}
+	/* The stream match groups the hypervisor takes must be unused */
+	for (i = smmu.smr_host; i < smmu.nr_smr; i++)
+		if (readl_relaxed(smmu.gr0 + SMMU_GR0_SMR(i)) & SMMU_SMR_VALID)
+			return -EBUSY;
+
+	ret = donate_mmio(p->base + (u64)(numpage + smmu.cb_host) * PAGE_SIZE,
+			  ARM_SMMU_PKVM_PROT_BANKS + 1, &smmu.cb);
 	if (ret)
 		return ret;
+	for (i = 0; i < ARM_SMMU_PKVM_PROT_BANKS; i++) {
+		smmu.bank_cb[i] = smmu.cb + i * PAGE_SIZE;
+		smmu.bank_l1[i] = new_table();
+		if (!smmu.bank_l1[i])
+			return -ENOMEM;
+		smmu.bank_tables[i] = 1;
+	}
+	smmu.cb += ARM_SMMU_PKVM_PROT_BANKS * PAGE_SIZE;
 
 	smmu.l1 = new_table();
 	if (!smmu.l1)
@@ -639,19 +956,52 @@ static int smmu_init(void)
 		       SMMU_SCTLR_TRE | SMMU_SCTLR_M, smmu.cb + SMMU_CB_SCTLR);
 
 	/*
+	 * Protected banks: stage 2 only, empty until the host maps lent
+	 * memory, one per stream declared before init. No stream can be
+	 * added once the host is deprivileged.
+	 */
+	for (i = 0; i < ARM_SMMU_PKVM_PROT_BANKS; i++) {
+		u32 cbn = smmu.cb_host + i, smr = smmu.smr_host + i;
+
+		writel_relaxed(0, smmu.bank_cb[i] + SMMU_CB_SCTLR);
+		writel_relaxed(SMMU_CBA2R_VA64, smmu.gr1 + SMMU_GR1_CBA2R(cbn));
+		writel_relaxed(FIELD_PREP(SMMU_CBAR_TYPE, SMMU_CBAR_TYPE_S2) |
+			       BANK_VMID(i), smmu.gr1 + SMMU_GR1_CBAR(cbn));
+		writeq_relaxed(hyp_virt_to_phys(smmu.bank_l1[i]),
+			       smmu.bank_cb[i] + SMMU_CB_TTBR0);
+		writel_relaxed(BANK_TCR, smmu.bank_cb[i] + SMMU_CB_TCR);
+		writel_relaxed(~0U, smmu.bank_cb[i] + SMMU_CB_FSR);
+		/* As for the shadow bank */
+		wmb();
+		writel_relaxed(SMMU_SCTLR_HUPCF | SMMU_SCTLR_CFRE | SMMU_SCTLR_AFE |
+			       SMMU_SCTLR_TRE | SMMU_SCTLR_M,
+			       smmu.bank_cb[i] + SMMU_CB_SCTLR);
+		writel_relaxed(FIELD_PREP(SMMU_S2CR_CBNDX, cbn),
+			       smmu.gr0 + SMMU_GR0_S2CR(smr));
+	}
+
+	/*
 	 * The host driver probes once pKVM is finalised: take over what the
 	 * bootloader programmed.
 	 */
-	for (i = 0; i < smmu.cb_shadow; i++) {
+	for (i = 0; i < smmu.cb_host; i++) {
 		cbar = readl_relaxed(smmu.gr1 + SMMU_GR1_CBAR(i));
 		smmu.cbar[i] = cbar;
 		writel_relaxed(nest_cbar(cbar), smmu.gr1 + SMMU_GR1_CBAR(i));
 	}
-	for (i = 0; i < smmu.nr_smr; i++) {
+	for (i = 0; i < smmu.smr_host; i++) {
+		u32 smr = readl_relaxed(smmu.gr0 + SMMU_GR0_SMR(i));
+
+		if ((smr & SMMU_SMR_VALID) && smr_is_protected(smr))
+			writel_relaxed(smr & ~SMMU_SMR_VALID, smmu.gr0 + SMMU_GR0_SMR(i));
 		smmu.s2cr[i] = readl_relaxed(smmu.gr0 + SMMU_GR0_S2CR(i));
 		writel_relaxed(shadow_s2cr(smmu.s2cr[i]),
 			       smmu.gr0 + SMMU_GR0_S2CR(i));
 	}
+	/* Enabled once no host stream match can catch the same streams */
+	for (i = 0; i < ARM_SMMU_PKVM_PROT_BANKS; i++)
+		writel_relaxed(smmu.bank_smr[i],
+			       smmu.gr0 + SMMU_GR0_SMR(smmu.smr_host + i));
 	gr0_write(SMMU_GR0_sCR0, readl_relaxed(smmu.gr0 + SMMU_GR0_sCR0));
 
 	writel_relaxed(0, smmu.gr0 + SMMU_GR0_TLBIALLNSNH);
@@ -667,5 +1017,7 @@ struct pkvm_iommu_ops arm_smmu_pkvm_ops = {
 	.init			= smmu_init,
 	.host_stage2_idmap	= smmu_host_stage2_idmap,
 	.dabt_handler		= smmu_dabt_handler,
+	.prot_map		= smmu_prot_map,
+	.prot_unmap		= smmu_prot_unmap,
 	.fault_info		= smmu_fault_info,
 };

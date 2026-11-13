@@ -63,10 +63,13 @@ config ARM_SMMU_PKVM
 
 	  The hypervisor maps all memory with pages: kvm-arm.iommu_pgt_mem
 	  must hold 129 pages plus one 4 KiB page per 2 MiB of memory, no-map
-	  regions included. If it cannot isolate the SMMU (pool too small,
-	  more than one application SMMU), the driver says why, the SMMU
-	  stays the host's, and protected memory is refused to every device
-	  the SMMU translates.
+	  regions included, and the protected streams' banks 3 x (69 + one
+	  per 2 MiB of CMA) pages: about 35 MiB with 16 GiB of memory and
+	  256 MiB of CMA. If it cannot isolate the SMMU (pool too small,
+	  more than one application SMMU, or no free context banks and
+	  stream match groups for the protected streams), the driver says
+	  why, the SMMU stays the host's, and protected memory is refused to
+	  every device the SMMU translates.
 
 	  If unsure, say N.
 
