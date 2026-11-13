@@ -1,0 +1,106 @@
+// SPDX-License-Identifier: BSD-3-Clause
+/*
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ */
+
+/dts-v1/;
+
+#include <dt-bindings/input/linux-event-codes.h>
+#include "seca.dtsi"
+
+/ {
+	model = "Qualcomm Technologies, Inc. SecaAU Ride SX";
+	compatible = "qcom,seca-ride-sx", "qcom,seca";
+
+	aliases {
+		serial0 = &uart15;
+	};
+
+	chosen {
+		stdout-path = "serial0:115200n8";
+	};
+
+	gpio-keys {
+		compatible = "gpio-keys";
+
+		pinctrl-0 = <&key_vol_down_default>;
+		pinctrl-names = "default";
+
+		key-volume-down {
+			label = "Volume Down";
+			gpios = <&tlmm 136 GPIO_ACTIVE_HIGH>;
+			linux,code = <KEY_VOLUMEDOWN>;
+		};
+	};
+
+	/*
+	 * The boot firmware owns the eUSB2 PHY rails: cmd-db offers no PMIC
+	 * LDO resources to the application processor on this platform.
+	 */
+	vreg_usb0_0p9: regulator-usb0-0p9 {
+		compatible = "regulator-fixed";
+		regulator-name = "vreg_usb0_0p9";
+		regulator-min-microvolt = <904000>;
+		regulator-max-microvolt = <904000>;
+		regulator-always-on;
+	};
+
+	vreg_usb0_1p2: regulator-usb0-1p2 {
+		compatible = "regulator-fixed";
+		regulator-name = "vreg_usb0_1p2";
+		regulator-min-microvolt = <1200000>;
+		regulator-max-microvolt = <1200000>;
+		regulator-always-on;
+	};
+};
+
+&remoteproc_adsp {
+	firmware-name = "qcom/seca/adsp.mbn",
+			"qcom/seca/adsp_dtbs.elf";
+
+	status = "okay";
+};
+
+&remoteproc_adsp1 {
+	firmware-name = "qcom/seca/adsp1.mbn",
+			"qcom/seca/adsp1_dtbs.elf";
+
+	status = "okay";
+};
+
+&tlmm {
+	key_vol_down_default: key-vol-down-default-state {
+		pins = "gpio136";
+		function = "gpio";
+		bias-pull-down;
+	};
+};
+
+&uart15 {
+	status = "okay";
+};
+
+&ufs_mem_hc {
+	reset-gpios = <&tlmm 181 GPIO_ACTIVE_LOW>;
+
+	status = "okay";
+};
+
+&ufs_mem_phy {
+	status = "okay";
+};
+
+&usb_0 {
+	dr_mode = "peripheral";
+	maximum-speed = "high-speed";
+	qcom,select-utmi-as-pipe-clk;
+
+	status = "okay";
+};
+
+&usb_0_hsphy {
+	vdd-supply = <&vreg_usb0_0p9>;
+	vdda12-supply = <&vreg_usb0_1p2>;
+
+	status = "okay";
+};

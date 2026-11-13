@@ -1425,6 +1425,18 @@ config QCOM_FALKOR_ERRATUM_E1041
 
 	  If unsure, say Y.
 
+config QCOM_ORYON_ERRATUM_RNDR
+	bool "Oryon r5p4: RNDR and RNDRRS never return a random number"
+	default y
+	help
+	  Qualcomm Oryon r5p4 cores advertise FEAT_RNG, but the RNDR and
+	  RNDRRS instructions always fail. Software that retries them until
+	  they succeed never makes progress, for example a KVM guest that
+	  uses them as its entropy source. This option hides FEAT_RNG on the
+	  affected cores, so that neither userspace nor KVM guests see it.
+
+	  If unsure, say Y.
+
 config ARM64_WORKAROUND_DISABLE_CNP
 	bool
 

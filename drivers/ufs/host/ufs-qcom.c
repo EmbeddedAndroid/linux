@@ -2330,6 +2330,7 @@ static void ufs_qcom_config_scaling_param(struct ufs_hba *hba,
 
 static int ufs_qcom_mcq_config_resource(struct ufs_hba *hba)
 {
+	const struct ufs_qcom_drvdata *drvdata = of_device_get_match_data(hba->dev);
 	struct platform_device *pdev = to_platform_device(hba->dev);
 	struct resource *res;
 
@@ -2345,6 +2346,16 @@ static int ufs_qcom_mcq_config_resource(struct ufs_hba *hba)
 		dev_err(hba->dev, "Failed to map MCQ region: %ld\n",
 			PTR_ERR(hba->mcq_base));
 		return PTR_ERR(hba->mcq_base);
+	}
+
+	/*
+	 * The MCQ head and tail pointers do not survive a collapse of the host
+	 * power domain and only a host controller reset clears them, so the
+	 * link has to be taken down whenever the host is suspended.
+	 */
+	if (drvdata && drvdata->no_mcq_retention) {
+		hba->spm_lvl = UFS_PM_LVL_5;
+		hba->rpm_lvl = UFS_PM_LVL_5;
 	}
 
 	return 0;
@@ -3090,6 +3101,10 @@ static const struct ufs_qcom_drvdata ufs_qcom_sm8550_drvdata = {
 	.no_phy_retention = true,
 };
 
+static const struct ufs_qcom_drvdata ufs_qcom_seca_drvdata = {
+	.no_mcq_retention = true,
+};
+
 static const struct ufs_qcom_drvdata ufs_qcom_sa8255p_drvdata = {
 	.vops = &ufs_hba_qcom_sa8255p_vops
 };
@@ -3100,6 +3115,7 @@ static const struct of_device_id ufs_qcom_of_match[] __maybe_unused = {
 	{ .compatible = "qcom,sm8550-ufshc", .data = &ufs_qcom_sm8550_drvdata },
 	{ .compatible = "qcom,sm8650-ufshc", .data = &ufs_qcom_sm8550_drvdata },
 	{ .compatible = "qcom,sa8255p-ufshc", .data = &ufs_qcom_sa8255p_drvdata },
+	{ .compatible = "qcom,seca-ufshc", .data = &ufs_qcom_seca_drvdata },
 	{},
 };
 MODULE_DEVICE_TABLE(of, ufs_qcom_of_match);

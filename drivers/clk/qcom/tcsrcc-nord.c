@@ -6,6 +6,7 @@
 #include <linux/clk-provider.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
+#include <linux/property.h>
 #include <linux/regmap.h>
 
 #include <dt-bindings/clock/qcom,nord-tcsrcc.h>
@@ -160,6 +161,27 @@ static struct clk_branch tcsr_ufs_clkref_en = {
 	},
 };
 
+/*
+ * SecaAU feeds its UFS PHY from the QREF at 0x1008, which is the UX SGMII 0
+ * reference on Nord; the Nord UFS slot at 0x3008 is unused.
+ */
+static struct clk_branch tcsr_seca_ufs_clkref_en = {
+	.halt_reg = 0x1008,
+	.halt_check = BRANCH_HALT_DELAY,
+	.clkr = {
+		.enable_reg = 0x1008,
+		.enable_mask = BIT(0),
+		.hw.init = &(const struct clk_init_data) {
+			.name = "tcsr_ufs_clkref_en",
+			.parent_data = &(const struct clk_parent_data){
+				.index = DT_BI_TCXO_PAD,
+			},
+			.num_parents = 1,
+			.ops = &clk_branch2_ops,
+		},
+	},
+};
+
 static struct clk_branch tcsr_usb2_0_clkref_en = {
 	.halt_reg = 0x4008,
 	.halt_check = BRANCH_HALT_DELAY,
@@ -297,6 +319,23 @@ static struct clk_regmap *tcsr_cc_nord_clocks[] = {
 	[TCSR_UX_SGMII_1_CLKREF_EN] = &tcsr_ux_sgmii_1_clkref_en.clkr,
 };
 
+static struct clk_regmap *tcsr_cc_seca_clocks[] = {
+	[TCSR_DP_RX_0_CLKREF_EN] = &tcsr_dp_rx_0_clkref_en.clkr,
+	[TCSR_DP_RX_1_CLKREF_EN] = &tcsr_dp_rx_1_clkref_en.clkr,
+	[TCSR_DP_TX_0_CLKREF_EN] = &tcsr_dp_tx_0_clkref_en.clkr,
+	[TCSR_DP_TX_1_CLKREF_EN] = &tcsr_dp_tx_1_clkref_en.clkr,
+	[TCSR_DP_TX_2_CLKREF_EN] = &tcsr_dp_tx_2_clkref_en.clkr,
+	[TCSR_DP_TX_3_CLKREF_EN] = &tcsr_dp_tx_3_clkref_en.clkr,
+	[TCSR_PCIE_CLKREF_EN] = &tcsr_pcie_clkref_en.clkr,
+	[TCSR_UFS_CLKREF_EN] = &tcsr_seca_ufs_clkref_en.clkr,
+	[TCSR_USB2_0_CLKREF_EN] = &tcsr_usb2_0_clkref_en.clkr,
+	[TCSR_USB2_1_CLKREF_EN] = &tcsr_usb2_1_clkref_en.clkr,
+	[TCSR_USB2_2_CLKREF_EN] = &tcsr_usb2_2_clkref_en.clkr,
+	[TCSR_USB3_0_CLKREF_EN] = &tcsr_usb3_0_clkref_en.clkr,
+	[TCSR_USB3_1_CLKREF_EN] = &tcsr_usb3_1_clkref_en.clkr,
+	[TCSR_UX_SGMII_1_CLKREF_EN] = &tcsr_ux_sgmii_1_clkref_en.clkr,
+};
+
 static const struct regmap_config tcsr_cc_nord_regmap_config = {
 	.reg_bits = 32,
 	.reg_stride = 4,
@@ -311,15 +350,22 @@ static const struct qcom_cc_desc tcsr_cc_nord_desc = {
 	.num_clks = ARRAY_SIZE(tcsr_cc_nord_clocks),
 };
 
+static const struct qcom_cc_desc tcsr_cc_seca_desc = {
+	.config = &tcsr_cc_nord_regmap_config,
+	.clks = tcsr_cc_seca_clocks,
+	.num_clks = ARRAY_SIZE(tcsr_cc_seca_clocks),
+};
+
 static const struct of_device_id tcsr_cc_nord_match_table[] = {
-	{ .compatible = "qcom,nord-tcsrcc" },
+	{ .compatible = "qcom,nord-tcsrcc", .data = &tcsr_cc_nord_desc },
+	{ .compatible = "qcom,seca-tcsrcc", .data = &tcsr_cc_seca_desc },
 	{ }
 };
 MODULE_DEVICE_TABLE(of, tcsr_cc_nord_match_table);
 
 static int tcsr_cc_nord_probe(struct platform_device *pdev)
 {
-	return qcom_cc_probe(pdev, &tcsr_cc_nord_desc);
+	return qcom_cc_probe(pdev, device_get_match_data(&pdev->dev));
 }
 
 static struct platform_driver tcsr_cc_nord_driver = {

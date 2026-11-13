@@ -304,6 +304,8 @@ struct fastrpc_soc_data {
 	u32 dma_addr_bits_cdsp;
 	u32 dma_addr_bits_default;
 	bool poll_mode_supported;
+	/* The DSP keeps using a released process's memory */
+	bool dsp_keeps_released_mem;
 };
 
 struct fastrpc_channel_ctx {
@@ -330,6 +332,8 @@ struct fastrpc_channel_ctx {
 	struct fastrpc_device *secure_fdevice;
 	struct fastrpc_device *fdevice;
 	struct list_head invoke_interrupted_mmaps;
+	/* Memory of released processes the DSP may still access */
+	struct list_head released_mem;
 	bool secure;
 	bool unsigned_support;
 	bool poll_mode_supported;
@@ -1364,7 +1368,6 @@ static int fastrpc_internal_invoke(struct fastrpc_user *fl,  u32 kernel,
 				   struct fastrpc_invoke_args *args)
 {
 	struct fastrpc_invoke_ctx *ctx = NULL;
-	struct fastrpc_buf *buf, *b;
 
 	int err = 0;
 
@@ -1427,12 +1430,16 @@ bail:
 	}
 
 	if (err == -ERESTARTSYS) {
+		unsigned long flags;
+		LIST_HEAD(mmaps);
+
 		spin_lock(&fl->lock);
-		list_for_each_entry_safe(buf, b, &fl->mmaps, node) {
-			list_del(&buf->node);
-			list_add_tail(&buf->node, &fl->cctx->invoke_interrupted_mmaps);
-		}
+		list_splice_init(&fl->mmaps, &mmaps);
 		spin_unlock(&fl->lock);
+
+		spin_lock_irqsave(&fl->cctx->lock, flags);
+		list_splice_tail(&mmaps, &fl->cctx->invoke_interrupted_mmaps);
+		spin_unlock_irqrestore(&fl->cctx->lock, flags);
 	}
 
 	if (err)
@@ -1565,6 +1572,38 @@ err:
 	return err;
 }
 
+static void fastrpc_parked_buf_free(struct fastrpc_channel_ctx *cctx,
+				    struct fastrpc_buf *buf)
+{
+	dma_free_coherent(buf->dev, buf->size, buf->virt,
+			  fastrpc_ipa_to_dma_addr(cctx, buf->dma_addr));
+	kfree(buf);
+}
+
+/*
+ * Keep memory the DSP may still access away from the page allocator. It is
+ * freed when the channel goes away, once the DSP is down. A buffer released
+ * after that has no DSP left to use it and is freed at once.
+ */
+static void fastrpc_buf_park(struct fastrpc_channel_ctx *cctx,
+			     struct fastrpc_buf *buf)
+{
+	unsigned long flags;
+	bool parked = false;
+
+	spin_lock_irqsave(&cctx->lock, flags);
+	if (cctx->rpdev) {
+		/* The buffer outlives its user, which is freed at close */
+		buf->fl = NULL;
+		list_add_tail(&buf->node, &cctx->released_mem);
+		parked = true;
+	}
+	spin_unlock_irqrestore(&cctx->lock, flags);
+
+	if (!parked)
+		fastrpc_buf_free(buf);
+}
+
 static int fastrpc_init_create_process(struct fastrpc_user *fl,
 					char __user *argp)
 {
@@ -1672,7 +1711,10 @@ static int fastrpc_init_create_process(struct fastrpc_user *fl,
 
 err_invoke:
 	fl->init_mem = NULL;
-	fastrpc_buf_free(imem);
+	if (fl->cctx->soc_data->dsp_keeps_released_mem)
+		fastrpc_buf_park(fl->cctx, imem);
+	else
+		fastrpc_buf_free(imem);
 err_alloc:
 	fastrpc_map_put(map);
 err:
@@ -1730,13 +1772,59 @@ static int fastrpc_release_current_dsp_process(struct fastrpc_user *fl)
 				       sc, &args[0]);
 }
 
+static int fastrpc_req_munmap_impl(struct fastrpc_user *fl, struct fastrpc_buf *buf)
+{
+	struct fastrpc_invoke_args args[1] = { [0] = { 0 } };
+	struct fastrpc_munmap_req_msg req_msg;
+	struct device *dev = fl->sctx->dev;
+	int err;
+	u32 sc;
+
+	req_msg.client_id = fl->client_id;
+	req_msg.size = buf->size;
+	req_msg.vaddr = buf->raddr;
+
+	args[0].ptr = (u64) (uintptr_t) &req_msg;
+	args[0].length = sizeof(req_msg);
+
+	sc = FASTRPC_SCALARS(FASTRPC_RMID_INIT_MUNMAP, 1, 0);
+	err = fastrpc_internal_invoke(fl, true, FASTRPC_INIT_HANDLE, sc,
+				      &args[0]);
+	if (!err) {
+		dev_dbg(dev, "unmmap\tpt 0x%09lx OK\n", buf->raddr);
+		fastrpc_buf_free(buf);
+	} else {
+		dev_err(dev, "unmmap\tpt 0x%09lx ERROR\n", buf->raddr);
+	}
+
+	return err;
+}
+
 static int fastrpc_device_release(struct inode *inode, struct file *file)
 {
 	struct fastrpc_user *fl = (struct fastrpc_user *)file->private_data;
 	struct fastrpc_channel_ctx *cctx = fl->cctx;
+	struct fastrpc_buf *buf, *b;
 	unsigned long flags;
+	LIST_HEAD(mmaps);
+
+	if (cctx->soc_data->dsp_keeps_released_mem) {
+		spin_lock(&fl->lock);
+		list_splice_init(&fl->mmaps, &mmaps);
+		spin_unlock(&fl->lock);
+		list_for_each_entry_safe(buf, b, &mmaps, node) {
+			list_del(&buf->node);
+			if (fastrpc_req_munmap_impl(fl, buf))
+				fastrpc_buf_park(cctx, buf);
+		}
+	}
 
 	fastrpc_release_current_dsp_process(fl);
+
+	if (cctx->soc_data->dsp_keeps_released_mem && fl->init_mem) {
+		fastrpc_buf_park(cctx, fl->init_mem);
+		fl->init_mem = NULL;
+	}
 
 	spin_lock_irqsave(&cctx->lock, flags);
 	list_del(&fl->user);
@@ -2001,34 +2089,6 @@ static int fastrpc_get_dsp_info(struct fastrpc_user *fl, char __user *argp)
 		return -EFAULT;
 
 	return 0;
-}
-
-static int fastrpc_req_munmap_impl(struct fastrpc_user *fl, struct fastrpc_buf *buf)
-{
-	struct fastrpc_invoke_args args[1] = { [0] = { 0 } };
-	struct fastrpc_munmap_req_msg req_msg;
-	struct device *dev = fl->sctx->dev;
-	int err;
-	u32 sc;
-
-	req_msg.client_id = fl->client_id;
-	req_msg.size = buf->size;
-	req_msg.vaddr = buf->raddr;
-
-	args[0].ptr = (u64) (uintptr_t) &req_msg;
-	args[0].length = sizeof(req_msg);
-
-	sc = FASTRPC_SCALARS(FASTRPC_RMID_INIT_MUNMAP, 1, 0);
-	err = fastrpc_internal_invoke(fl, true, FASTRPC_INIT_HANDLE, sc,
-				      &args[0]);
-	if (!err) {
-		dev_dbg(dev, "unmmap\tpt 0x%09lx OK\n", buf->raddr);
-		fastrpc_buf_free(buf);
-	} else {
-		dev_err(dev, "unmmap\tpt 0x%09lx ERROR\n", buf->raddr);
-	}
-
-	return err;
 }
 
 static int fastrpc_req_munmap(struct fastrpc_user *fl, char __user *argp)
@@ -2508,6 +2568,14 @@ static const struct fastrpc_soc_data kaanapali_soc_data = {
 	.poll_mode_supported = true,
 };
 
+static const struct fastrpc_soc_data seca_soc_data = {
+	.sid_pos = 56,
+	.dma_addr_bits_cdsp = 34,
+	.dma_addr_bits_default = 32,
+	.poll_mode_supported = true,
+	.dsp_keeps_released_mem = true,
+};
+
 static const struct fastrpc_soc_data default_soc_data = {
 	.sid_pos = 32,
 	.dma_addr_bits_cdsp = 32,
@@ -2778,6 +2846,7 @@ static int fastrpc_rpmsg_probe(struct rpmsg_device *rpdev)
 	dma_set_mask_and_coherent(rdev, DMA_BIT_MASK(32));
 	INIT_LIST_HEAD(&data->users);
 	INIT_LIST_HEAD(&data->invoke_interrupted_mmaps);
+	INIT_LIST_HEAD(&data->released_mem);
 	spin_lock_init(&data->lock);
 	idr_init(&data->ctx_idr);
 	data->domain_id = domain_id;
@@ -2869,6 +2938,7 @@ static void fastrpc_rpmsg_remove(struct rpmsg_device *rpdev)
 	struct fastrpc_buf *buf, *b;
 	struct fastrpc_user *user;
 	unsigned long flags;
+	LIST_HEAD(parked);
 
 	if (cctx->fdevice)
 		misc_deregister(&cctx->fdevice->miscdev);
@@ -2883,8 +2953,17 @@ static void fastrpc_rpmsg_remove(struct rpmsg_device *rpdev)
 		fastrpc_notify_users(user);
 	spin_unlock_irqrestore(&cctx->lock, flags);
 
+	spin_lock_irqsave(&cctx->lock, flags);
 	list_for_each_entry_safe(buf, b, &cctx->invoke_interrupted_mmaps, node)
 		list_del(&buf->node);
+	list_splice_init(&cctx->released_mem, &parked);
+	spin_unlock_irqrestore(&cctx->lock, flags);
+
+	/* The DSP is down: memory it held can go back to the allocator. */
+	list_for_each_entry_safe(buf, b, &parked, node) {
+		list_del(&buf->node);
+		fastrpc_parked_buf_free(cctx, buf);
+	}
 
 	fastrpc_remote_heap_release(cctx, rpdev);
 
@@ -2960,6 +3039,7 @@ static int fastrpc_rpmsg_callback(struct rpmsg_device *rpdev, void *data,
 
 static const struct of_device_id fastrpc_rpmsg_of_match[] = {
 	{ .compatible = "qcom,kaanapali-fastrpc", .data = &kaanapali_soc_data },
+	{ .compatible = "qcom,seca-fastrpc", .data = &seca_soc_data },
 	{ .compatible = "qcom,fastrpc", .data = &default_soc_data },
 	{ }
 };

@@ -792,6 +792,7 @@ struct arm64_ftr_override __read_mostly id_aa64pfr0_override;
 struct arm64_ftr_override __read_mostly id_aa64pfr1_override;
 struct arm64_ftr_override __read_mostly id_aa64zfr0_override;
 struct arm64_ftr_override __read_mostly id_aa64smfr0_override;
+struct arm64_ftr_override __read_mostly id_aa64isar0_override;
 struct arm64_ftr_override __read_mostly id_aa64isar1_override;
 struct arm64_ftr_override __read_mostly id_aa64isar2_override;
 
@@ -846,7 +847,8 @@ static const struct __ftr_reg_entry {
 	ARM64_FTR_REG(SYS_ID_AA64DFR1_EL1, ftr_raz),
 
 	/* Op1 = 0, CRn = 0, CRm = 6 */
-	ARM64_FTR_REG(SYS_ID_AA64ISAR0_EL1, ftr_id_aa64isar0),
+	ARM64_FTR_REG_OVERRIDE(SYS_ID_AA64ISAR0_EL1, ftr_id_aa64isar0,
+			       &id_aa64isar0_override),
 	ARM64_FTR_REG_OVERRIDE(SYS_ID_AA64ISAR1_EL1, ftr_id_aa64isar1,
 			       &id_aa64isar1_override),
 	ARM64_FTR_REG_OVERRIDE(SYS_ID_AA64ISAR2_EL1, ftr_id_aa64isar2,
@@ -988,6 +990,26 @@ u64 arm64_ftr_reg_override(u32 sys_id, u64 val)
 	}
 
 	return val;
+}
+
+/*
+ * Qualcomm Oryon r5p4 reports FEAT_RNG, but RNDR and RNDRRS never return a
+ * random number. Hide the feature from userspace and from KVM guests as if
+ * it had been overridden, before init_cpu_features() sanitises the boot
+ * CPU's ID registers.
+ */
+static const struct midr_range broken_rndr_cpus[] = {
+	MIDR_REV(MIDR_QCOM_ORYON_X1, 5, 4),
+	{},
+};
+
+static void __init apply_cpu_ftr_errata(void)
+{
+	if (IS_ENABLED(CONFIG_QCOM_ORYON_ERRATUM_RNDR) &&
+	    is_midr_in_range_list(broken_rndr_cpus)) {
+		id_aa64isar0_override.val &= ~ID_AA64ISAR0_EL1_RNDR_MASK;
+		id_aa64isar0_override.mask |= ID_AA64ISAR0_EL1_RNDR_MASK;
+	}
 }
 
 void __init validate_ftr_regs(void)
@@ -3989,6 +4011,7 @@ static void __init setup_boot_cpu_capabilities(void)
 
 void __init setup_boot_cpu_features(void)
 {
+	apply_cpu_ftr_errata();
 	init_cpu_features();
 
 	/*

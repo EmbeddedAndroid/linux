@@ -46,6 +46,7 @@ properties:
               - qcom,apss-wdt-sdm845
               - qcom,apss-wdt-sdx55
               - qcom,apss-wdt-sdx65
+              - qcom,apss-wdt-seca
               - qcom,apss-wdt-shikra
               - qcom,apss-wdt-sm6115
               - qcom,apss-wdt-sm6350
