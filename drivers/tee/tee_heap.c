@@ -6,6 +6,7 @@
 #include <linux/dma-buf.h>
 #include <linux/dma-heap.h>
 #include <linux/genalloc.h>
+#include <linux/iommu-prot.h>
 #include <linux/module.h>
 #include <linux/scatterlist.h>
 #include <linux/slab.h>
@@ -125,6 +126,9 @@ tee_heap_map_dma_buf(struct dma_buf_attachment *attachment,
 {
 	struct tee_heap_attachment *a = attachment->priv;
 	int ret;
+
+	if (!iommu_prot_dma_allowed(attachment->dev))
+		return ERR_PTR(-EPERM);
 
 	ret = dma_map_sgtable(attachment->dev, &a->table, direction,
 			      DMA_ATTR_SKIP_CPU_SYNC);
