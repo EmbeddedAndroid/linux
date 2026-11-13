@@ -157,3 +157,24 @@ bool pkvm_iommu_host_dabt_handler(struct user_pt_regs *regs, u64 esr, u64 addr)
 	return pkvm_iommu_ops && pkvm_iommu_ops->dabt_handler &&
 	       pkvm_iommu_ops->dabt_handler(regs, esr, addr);
 }
+
+int pkvm_iommu_prot_map(u32 stream, u64 iova, u64 pfn, u64 nr_pages, int prot)
+{
+	if (!pkvm_iommu_ops || !pkvm_iommu_ops->prot_map)
+		return -ENODEV;
+	return pkvm_iommu_ops->prot_map(stream, iova, pfn, nr_pages, prot);
+}
+
+int pkvm_iommu_prot_unmap(u32 stream, u64 iova, u64 nr_pages)
+{
+	if (!pkvm_iommu_ops || !pkvm_iommu_ops->prot_unmap)
+		return -ENODEV;
+	return pkvm_iommu_ops->prot_unmap(stream, iova, nr_pages);
+}
+
+u64 pkvm_iommu_fault_info(u32 field)
+{
+	if (!pkvm_iommu_ops || !pkvm_iommu_ops->fault_info)
+		return -ENODEV;
+	return pkvm_iommu_ops->fault_info(field);
+}

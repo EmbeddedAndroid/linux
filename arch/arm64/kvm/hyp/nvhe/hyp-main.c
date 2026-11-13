@@ -22,6 +22,7 @@
 
 #include <nvhe/alloc.h>
 #include <nvhe/ffa.h>
+#include <nvhe/iommu.h>
 #include <nvhe/mem_protect.h>
 #include <nvhe/mm.h>
 #include <nvhe/pkvm.h>
@@ -1168,6 +1169,23 @@ DEFINE_KVM_HOST_HCALL(void, __kvm_tlb_flush_vmid,
 	__kvm_tlb_flush_vmid(kern_hyp_va_host(mmu));
 }
 
+DEFINE_KVM_HOST_HCALL(int, __pkvm_iommu_prot_map,
+		      u32, stream, u64, iova, u64, pfn, u64, nr_pages, int, prot)
+{
+	return pkvm_iommu_prot_map(stream, iova, pfn, nr_pages, prot);
+}
+
+DEFINE_KVM_HOST_HCALL(int, __pkvm_iommu_prot_unmap,
+		      u32, stream, u64, iova, u64, nr_pages)
+{
+	return pkvm_iommu_prot_unmap(stream, iova, nr_pages);
+}
+
+DEFINE_KVM_HOST_HCALL(u64, __pkvm_iommu_fault_info, u32, field)
+{
+	return pkvm_iommu_fault_info(field);
+}
+
 DEFINE_KVM_HOST_HCALL(void, __pkvm_tlb_flush_vmid,
 	pkvm_handle_t, handle)
 {
@@ -1615,6 +1633,9 @@ static const hcall_t host_hcall[] = {
 	HANDLE_FUNC(__pkvm_vcpu_put),
 	HANDLE_FUNC(__pkvm_vcpu_sync_state),
 	HANDLE_FUNC(__pkvm_tlb_flush_vmid),
+	HANDLE_FUNC(__pkvm_iommu_prot_map),
+	HANDLE_FUNC(__pkvm_iommu_prot_unmap),
+	HANDLE_FUNC(__pkvm_iommu_fault_info),
 };
 
 static void handle_host_hcall(struct kvm_cpu_context *host_ctxt)
