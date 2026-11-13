@@ -1379,6 +1379,17 @@ int __pkvm_host_share_ffa(u64 pfn, u64 nr_pages)
 }
 
 /*
+ * Lent pages carry their state in their annotation: lent but not yet
+ * accepted by the SPMC (PKVM_FFA_LENT_PENDING), the lend can still be
+ * rolled back then; mapped by a hypervisor-owned IOMMU bank
+ * (PKVM_FFA_LENT_MAPPED), they cannot be reclaimed then; or held for a
+ * reclaim (PKVM_FFA_LENT_RECLAIMING), no bank can map them then.
+ */
+#define PKVM_FFA_LENT_MAPPED		1ULL
+#define PKVM_FFA_LENT_RECLAIMING	2ULL
+#define PKVM_FFA_LENT_PENDING		4ULL
+
+/*
  * FFA_MEM_LEND takes the pages away from the host until it reclaims them:
  * they leave the host stage-2, owned by PKVM_ID_FFA, and a host access
  * gets an abort.
@@ -1395,13 +1406,14 @@ int __pkvm_host_lend_ffa(u64 pfn, u64 nr_pages)
 	host_lock_component();
 	ret = __host_check_page_state_range(phys, size, PKVM_PAGE_OWNED);
 	if (!ret)
-		ret = host_stage2_set_owner_locked(phys, size, PKVM_ID_FFA);
+		ret = host_stage2_set_owner_metadata_locked(phys, size, PKVM_ID_FFA,
+							    PKVM_FFA_LENT_PENDING);
 	host_unlock_component();
 
 	return ret;
 }
 
-static int __host_check_ffa_lent_range(u64 phys, u64 size)
+static int __host_check_ffa_lent_range_meta(u64 phys, u64 size, u64 meta)
 {
 	u64 addr;
 
@@ -1415,9 +1427,80 @@ static int __host_check_ffa_lent_range(u64 phys, u64 size)
 
 		if (!host_stage2_pte_is_owned_by(pte, PKVM_ID_FFA))
 			return -EPERM;
+		if (FIELD_GET(KVM_HOST_DONATION_PTE_EXTRA_MASK, pte) != meta)
+			return -EBUSY;
 	}
 
 	return 0;
+}
+
+/*
+ * Mark lent pages as mapped (@map) or no longer mapped in a hypervisor
+ * IOMMU bank. Called with the host component locked.
+ */
+int __pkvm_host_ffa_lent_set_mapped(u64 phys, u64 size, bool map)
+{
+	int ret;
+
+	hyp_assert_lock_held(&host_mmu.lock);
+
+	ret = __host_check_ffa_lent_range_meta(phys, size,
+					       map ? 0 : PKVM_FFA_LENT_MAPPED);
+	if (ret)
+		return ret;
+
+	return host_stage2_set_owner_metadata_locked(phys, size, PKVM_ID_FFA,
+						     map ? PKVM_FFA_LENT_MAPPED : 0);
+}
+
+/*
+ * The SPMC acknowledged the descriptor or fragment that lends these pages:
+ * a bank may map them now.
+ */
+int __pkvm_host_ffa_lent_settle(u64 pfn, u64 nr_pages)
+{
+	u64 phys = hyp_pfn_to_phys(pfn);
+	u64 size = PAGE_SIZE * nr_pages;
+	int ret;
+
+	if (!pfn_range_is_valid(pfn, nr_pages))
+		return -EINVAL;
+
+	host_lock_component();
+	ret = __host_check_ffa_lent_range_meta(phys, size, PKVM_FFA_LENT_PENDING);
+	if (!ret)
+		ret = host_stage2_set_owner_metadata_locked(phys, size, PKVM_ID_FFA, 0);
+	host_unlock_component();
+
+	return ret;
+}
+
+/*
+ * Hold lent pages (@hold) for an FFA_MEM_RECLAIM before the SPMC sees it,
+ * so that no IOMMU bank maps them between the check and the reclaim, or
+ * release them if the SPMC refused it. -EBUSY if a bank maps them. A range
+ * the host shared rather than lent is left alone.
+ */
+int __pkvm_host_ffa_lent_hold(u64 pfn, u64 nr_pages, bool hold)
+{
+	u64 phys = hyp_pfn_to_phys(pfn);
+	u64 size = PAGE_SIZE * nr_pages;
+	int ret;
+
+	if (!pfn_range_is_valid(pfn, nr_pages))
+		return -EINVAL;
+
+	host_lock_component();
+	ret = __host_check_ffa_lent_range_meta(phys, size,
+					       hold ? 0 : PKVM_FFA_LENT_RECLAIMING);
+	if (!ret)
+		ret = host_stage2_set_owner_metadata_locked(phys, size, PKVM_ID_FFA,
+							    hold ? PKVM_FFA_LENT_RECLAIMING : 0);
+	else if (ret == -EPERM)
+		ret = 0;
+	host_unlock_component();
+
+	return ret;
 }
 
 int __pkvm_host_reclaim_lent_ffa(u64 pfn, u64 nr_pages)
@@ -1430,7 +1513,10 @@ int __pkvm_host_reclaim_lent_ffa(u64 pfn, u64 nr_pages)
 		return -EINVAL;
 
 	host_lock_component();
-	ret = __host_check_ffa_lent_range(phys, size);
+	/* Held for an FFA_MEM_RECLAIM, or a lend the SPMC did not accept */
+	ret = __host_check_ffa_lent_range_meta(phys, size, PKVM_FFA_LENT_RECLAIMING);
+	if (ret == -EBUSY)
+		ret = __host_check_ffa_lent_range_meta(phys, size, PKVM_FFA_LENT_PENDING);
 	if (!ret)
 		ret = host_stage2_set_owner_locked(phys, size, PKVM_ID_HOST);
 	host_unlock_component();
@@ -1950,6 +2036,17 @@ static void assert_page_state(void)
 	guest_unlock_component(vm);
 }
 
+static int selftest_lent_set_mapped(u64 phys, bool map)
+{
+	int ret;
+
+	host_lock_component();
+	ret = __pkvm_host_ffa_lent_set_mapped(phys, PAGE_SIZE, map);
+	host_unlock_component();
+
+	return ret;
+}
+
 #define assert_transition_res(res, fn, ...)		\
 	do {						\
 		WARN_ON(fn(__VA_ARGS__) != res);	\
@@ -2051,6 +2148,21 @@ void pkvm_ownership_selftest(void *base)
 
 	selftest_state.host = PKVM_NOPAGE;
 	assert_transition_res(0,	__pkvm_host_lend_ffa, pfn, 1);
+	selftest_state.host = PKVM_PAGE_OWNED;
+	assert_transition_res(0,	__pkvm_host_reclaim_lent_ffa, pfn, 1);
+
+	selftest_state.host = PKVM_NOPAGE;
+	assert_transition_res(0,	__pkvm_host_lend_ffa, pfn, 1);
+	assert_transition_res(-EBUSY,	selftest_lent_set_mapped, phys, true);
+	assert_transition_res(-EBUSY,	__pkvm_host_ffa_lent_hold, pfn, 1, true);
+	assert_transition_res(0,	__pkvm_host_ffa_lent_settle, pfn, 1);
+	assert_transition_res(-EBUSY,	__pkvm_host_ffa_lent_settle, pfn, 1);
+	assert_transition_res(-EBUSY,	__pkvm_host_reclaim_lent_ffa, pfn, 1);
+	assert_transition_res(0,	selftest_lent_set_mapped, phys, true);
+	assert_transition_res(-EBUSY,	__pkvm_host_ffa_lent_hold, pfn, 1, true);
+	assert_transition_res(-EBUSY,	__pkvm_host_reclaim_lent_ffa, pfn, 1);
+	assert_transition_res(0,	selftest_lent_set_mapped, phys, false);
+	assert_transition_res(0,	__pkvm_host_ffa_lent_hold, pfn, 1, true);
 	assert_transition_res(-EPERM,	__pkvm_host_lend_ffa, pfn, 1);
 	assert_transition_res(-EPERM,	__pkvm_host_share_ffa, pfn, 1);
 	assert_transition_res(-EPERM,	__pkvm_host_unshare_ffa, pfn, 1);
