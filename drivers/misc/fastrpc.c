@@ -1724,6 +1724,34 @@ static int fastrpc_release_current_dsp_process(struct fastrpc_user *fl)
 				       sc, &args[0]);
 }
 
+static int fastrpc_req_munmap_impl(struct fastrpc_user *fl, struct fastrpc_buf *buf)
+{
+	struct fastrpc_invoke_args args[1] = { [0] = { 0 } };
+	struct fastrpc_munmap_req_msg req_msg;
+	struct device *dev = fl->sctx->dev;
+	int err;
+	u32 sc;
+
+	req_msg.client_id = fl->client_id;
+	req_msg.size = buf->size;
+	req_msg.vaddr = buf->raddr;
+
+	args[0].ptr = (u64) (uintptr_t) &req_msg;
+	args[0].length = sizeof(req_msg);
+
+	sc = FASTRPC_SCALARS(FASTRPC_RMID_INIT_MUNMAP, 1, 0);
+	err = fastrpc_internal_invoke(fl, true, FASTRPC_INIT_HANDLE, sc,
+				      &args[0]);
+	if (!err) {
+		dev_dbg(dev, "unmmap\tpt 0x%09lx OK\n", buf->raddr);
+		fastrpc_buf_free(buf);
+	} else {
+		dev_err(dev, "unmmap\tpt 0x%09lx ERROR\n", buf->raddr);
+	}
+
+	return err;
+}
+
 static int fastrpc_device_release(struct inode *inode, struct file *file)
 {
 	struct fastrpc_user *fl = (struct fastrpc_user *)file->private_data;
@@ -1995,34 +2023,6 @@ static int fastrpc_get_dsp_info(struct fastrpc_user *fl, char __user *argp)
 		return -EFAULT;
 
 	return 0;
-}
-
-static int fastrpc_req_munmap_impl(struct fastrpc_user *fl, struct fastrpc_buf *buf)
-{
-	struct fastrpc_invoke_args args[1] = { [0] = { 0 } };
-	struct fastrpc_munmap_req_msg req_msg;
-	struct device *dev = fl->sctx->dev;
-	int err;
-	u32 sc;
-
-	req_msg.client_id = fl->client_id;
-	req_msg.size = buf->size;
-	req_msg.vaddr = buf->raddr;
-
-	args[0].ptr = (u64) (uintptr_t) &req_msg;
-	args[0].length = sizeof(req_msg);
-
-	sc = FASTRPC_SCALARS(FASTRPC_RMID_INIT_MUNMAP, 1, 0);
-	err = fastrpc_internal_invoke(fl, true, FASTRPC_INIT_HANDLE, sc,
-				      &args[0]);
-	if (!err) {
-		dev_dbg(dev, "unmmap\tpt 0x%09lx OK\n", buf->raddr);
-		fastrpc_buf_free(buf);
-	} else {
-		dev_err(dev, "unmmap\tpt 0x%09lx ERROR\n", buf->raddr);
-	}
-
-	return err;
 }
 
 static int fastrpc_req_munmap(struct fastrpc_user *fl, char __user *argp)
