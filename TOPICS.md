@@ -47,12 +47,14 @@ Status legend: FROMLIST = posted upstream by its author, link to the revision ca
 | qcom/kodiak | next-20261103 | 7 | 4 | 2 | 5 | qcs6490-rb3gen2 |
 | qcom/agatti | next-20261103 | 3 | 3 | 0 | 3 | qrb2210-arduino-imola |
 | qcom/nord | next-20261103 | 4 | 3 | 0 | 4 | iq10-evk |
+| qcom/seca | next-20261103 | 58 | 58 | 0 | 58 | seca-ride-sx |
 | qcom/eliza-camera | qcom/eliza | 39 | 19 | 18 | 20 | eliza-mtp camera overlays |
 
-qcom/integration 0bcc0b835142: 163 commits, 37 merges (plus this file).
+qcom/integration 22bb277b0943: 222 commits, 38 merges (plus this file).
 
 ## Conflicts resolved in the merges
 
+- Merge branch 'qcom/seca' into qcom/integration: drivers/remoteproc/qcom_q6v5_pas.c: the integration already starts table_sz at zero, so qcom/seca's reset on the failed rsc table load is dropped; drivers/misc/fastrpc.c: qcom/topic/fastrpc deregisters the misc devices first in fastrpc_rpmsg_remove(); qcom/seca's channel lock and the freeing of the SecaAU parked memory are kept, before fastrpc_cb_devices_destroy().
 - Merge branch 'qcom/eliza' into qcom/integration: Conflicts in drivers/media/platform/qcom/iris/iris_platform_common.h and iris_probe.c: qcom/topic/iris-kaanapali adds the Kaanapali platform data and qcom/eliza the Eliza platform data at the same place; keep both, Eliza first in name order.
 
 Conflicts resolved while building the branches (cherry-picks onto the base) are in the branch sections.
@@ -547,3 +549,65 @@ Adaptation: qcom/eliza-camera, SM8750 camss v6 (written on camss v23): from "csi
 | fdfef99b4ce10 | arm64: dts: qcom: eliza-mtp: Add IMX766 rear camera overlay | Tyler Baker | not posted (lei, all lists, 2026-11-04) |
 | 5e3b26b49ac22 | arm64: dts: qcom: eliza-mtp: add IMX858 rear camera overlay | Tyler Baker | not posted (lei, all lists, 2026-11-04) |
 
+## qcom/seca
+
+SecaAU Ride SX (QAM8787P) on the Nord support: SoC ID, bindings, NE/NW GCC, TCSR, pinctrl and rpmhpd data, SoC dtsi and board, UFS (MCQ retention via spm/rpm level 5), PAS remoteprocs over OP-TEE, FastRPC parking for the SecaAU ADSP, the Oryon RNDR erratum, the APSS watchdog. Not posted; no Seca series on any list (listindex, 2026-11-10).
+
+- 8bde7fb34 dt-bindings: clock: qcom,nord-negcc: add SecaAU
+- 1504dfdc1 clk: qcom: negcc-nord: add SecaAU support
+- 1b9805056 dt-bindings: clock: qcom,sm8550-tcsr: add SecaAU TCSR clock controller
+- 011df5c11 clk: qcom: tcsrcc-nord: add SecaAU
+- 08d6d9f82 dt-bindings: arm: qcom: document SecaAU and its Ride SX board
+- c65d356a1 dt-bindings: pinctrl: qcom,nord-tlmm: add SecaAU
+- 7c0b3f054 dt-bindings: usb: qcom,snps-dwc3: add SecaAU
+- 46fa51707 dt-bindings: phy: qcom,snps-eusb2-phy: add SecaAU
+- ef503aafd dt-bindings: arm-smmu: add SecaAU
+- 681a2b69f arm64: dts: qcom: add SecaAU SoC and Ride SX board
+- df244cd74 dt-bindings: arm: qcom,ids: add SoC ID for QAM8787P
+- e2db73c37 soc: qcom: socinfo: add SoC ID for QAM8787P
+- 47a9ffd07 dt-bindings: clock: qcom: add SecaAU NW_GCC
+- 830d7331d clk: qcom: add SecaAU NW_GCC driver
+- 4a02c8694 dt-bindings: ufs: qcom: add SecaAU UFS host and PHY
+- 28eb47d31 arm64: dts: qcom: seca: add UFS
+- 09bc4220b scsi: ufs: qcom: Take the link down on suspend when MCQ state is lost
+- 87208ccd7 dt-bindings: firmware: qcom,scm: document SecaAU SCM
+- 19fd369f3 dt-bindings: mailbox: qcom,cpucp-mbox: document SecaAU CPUCP mailbox
+- e75e522b4 arm64: dts: qcom: seca: add the SCM firmware node
+- a7c2eb5e4 arm64: dts: qcom: seca: add CPU idle states and PSCI power domains
+- 86830fde5 arm64: dts: qcom: seca: add the CPUCP mailbox and SCMI CPU performance
+- 2e1aac58e arm64: dts: qcom: seca: describe the CPU PMU
+- 1de44dadc dt-bindings: power: qcom,rpmpd: add SecaAU RPMh power domains
+- 63096b308 pmdomain: qcom: rpmhpd: add SecaAU power domains
+- e0907d753 dt-bindings: clock: qcom,rpmhcc: add SecaAU RPMh clocks
+- 7dd019589 clk: qcom: rpmh: add SecaAU RPMh clocks
+- db8f153df dt-bindings: mailbox: qcom-ipcc: document SecaAU IPCC
+- 11c187bd4 dt-bindings: soc: qcom: aoss-qmp: document SecaAU AOSS QMP
+- e515ec3c1 dt-bindings: remoteproc: qcom,nord-pas: add SecaAU ADSP and CDSPs
+- 89b836f27 arm64: dts: qcom: seca: add RPMh, IPCC and AOSS QMP
+- 7dcee66c9 arm64: dts: qcom: seca: add the ADSP and CDSP remote processors
+- bdadf3aff arm64: dts: qcom: seca-ride-sx: wire the UFS device reset
+- 82e150327 remoteproc: boot the processor when attach finds it stopped
+- ccb2c0963 remoteproc: qcom_q6v5_pas: start early_boot remotes left off
+- cf748656e arm64: dts: qcom: seca-ride-sx: enable the ADSP
+- 5c7981cd4 dt-bindings: remoteproc: qcom,nord-pas: add the second HPASS DSP
+- 53c81a25c remoteproc: qcom_q6v5_pas: add the second HPASS DSP
+- 62a957602 arm64: dts: qcom: seca: add the second ADSP
+- 47ec21921 arm64: dts: qcom: seca-ride-sx: enable the second ADSP
+- d166d4620 soc: qcom: pd-mapper: add SecaAU domains
+- 77091d60b arm64: cpufeature: hide FEAT_RNG on Qualcomm Oryon r5p4
+- 1fe32891e remoteproc: qcom: pas: don't pass a stale resource table size
+- 075776c35 arm64: dts: qcom: seca: add the application SMMUs
+- 119aa9bc3 arm64: dts: qcom: seca: put the ADSPs behind the apps SMMU
+- 379205589 dt-bindings: misc: qcom,fastrpc: add SecaAU
+- d25a1bb2f arm64: dts: qcom: seca: add the ADSP FastRPC node
+- 94dedb254 arm64: dts: qcom: seca: add the EL2 virtual timer interrupt
+- 16cd3af5d dt-bindings: interrupt-controller: qcom,pdc: add SecaAU
+- 3a8b5bf38 arm64: dts: qcom: seca: add the PDC and the SPMI arbiter
+- 0dbbee573 arm64: dts: qcom: seca: add the USB0 wakeup interrupts
+- dfa9b1038 arm64: dts: qcom: seca-ride-sx: enable the USB0 peripheral port
+- 87c1f2c30 misc: fastrpc: protect the interrupted mmaps list with the channel lock
+- e87d4db3e misc: fastrpc: move fastrpc_req_munmap_impl() above the release path
+- c6dffa10a misc: fastrpc: park memory the SecaAU ADSP keeps after a release
+- 818b40362 arm64: dts: qcom: seca: describe the L2 caches and the CPU topology
+- 3d1c16c03 dt-bindings: watchdog: qcom-wdt: add SecaAU
+- ff454f8a1 arm64: dts: qcom: seca: add the APSS watchdog
