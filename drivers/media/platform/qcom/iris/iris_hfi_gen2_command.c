@@ -779,6 +779,23 @@ static int iris_hfi_gen2_session_set_codec(struct iris_inst *inst)
 					inst_hfi_gen2->packet->size);
 }
 
+static int iris_hfi_gen2_session_set_secure(struct iris_inst *inst)
+{
+	struct iris_inst_hfi_gen2 *inst_hfi_gen2 = to_iris_inst_hfi_gen2(inst);
+	u32 secure = 1;
+
+	iris_hfi_gen2_packet_session_property(inst,
+					      HFI_PROP_SECURE,
+					      HFI_HOST_FLAGS_NONE,
+					      HFI_PORT_NONE,
+					      HFI_PAYLOAD_U32,
+					      &secure,
+					      sizeof(u32));
+
+	return iris_hfi_queue_cmd_write(inst->core, inst_hfi_gen2->packet,
+					inst_hfi_gen2->packet->size);
+}
+
 static int iris_hfi_gen2_session_set_default_header(struct iris_inst *inst)
 {
 	struct iris_inst_hfi_gen2 *inst_hfi_gen2 = to_iris_inst_hfi_gen2(inst);
@@ -829,6 +846,12 @@ static int iris_hfi_gen2_session_open(struct iris_inst *inst)
 	ret = iris_hfi_gen2_session_set_codec(inst);
 	if (ret)
 		goto fail_free_packet;
+
+	if (inst->secure) {
+		ret = iris_hfi_gen2_session_set_secure(inst);
+		if (ret)
+			goto fail_free_packet;
+	}
 
 	if (inst->domain == DECODER) {
 		ret = iris_hfi_gen2_session_set_default_header(inst);
@@ -1303,7 +1326,7 @@ static void iris_hfi_gen2_get_buffer(u32 domain, struct iris_buffer *buffer,
 	buf->data_size = buffer->data_size;
 	if (buffer->attr & BUF_ATTR_PENDING_RELEASE)
 		buf->flags |= HFI_BUF_HOST_FLAG_RELEASE;
-	buf->flags |= HFI_BUF_HOST_FLAGS_CB_NON_SECURE;
+	buf->flags |= buffer->hfi_cb_flags ?: HFI_BUF_HOST_FLAGS_CB_NON_SECURE;
 	buf->timestamp = buffer->timestamp;
 }
 

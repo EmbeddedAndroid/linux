@@ -234,6 +234,23 @@ static struct device *iris_create_cb_dev(struct iris_core *core, const char *nam
 	return &pdev->dev;
 }
 
+/* Optional: without them, or without an IOMMU on them, sessions are not secure */
+static void iris_init_secure_cb_devs(struct iris_core *core)
+{
+	static const char * const names[IRIS_SECURE_CB_MAX] = {
+		[IRIS_SECURE_CB_BITSTREAM]	= "secure-bitstream",
+		[IRIS_SECURE_CB_PIXEL]		= "secure-pixel",
+		[IRIS_SECURE_CB_NON_PIXEL]	= "secure-non-pixel",
+	};
+	struct device *dev;
+	int i;
+
+	for (i = 0; i < IRIS_SECURE_CB_MAX; i++) {
+		dev = iris_create_cb_dev(core, names[i]);
+		core->sec_dev[i] = IS_ERR(dev) ? NULL : dev;
+	}
+}
+
 static int iris_init_cb_devs(struct iris_core *core)
 {
 	struct device *dev;
@@ -256,6 +273,8 @@ static int iris_init_cb_devs(struct iris_core *core)
 
 	core->fw_dev = dev;
 
+	iris_init_secure_cb_devs(core);
+
 	return 0;
 
 unreg_p_dev:
@@ -272,6 +291,11 @@ unreg_np_dev:
 
 static void iris_deinit_cb_devs(struct iris_core *core)
 {
+	int i;
+
+	for (i = 0; i < IRIS_SECURE_CB_MAX; i++)
+		if (core->sec_dev[i])
+			platform_device_unregister(to_platform_device(core->sec_dev[i]));
 	if (core->fw_dev)
 		platform_device_unregister(to_platform_device(core->fw_dev));
 	if (core->p_dev)

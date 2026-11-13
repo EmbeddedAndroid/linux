@@ -4,6 +4,7 @@
  */
 
 #include <linux/math64.h>
+#include <linux/media/qcom/iris.h>
 #include <linux/types.h>
 #include <media/v4l2-mem2mem.h>
 
@@ -11,6 +12,7 @@
 #include "iris_hfi_gen1_defines.h"
 #include "iris_hfi_gen2_defines.h"
 #include "iris_instance.h"
+#include "iris_secure.h"
 
 #define CABAC_MAX_BITRATE 160000000
 #define CAVLC_MAX_BITRATE 220000000
@@ -352,6 +354,28 @@ static const struct v4l2_ctrl_ops iris_ctrl_ops = {
 	.s_ctrl = iris_op_s_ctrl,
 };
 
+static int iris_secure_s_ctrl(struct v4l2_ctrl *ctrl)
+{
+	struct iris_inst *inst = container_of(ctrl->handler, struct iris_inst, ctrl_handler);
+
+	return iris_secure_set(inst, ctrl->val);
+}
+
+static const struct v4l2_ctrl_ops iris_secure_ctrl_ops = {
+	.s_ctrl = iris_secure_s_ctrl,
+};
+
+static const struct v4l2_ctrl_config iris_secure_ctrl = {
+	.ops	= &iris_secure_ctrl_ops,
+	.id	= V4L2_CID_IRIS_SECURE_SESSION,
+	.name	= "Secure Session",
+	.type	= V4L2_CTRL_TYPE_BOOLEAN,
+	.min	= 0,
+	.max	= 1,
+	.step	= 1,
+	.def	= 0,
+};
+
 int iris_ctrls_init(struct iris_inst *inst)
 {
 	struct platform_inst_fw_cap *cap = &inst->fw_caps[0];
@@ -369,7 +393,7 @@ int iris_ctrls_init(struct iris_inst *inst)
 	 * V4L2_CID_MIN_BUFFERS_FOR_OUTPUT for encoder
 	 */
 
-	ret = v4l2_ctrl_handler_init(&inst->ctrl_handler, num_ctrls + 1);
+	ret = v4l2_ctrl_handler_init(&inst->ctrl_handler, num_ctrls + 2);
 	if (ret)
 		return ret;
 
@@ -408,6 +432,9 @@ int iris_ctrls_init(struct iris_inst *inst)
 
 		ctrl_idx++;
 	}
+
+	if (iris_secure_supported(inst->core))
+		v4l2_ctrl_new_custom(&inst->ctrl_handler, &iris_secure_ctrl, NULL);
 
 	if (inst->domain == DECODER) {
 		v4l2_ctrl_new_std(&inst->ctrl_handler, NULL,

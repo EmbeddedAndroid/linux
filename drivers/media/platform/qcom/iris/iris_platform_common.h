@@ -277,6 +277,9 @@ struct iris_firmware_data {
 	/* Query buffer sizes from the firmware (pre-Iris HFI Gen1 platforms). */
 	bool query_buffer_requirements;
 
+	/* The firmware runs secure sessions (HFI_PROP_SECURE) */
+	bool secure_sessions;
+
 	const struct platform_inst_fw_cap *inst_fw_caps_dec;
 	u32 inst_fw_caps_dec_size;
 	const struct platform_inst_fw_cap *inst_fw_caps_enc;

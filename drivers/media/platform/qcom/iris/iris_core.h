@@ -36,6 +36,14 @@ enum domain_type {
 
 struct qcom_ubwc_cfg_data;
 
+/* Secure context banks, from the secure-* subnodes */
+enum iris_secure_cb {
+	IRIS_SECURE_CB_BITSTREAM,
+	IRIS_SECURE_CB_PIXEL,
+	IRIS_SECURE_CB_NON_PIXEL,
+	IRIS_SECURE_CB_MAX,
+};
+
 /**
  * struct iris_core - holds core parameters valid for all instances
  *
@@ -93,6 +101,7 @@ struct iris_core {
 	struct device				*np_dev;
 	struct device				*p_dev;
 	struct device				*fw_dev;
+	struct device				*sec_dev[IRIS_SECURE_CB_MAX];
 	struct qcom_pas_context			*pas_ctx;
 	void __iomem				*reg_base;
 	int					irq;

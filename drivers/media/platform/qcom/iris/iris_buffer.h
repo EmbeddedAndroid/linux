@@ -99,6 +99,11 @@ struct iris_buffer {
 	u32				flags; /* V4L2_BUF_FLAG_* */
 	u64				timestamp;
 	enum iris_buffer_attributes	attr;
+	u32				hfi_cb_flags;
+	/* internal buffers of secure sessions: the protected DMA-buf */
+	struct dma_buf			*sec_dbuf;
+	struct dma_buf_attachment	*sec_att;
+	struct sg_table			*sec_sgt;
 };
 
 struct iris_buffers {

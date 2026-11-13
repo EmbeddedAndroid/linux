@@ -23268,7 +23268,9 @@ L:	linux-media@vger.kernel.org
 L:	linux-arm-msm@vger.kernel.org
 S:	Maintained
 F:	Documentation/devicetree/bindings/media/qcom,*-iris.yaml
+F:	Documentation/userspace-api/media/drivers/qcom-iris.rst
 F:	drivers/media/platform/qcom/iris/
+F:	include/uapi/linux/media/qcom/iris.h
 
 QUALCOMM MIPI CSI2 PHY DRIVER
 M:	Bryan O'Donoghue <bod@kernel.org>

@@ -20,6 +20,7 @@ qcom-iris-objs += iris_buffer.o \
              iris_power.o \
              iris_probe.o \
              iris_resources.o \
+             iris_secure.o \
              iris_state.o \
              iris_utils.o \
              iris_vidc.o \
