@@ -700,8 +700,7 @@
 		};
 
 		pdp_ns_mem: pdp-ns-mem-region@87600000 {
-			reg = <0x0 0x87600000 0x0 0x8000>,
-			      <0x0 0x87609000 0x0 0x1f7000>;
+			reg = <0x0 0x87600000 0x0 0x8000>;
 			no-map;
 		};
 
@@ -714,6 +713,11 @@
 		pdp0_a2p: scmi-shmem@87608180 {
 			compatible = "arm,scmi-shmem";
 			reg = <0x0 0x87608180 0x0 0x80>;
+			no-map;
+		};
+
+		pdp-ns-mem-region@87609000 {
+			reg = <0x0 0x87609000 0x0 0x1f7000>;
 			no-map;
 		};
 
