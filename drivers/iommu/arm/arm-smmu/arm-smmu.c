@@ -25,6 +25,7 @@
 #include <linux/err.h>
 #include <linux/interrupt.h>
 #include <linux/io.h>
+#include <linux/iommu-prot.h>
 #include <linux/iopoll.h>
 #include <linux/module.h>
 #include <linux/of.h>
@@ -2118,6 +2119,7 @@ static void arm_smmu_rmr_install_bypass_smr(struct arm_smmu_device *smmu)
 static int arm_smmu_device_probe(struct platform_device *pdev)
 {
 	struct resource *res;
+	const struct iommu_prot_ops *prot = iommu_prot_get_ops();
 	struct arm_smmu_device *smmu;
 	struct device *dev = &pdev->dev;
 	int num_irqs, i, err;
@@ -2142,6 +2144,11 @@ static int arm_smmu_device_probe(struct platform_device *pdev)
 	if (IS_ERR(smmu->base))
 		return PTR_ERR(smmu->base);
 	smmu->ioaddr = res->start;
+
+	/* Before the implementation and the reset write any register */
+	if (prot && prot->may_probe && !prot->may_probe(smmu->ioaddr))
+		return dev_err_probe(dev, -EPROBE_DEFER,
+				     "hypervisor takeover in progress\n");
 
 	/*
 	 * The resource size should effectively match the value of SMMU_TOP;
