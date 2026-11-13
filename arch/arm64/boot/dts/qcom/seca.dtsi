@@ -1083,10 +1083,18 @@
 				     "qcom,snps-dwc3";
 			reg = <0x0 0x0a600000 0x0 0xfc100>;
 
-			interrupts = <GIC_SPI 133 IRQ_TYPE_LEVEL_HIGH>,
-				     <GIC_SPI 130 IRQ_TYPE_LEVEL_HIGH>;
+			interrupts-extended = <&intc GIC_SPI 133 IRQ_TYPE_LEVEL_HIGH>,
+					      <&intc GIC_SPI 130 IRQ_TYPE_LEVEL_HIGH>,
+					      <&intc GIC_SPI 131 IRQ_TYPE_LEVEL_HIGH>,
+					      <&pdc 14 IRQ_TYPE_EDGE_BOTH>,
+					      <&pdc 15 IRQ_TYPE_EDGE_BOTH>,
+					      <&pdc 17 IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "dwc_usb3",
-					  "pwr_event";
+					  "pwr_event",
+					  "hs_phy_irq",
+					  "dp_hs_phy_irq",
+					  "dm_hs_phy_irq",
+					  "ss_phy_irq";
 
 			clocks = <&negcc NE_GCC_CNOC_USB3_PRIM_AXI_CLK>,
 				 <&negcc NE_GCC_USB31_PRIM_MASTER_CLK>,
