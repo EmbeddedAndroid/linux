@@ -1527,6 +1527,14 @@
 			interrupts = <GIC_SPI 56 IRQ_TYPE_LEVEL_HIGH>;
 		};
 
+		watchdog@17826000 {
+			compatible = "qcom,apss-wdt-seca",
+				     "qcom,kpss-wdt";
+			reg = <0x0 0x17826000 0x0 0x1000>;
+			clocks = <&sleep_clk>;
+			interrupts = <GIC_ESPI 848 IRQ_TYPE_EDGE_RISING>;
+		};
+
 		apps_rsc: rsc@18900000 {
 			compatible = "qcom,rpmh-rsc";
 			reg = <0x0 0x18900000 0x0 0x10000>,
