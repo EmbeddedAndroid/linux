@@ -270,6 +270,21 @@ static int sc8280xp_snd_init(struct snd_soc_pcm_runtime *rtd)
 	return 0;
 }
 
+static void sc8280xp_snd_exit(struct snd_soc_pcm_runtime *rtd)
+{
+	struct sc8280xp_snd_data *data = snd_soc_card_get_drvdata(rtd->card);
+	struct snd_soc_dai *codec_dai;
+	int i;
+
+	if (!data->priv->wcd_jack)
+		return;
+
+	/* The jack is freed with the card; the card can be bound again. */
+	for_each_rtd_codec_dais(rtd, i, codec_dai)
+		snd_soc_component_set_jack(codec_dai->component, NULL, NULL);
+	data->jack_setup = false;
+}
+
 static int sc8280xp_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 				     struct snd_pcm_hw_params *params)
 {
@@ -477,6 +492,7 @@ static void sc8280xp_add_be_ops(struct snd_soc_card *card)
 	for_each_card_prelinks(card, i, link) {
 		if (link->no_pcm == 1 || link->num_codecs > 0) {
 			link->init = sc8280xp_snd_init;
+			link->exit = sc8280xp_snd_exit;
 			link->be_hw_params_fixup = sc8280xp_be_hw_params_fixup;
 			link->ops = &sc8280xp_be_ops;
 		}
