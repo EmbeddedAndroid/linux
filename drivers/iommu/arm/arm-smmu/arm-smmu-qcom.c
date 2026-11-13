@@ -6,6 +6,8 @@
 #include <linux/acpi.h>
 #include <linux/adreno-smmu-priv.h>
 #include <linux/delay.h>
+#include <linux/iommu-prot.h>
+#include <linux/of_address.h>
 #include <linux/of_device.h>
 #include <linux/firmware/qcom/qcom_scm.h>
 #include <linux/platform_device.h>
@@ -589,6 +591,64 @@ static int qcom_smmu_def_domain_type(struct device *dev)
 	return match ? IOMMU_DOMAIN_IDENTITY : 0;
 }
 
+/* Video codecs whose secure-* context bank subnodes are secure streams */
+static const struct of_device_id qcom_smmu_secure_cb_of_match[] = {
+	{ .compatible = "qcom,eliza-iris" },
+	{ }
+};
+
+static bool qcom_smmu_protected_master(struct device *dev)
+{
+	struct device_node *parent;
+	bool ret;
+
+	if (!dev->of_node || !of_node_name_prefix(dev->of_node, "secure-"))
+		return false;
+	parent = of_get_parent(dev->of_node);
+	ret = !!of_match_node(qcom_smmu_secure_cb_of_match, parent);
+	of_node_put(parent);
+	return ret;
+}
+
+#if IS_ENABLED(CONFIG_IOMMU_PROT) && !defined(MODULE)
+/*
+ * Hand the secure streams to the hypervisor's provider while the kernel
+ * still owns the SMMU: they can only be declared before isolation starts,
+ * which is before the SMMU probes.
+ */
+static int __init qcom_smmu_declare_secure_streams(void)
+{
+	struct device_node *codec, *np;
+	struct of_phandle_args args;
+	struct resource res;
+	int ret;
+
+	if (!iommu_prot_get_ops())
+		return 0;
+	for_each_matching_node(codec, qcom_smmu_secure_cb_of_match) {
+		if (!of_device_is_available(codec))
+			continue;
+		for_each_child_of_node(codec, np) {
+			if (!of_node_name_prefix(np, "secure-") ||
+			    of_parse_phandle_with_args(np, "iommus", "#iommu-cells",
+						       0, &args))
+				continue;
+			ret = -EINVAL;
+			if (args.args_count == 2 &&
+			    !of_address_to_resource(args.np, 0, &res))
+				ret = iommu_prot_declare(res.start, args.args[0],
+							 args.args[1]);
+			of_node_put(args.np);
+			if (ret)
+				pr_warn("%pOF: secure stream not protected: %d\n",
+					np, ret);
+		}
+	}
+	return 0;
+}
+subsys_initcall_sync(qcom_smmu_declare_secure_streams);
+#endif
+
 static int qcom_sdm845_smmu500_reset(struct arm_smmu_device *smmu)
 {
 	int ret;
@@ -627,6 +687,7 @@ static const struct arm_smmu_impl qcom_smmu_500_impl = {
 	.context_fault = qcom_smmu_context_fault,
 	.context_fault_needs_threaded_irq = true,
 #endif
+	.protected_master = qcom_smmu_protected_master,
 };
 
 static const struct arm_smmu_impl sdm845_smmu_500_impl = {
