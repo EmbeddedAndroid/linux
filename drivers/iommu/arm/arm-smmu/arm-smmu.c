@@ -914,11 +914,16 @@ static void arm_smmu_destroy_domain_context(struct arm_smmu_domain *smmu_domain)
 	arm_smmu_rpm_put(smmu);
 }
 
+static struct iommu_domain *arm_smmu_prot_domain_alloc(struct arm_smmu_device *smmu);
+
 static struct iommu_domain *arm_smmu_domain_alloc_paging(struct device *dev)
 {
 	struct arm_smmu_domain *smmu_domain;
 	struct arm_smmu_master_cfg *cfg = dev_iommu_priv_get(dev);
 	struct arm_smmu_device *smmu = cfg->smmu;
+
+	if (cfg->prot)
+		return arm_smmu_prot_domain_alloc(smmu);
 
 	/*
 	 * Allocate the domain and initialise some of its data structures.
@@ -1182,6 +1187,8 @@ static int arm_smmu_attach_dev(struct iommu_domain *domain, struct device *dev,
 	cfg = dev_iommu_priv_get(dev);
 	if (!cfg)
 		return -ENODEV;
+	if (cfg->prot)
+		return -EINVAL;
 
 	smmu = cfg->smmu;
 
@@ -1221,6 +1228,9 @@ static int arm_smmu_attach_dev_type(struct device *dev,
 
 	if (!cfg)
 		return -ENODEV;
+	/* The hypervisor programs a protected stream: only blocking is a no-op */
+	if (cfg->prot)
+		return type == S2CR_TYPE_FAULT ? 0 : -EINVAL;
 	smmu = cfg->smmu;
 
 	ret = arm_smmu_rpm_get(smmu);
@@ -1263,6 +1273,128 @@ static struct iommu_domain arm_smmu_blocked_domain = {
 	.type = IOMMU_DOMAIN_BLOCKED,
 	.ops = &arm_smmu_blocked_ops,
 };
+
+/*
+ * A stream a hypervisor owns on the kernel's behalf (include/linux/iommu-prot.h):
+ * the driver programs nothing for it, and maps and unmaps go to the provider,
+ * which only accepts protected memory.
+ */
+struct arm_smmu_prot_domain {
+	struct iommu_domain	domain;
+	struct arm_smmu_device	*smmu;
+	u32			id;
+	u32			mask;
+};
+
+static struct arm_smmu_prot_domain *to_prot_domain(struct iommu_domain *dom)
+{
+	return container_of(dom, struct arm_smmu_prot_domain, domain);
+}
+
+static int arm_smmu_prot_attach_dev(struct iommu_domain *domain,
+				    struct device *dev, struct iommu_domain *old)
+{
+	struct arm_smmu_prot_domain *pd = to_prot_domain(domain);
+	struct arm_smmu_master_cfg *cfg = dev_iommu_priv_get(dev);
+	struct iommu_fwspec *fwspec = dev_iommu_fwspec_get(dev);
+	u32 id, mask;
+
+	if (!cfg || !cfg->prot || cfg->smmu != pd->smmu)
+		return -EINVAL;
+	id = FIELD_GET(ARM_SMMU_SMR_ID, fwspec->ids[0]);
+	mask = FIELD_GET(ARM_SMMU_SMR_MASK, fwspec->ids[0]);
+	/* One stream per domain: the provider maps per stream */
+	if (pd->mask != U32_MAX && (pd->id != id || pd->mask != mask))
+		return -EINVAL;
+	pd->id = id;
+	pd->mask = mask;
+	return 0;
+}
+
+static int arm_smmu_prot_map_pages(struct iommu_domain *domain,
+				   unsigned long iova, phys_addr_t paddr,
+				   size_t pgsize, size_t pgcount, int prot,
+				   gfp_t gfp, size_t *mapped)
+{
+	struct arm_smmu_prot_domain *pd = to_prot_domain(domain);
+	const struct iommu_prot_ops *ops = iommu_prot_get_ops();
+	size_t size = pgsize * pgcount;
+	int ret;
+
+	if (pd->mask == U32_MAX)
+		return -ENODEV;
+	ret = ops->map(pd->smmu->ioaddr, pd->id, pd->mask, iova, paddr, size,
+		       prot);
+	if (!ret)
+		*mapped = size;
+	return ret;
+}
+
+static size_t arm_smmu_prot_unmap_pages(struct iommu_domain *domain,
+					unsigned long iova, size_t pgsize,
+					size_t pgcount,
+					struct iommu_iotlb_gather *gather)
+{
+	struct arm_smmu_prot_domain *pd = to_prot_domain(domain);
+	const struct iommu_prot_ops *ops = iommu_prot_get_ops();
+	size_t size = pgsize * pgcount;
+
+	/*
+	 * A failed unmap leaves the memory mapped and held by the provider,
+	 * so it cannot be reclaimed: safe, at the cost of that IOVA range.
+	 */
+	if (pd->mask == U32_MAX ||
+	    ops->unmap(pd->smmu->ioaddr, pd->id, pd->mask, iova, size))
+		return 0;
+	return size;
+}
+
+/*
+ * The kernel cannot read the provider's tables, and has no business with
+ * the CPU caches of protected memory: its users map scatterlists with
+ * DMA_ATTR_SKIP_CPU_SYNC. dma_unmap_page() and dma_unmap_single() look the
+ * address up here and cannot be used on these devices.
+ */
+static phys_addr_t arm_smmu_prot_iova_to_phys(struct iommu_domain *domain,
+					      dma_addr_t iova)
+{
+	return 0;
+}
+
+/* The provider invalidates its TLBs before map and unmap return */
+static void arm_smmu_prot_flush_iotlb_all(struct iommu_domain *domain)
+{
+}
+
+static void arm_smmu_prot_domain_free(struct iommu_domain *domain)
+{
+	kfree(to_prot_domain(domain));
+}
+
+static const struct iommu_domain_ops arm_smmu_prot_domain_ops = {
+	.attach_dev	= arm_smmu_prot_attach_dev,
+	.map_pages	= arm_smmu_prot_map_pages,
+	.unmap_pages	= arm_smmu_prot_unmap_pages,
+	.flush_iotlb_all = arm_smmu_prot_flush_iotlb_all,
+	.iova_to_phys	= arm_smmu_prot_iova_to_phys,
+	.free		= arm_smmu_prot_domain_free,
+};
+
+static struct iommu_domain *arm_smmu_prot_domain_alloc(struct arm_smmu_device *smmu)
+{
+	struct arm_smmu_prot_domain *pd;
+
+	pd = kzalloc_obj(*pd);
+	if (!pd)
+		return NULL;
+	pd->smmu = smmu;
+	pd->mask = U32_MAX;
+	pd->domain.ops = &arm_smmu_prot_domain_ops;
+	pd->domain.pgsize_bitmap = SZ_4K;
+	pd->domain.geometry.aperture_end = DMA_BIT_MASK(32);
+	pd->domain.geometry.force_aperture = true;
+	return &pd->domain;
+}
 
 static int arm_smmu_map_pages(struct iommu_domain *domain, unsigned long iova,
 			      phys_addr_t paddr, size_t pgsize, size_t pgcount,
@@ -1413,8 +1545,10 @@ static bool arm_smmu_capable(struct device *dev, enum iommu_cap cap)
 		return cfg->smmu->features & ARM_SMMU_FEAT_COHERENT_WALK ||
 			device_get_dma_attr(dev) == DEV_DMA_COHERENT;
 	case IOMMU_CAP_NOEXEC:
-	case IOMMU_CAP_DEFERRED_FLUSH:
 		return true;
+	case IOMMU_CAP_DEFERRED_FLUSH:
+		/* Protected memory is reclaimed once unmapped: no IOVA reuse delay */
+		return !cfg->prot;
 	default:
 		return false;
 	}
@@ -1479,6 +1613,22 @@ static struct iommu_device *arm_smmu_probe_device(struct device *dev)
 	while (i--)
 		cfg->smendx[i] = INVALID_SMENDX;
 
+	if (smmu->impl && smmu->impl->protected_master &&
+	    smmu->impl->protected_master(dev)) {
+		const struct iommu_prot_ops *prot = iommu_prot_get_ops();
+		u32 id = FIELD_GET(ARM_SMMU_SMR_ID, fwspec->ids[0]);
+		u32 mask = FIELD_GET(ARM_SMMU_SMR_MASK, fwspec->ids[0]);
+
+		/* Without a provider the stream stays untranslated: unusable */
+		ret = -ENODEV;
+		if (fwspec->num_ids != 1 || !prot || !prot->can_protect ||
+		    !prot->can_protect(smmu->ioaddr, id, mask))
+			goto out_cfg_free;
+		cfg->prot = true;
+		dev->iommu->prot_stream = 1;
+		goto out_link;
+	}
+
 	ret = arm_smmu_rpm_get(smmu);
 	if (ret < 0)
 		goto out_cfg_free;
@@ -1489,6 +1639,7 @@ static struct iommu_device *arm_smmu_probe_device(struct device *dev)
 	if (ret)
 		goto out_cfg_free;
 
+out_link:
 	device_link_add(dev, smmu->dev,
 			DL_FLAG_PM_RUNTIME | DL_FLAG_AUTOREMOVE_SUPPLIER);
 
@@ -1506,6 +1657,9 @@ static void arm_smmu_release_device(struct device *dev)
 	struct arm_smmu_master_cfg *cfg = dev_iommu_priv_get(dev);
 	int ret;
 
+	if (cfg->prot)
+		goto out_free;
+
 	ret = arm_smmu_rpm_get(cfg->smmu);
 	if (ret < 0)
 		return;
@@ -1513,7 +1667,7 @@ static void arm_smmu_release_device(struct device *dev)
 	arm_smmu_master_free_smes(cfg, fwspec);
 
 	arm_smmu_rpm_put(cfg->smmu);
-
+out_free:
 	kfree(cfg);
 }
 
@@ -1536,6 +1690,10 @@ static struct iommu_group *arm_smmu_device_group(struct device *dev)
 	struct arm_smmu_device *smmu = cfg->smmu;
 	struct iommu_group *group = NULL;
 	int i, idx;
+
+	/* No stream map entries: the stream cannot be shared with the kernel's */
+	if (cfg->prot)
+		return generic_device_group(dev);
 
 	mutex_lock(&smmu->stream_map_mutex);
 	for_each_cfg_sme(cfg, fwspec, i, idx) {
@@ -1624,6 +1782,9 @@ static int arm_smmu_def_domain_type(struct device *dev)
 
 	if (using_legacy_binding)
 		return IOMMU_DOMAIN_IDENTITY;
+
+	if (cfg->prot)
+		return IOMMU_DOMAIN_DMA;
 
 	if (impl && impl->def_domain_type)
 		return impl->def_domain_type(dev);

@@ -389,6 +389,7 @@ struct arm_smmu_domain {
 
 struct arm_smmu_master_cfg {
 	struct arm_smmu_device		*smmu;
+	bool				prot;
 	s16				smendx[];
 };
 
@@ -455,6 +456,7 @@ struct arm_smmu_impl {
 	void (*write_s2cr)(struct arm_smmu_device *smmu, int idx);
 	void (*write_sctlr)(struct arm_smmu_device *smmu, int idx, u32 reg);
 	void (*probe_finalize)(struct arm_smmu_device *smmu, struct device *dev);
+	bool (*protected_master)(struct device *dev);
 };
 
 #define INVALID_SMENDX			-1
