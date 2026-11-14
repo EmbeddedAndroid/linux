@@ -32,6 +32,23 @@ to_protmem_dyn_pool(struct tee_protmem_pool *pool)
 	return container_of(pool, struct optee_protmem_dyn_pool, pool);
 }
 
+/*
+ * After a failed reclaim the secure world may still own the memory: keep
+ * the tee_shm, and with it the pages, allocated instead of returning them
+ * to the DMA allocator.
+ */
+static int reclaim_dyn_protmem(struct optee_protmem_dyn_pool *rp)
+{
+	int rc = rp->optee->ops->reclaim_protmem(rp->optee, rp->protmem);
+
+	if (rc) {
+		pr_warn("reclaim failed (%d), leaking %zu bytes at %pa\n",
+			rc, rp->protmem->size, &rp->protmem->paddr);
+		rp->protmem = NULL;
+	}
+	return rc;
+}
+
 static int init_dyn_protmem(struct optee_protmem_dyn_pool *rp)
 {
 	int rc;
@@ -75,7 +92,8 @@ err_free_pool:
 	gen_pool_destroy(rp->gen_pool);
 	rp->gen_pool = NULL;
 err_reclaim:
-	rp->optee->ops->reclaim_protmem(rp->optee, rp->protmem);
+	if (reclaim_dyn_protmem(rp))
+		return rc;
 err_put_shm:
 	tee_shm_put(rp->protmem);
 err_null_protmem:
@@ -111,7 +129,8 @@ static void release_dyn_protmem(struct optee_protmem_dyn_pool *rp)
 	gen_pool_destroy(rp->gen_pool);
 	rp->gen_pool = NULL;
 
-	rp->optee->ops->reclaim_protmem(rp->optee, rp->protmem);
+	if (reclaim_dyn_protmem(rp))
+		return;
 	rp->protmem->flags &= ~TEE_SHM_DYNAMIC;
 
 	WARN(refcount_read(&rp->protmem->refcount) != 1, "Unexpected refcount");
