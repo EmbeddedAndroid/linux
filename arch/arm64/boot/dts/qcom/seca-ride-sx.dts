@@ -68,6 +68,20 @@
 	status = "okay";
 };
 
+&remoteproc_cdsp0 {
+	firmware-name = "qcom/seca/cdsp.mbn",
+			"qcom/seca/cdsp_dtbs.elf";
+
+	status = "okay";
+};
+
+&remoteproc_cdsp1 {
+	firmware-name = "qcom/seca/cdsp1.mbn",
+			"qcom/seca/cdsp1_dtbs.elf";
+
+	status = "okay";
+};
+
 &tlmm {
 	key_vol_down_default: key-vol-down-default-state {
 		pins = "gpio136";
