@@ -7,6 +7,7 @@
 
 #include <linux/arm_ffa.h>
 #include <linux/errno.h>
+#include <linux/moduleparam.h>
 #include <linux/rpmb.h>
 #include <linux/scatterlist.h>
 #include <linux/sched.h>
@@ -756,6 +757,14 @@ err_reclaim:
 	return rc;
 }
 
+/*
+ * DIAG only: the next <n> protmem reclaims send FFA_MEM_RECLAIM for a handle
+ * nobody owns, so the reclaim fails and the pool stays lent to OP-TEE.
+ */
+#define DIAG_HANDLE_OFFSET	0x10000000ULL
+static unsigned int diag_bad_protmem_reclaim;
+module_param(diag_bad_protmem_reclaim, uint, 0644);
+
 static int optee_ffa_reclaim_protmem(struct optee *optee,
 				     struct tee_shm *protmem)
 {
@@ -777,6 +786,12 @@ static int optee_ffa_reclaim_protmem(struct optee *optee,
 	if (rc)
 		pr_err("Release SHM id 0x%llx rc %d\n", global_handle, rc);
 
+	if (diag_bad_protmem_reclaim) {
+		diag_bad_protmem_reclaim--;
+		pr_warn("DIAG: reclaiming protmem 0x%llx with handle 0x%llx\n",
+			global_handle, global_handle + DIAG_HANDLE_OFFSET);
+		global_handle += DIAG_HANDLE_OFFSET;
+	}
 	rc = mem_ops->memory_reclaim(global_handle, 0);
 	if (rc)
 		pr_err("mem_reclaim: 0x%llx %d", global_handle, rc);
