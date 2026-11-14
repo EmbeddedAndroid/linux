@@ -156,7 +156,7 @@
 
 &{/reserved-memory} {
 	protmem_pool: protmem-pool {
-		compatible = "shared-dma-pool";
+		compatible = "lendable-dma-pool";
 		reusable;
 		size = <0x0 0x10000000>;
 		alignment = <0x0 0x400000>;
