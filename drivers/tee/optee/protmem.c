@@ -249,6 +249,8 @@ static void pool_op_dyn_destroy_pool(struct tee_protmem_pool *pool)
 	 */
 	list_for_each_entry_safe(k, tmp, &rp->kept, link) {
 		rc = rp->optee->ops->reclaim_protmem(rp->optee, k->shm);
+		pr_warn("DIAG: teardown reclaim of %zu bytes at %pa: rc %d\n",
+			k->shm->size, &k->shm->paddr, rc);
 		if (rc) {
 			pr_warn("reclaim retry failed (%d), leaking %zu bytes at %pa\n",
 				rc, k->shm->size, &k->shm->paddr);
