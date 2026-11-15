@@ -290,6 +290,9 @@ void qda_fastrpc_context_free(struct kref *ref)
 
 	kfree(ctx->map);
 
+	if (ctx->inline_obj)
+		drm_gem_object_put(&ctx->inline_obj->base);
+
 	if (ctx->session)
 		qda_session_put(ctx->session);
 
@@ -415,7 +418,8 @@ static int process_msg_buffer(struct qda_fastrpc_invoke_ctx *ctx, int i,
 	u64 vma_offset = 0;
 	int err;
 
-	if (ctx->gem_objs[i] && ctx->legacy) {
+	if (ctx->gem_objs[i] && ctx->legacy &&
+	    (!ctx->inline_obj || ctx->gem_objs[i] != &ctx->inline_obj->base)) {
 		/*
 		 * The legacy ABI predates GEM handles, so the offset field
 		 * holds an address in the caller's own mapping of the buffer,
@@ -843,6 +847,83 @@ int qda_fastrpc_invoke_common(struct qda_dev *qdev, struct qda_fastrpc_invoke_ct
 	return 0;
 }
 
+/*
+ * A legacy buffer argument with no DMA-BUF (fd -1 or 0) points at the
+ * caller's own memory, which the DSP cannot reach. As drivers/misc/fastrpc.c
+ * does, copy every such argument into one driver buffer of the session
+ * before the invocation, and the output arguments back after it.
+ */
+static int qda_fastrpc_legacy_inline_in(struct qda_fastrpc_invoke_ctx *ctx,
+					struct qda_legacy_invoke_arg *legacy_args)
+{
+	struct qda_gem_obj *buf;
+	u64 size = 0;
+	int i;
+
+	/* Each length is at most SZ_1G, so a u64 sum over every argument cannot wrap */
+	for (i = 0; i < ctx->nbufs; ++i) {
+		if (legacy_args[i].obj || !legacy_args[i].length)
+			continue;
+		if (legacy_args[i].length > SZ_1G)
+			return -EINVAL;
+		size += ALIGN(legacy_args[i].length, QDA_FASTRPC_ALIGN);
+	}
+	if (size > SZ_1G)
+		return -EINVAL;
+
+	if (!size)
+		return 0;
+
+	buf = alloc_kernel_gem(ctx, size);
+	if (IS_ERR(buf))
+		return PTR_ERR(buf);
+	ctx->inline_obj = buf;
+
+	size = 0;
+	for (i = 0; i < ctx->nbufs; ++i) {
+		if (legacy_args[i].obj || !legacy_args[i].length)
+			continue;
+
+		drm_gem_object_get(&buf->base);
+		ctx->gem_objs[i] = &buf->base;
+		ctx->args[i].offset = size;
+
+		/*
+		 * Output arguments too: one that overlaps an input then starts
+		 * with the input's bytes, as with fastrpc.c's shared region
+		 */
+		if (copy_from_user((u8 *)buf->virt + size, u64_to_user_ptr(legacy_args[i].ptr),
+				   legacy_args[i].length))
+			return -EFAULT;
+
+		size += ALIGN(legacy_args[i].length, QDA_FASTRPC_ALIGN);
+	}
+
+	return 0;
+}
+
+static int qda_fastrpc_legacy_inline_out(struct qda_fastrpc_invoke_ctx *ctx,
+					 struct qda_legacy_invoke_arg *legacy_args)
+{
+	u32 inbufs = QDA_REMOTE_SCALARS_INBUFS(ctx->sc);
+	int i;
+
+	if (!ctx->inline_obj)
+		return 0;
+
+	for (i = inbufs; i < ctx->nbufs; ++i) {
+		if (ctx->gem_objs[i] != &ctx->inline_obj->base)
+			continue;
+
+		if (copy_to_user(u64_to_user_ptr(legacy_args[i].ptr),
+				 (u8 *)ctx->inline_obj->virt + ctx->args[i].offset,
+				 legacy_args[i].length))
+			return -EFAULT;
+	}
+
+	return 0;
+}
+
 /**
  * qda_fastrpc_invoke_legacy() - Perform a dynamic invocation on behalf of the legacy shim
  * @qdev: Device to invoke on
@@ -928,8 +1009,15 @@ int qda_fastrpc_invoke_legacy(struct qda_dev *qdev, struct qda_session *session,
 
 	ctx->nscalars = nscalars;
 
-	err = qda_fastrpc_invoke_common(qdev, ctx);
+	err = qda_fastrpc_legacy_inline_in(ctx, legacy_args);
+	if (err)
+		goto out_put;
 
+	err = qda_fastrpc_invoke_common(qdev, ctx);
+	if (!err)
+		err = qda_fastrpc_legacy_inline_out(ctx, legacy_args);
+
+out_put:
 	kref_put(&ctx->refcount, qda_fastrpc_context_free);
 
 	return err;
