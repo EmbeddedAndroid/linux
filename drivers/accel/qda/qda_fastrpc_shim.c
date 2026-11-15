@@ -313,6 +313,25 @@ static long qda_shim_init_create_static(struct qda_shim_file *sf, void __user *a
 					   u64_to_user_ptr(args.name), args.namelen);
 }
 
+/* drivers/misc/fastrpc.c ADSP_MMAP_ADD_PAGES: the kernel supplies the pages */
+#define SHIM_MMAP_ADD_PAGES	0x1000
+
+/* A buffer of the session's own, for a mapping that names no DMA-BUF */
+static struct drm_gem_object *shim_alloc_pages(struct qda_session *session, u64 size)
+{
+	struct drm_gem_object *obj;
+	struct dma_buf *dmabuf;
+
+	dmabuf = qda_legacy_ops_table.alloc_dmabuf(session, size);
+	if (IS_ERR(dmabuf))
+		return ERR_CAST(dmabuf);
+
+	obj = qda_legacy_ops_table.import_dmabuf(session, dmabuf);
+	dma_buf_put(dmabuf);
+
+	return obj;
+}
+
 static long qda_shim_mmap(struct qda_shim_file *sf, void __user *argp)
 {
 	struct qda_shim_mapping *m;
@@ -323,7 +342,17 @@ static long qda_shim_mmap(struct qda_shim_file *sf, void __user *argp)
 	if (copy_from_user(&args, argp, sizeof(args)))
 		return -EFAULT;
 
-	obj = shim_import_fd(sf->session, args.fd);
+	if (args.fd <= 0) {
+		/*
+		 * As fastrpc_req_mmap, which also takes ADSP_MMAP_REMOTE_HEAP_ADDR
+		 * (not supported here) and refuses pages the caller supplies
+		 */
+		if (args.flags != SHIM_MMAP_ADD_PAGES || !args.size || args.vaddrin)
+			return -EINVAL;
+		obj = shim_alloc_pages(sf->session, args.size);
+	} else {
+		obj = shim_import_fd(sf->session, args.fd);
+	}
 	if (IS_ERR(obj))
 		return PTR_ERR(obj);
 	if (!obj)
