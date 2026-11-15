@@ -366,6 +366,7 @@ allOf:
         compatible:
           contains:
             enum:
+              - qcom,adreno-gmu-815.0
               - qcom,adreno-gmu-x285.0
               - qcom,adreno-gmu-x290.1
     then:
