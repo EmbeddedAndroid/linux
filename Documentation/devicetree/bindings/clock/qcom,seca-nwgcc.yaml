@@ -12,7 +12,7 @@ maintainers:
 description: |
   Qualcomm global clock control (NW) module provides the clocks, resets
   and power domains on SecaAU SoC, including those of its two UFS
-  controllers.
+  controllers and the GPU clock controller inputs.
 
   See also: include/dt-bindings/clock/qcom,seca-nwgcc.h
 
