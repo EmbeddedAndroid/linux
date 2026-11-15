@@ -314,8 +314,10 @@ config CLK_SECA_NWGCC
 	help
 	  Support for the North West global clock controller on SecaAU
 	  devices, which carries the UFS controller clocks, resets and
-	  power domains and the GPU clock controller inputs.
-	  Say Y if you want to use UFS storage or the GPU on SecaAU.
+	  power domains, the GPU clock controller inputs and the video
+	  codec bus clocks.
+	  Say Y if you want to use UFS storage, the GPU or the video codec
+	  on SecaAU.
 
 config CLK_SHIKRA_GCC
 	tristate "Shikra Global Clock Controller"

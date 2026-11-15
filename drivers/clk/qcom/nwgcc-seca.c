@@ -758,6 +758,36 @@ static struct clk_branch nw_gcc_ufs_1_phy_unipro_core_clk = {
 	},
 };
 
+static struct clk_branch nw_gcc_video_axi0_clk = {
+	.halt_reg = 0x1a008,
+	.halt_check = BRANCH_HALT_SKIP,
+	.hwcg_reg = 0x1a008,
+	.hwcg_bit = 1,
+	.clkr = {
+		.enable_reg = 0x1a008,
+		.enable_mask = BIT(0),
+		.hw.init = &(const struct clk_init_data) {
+			.name = "nw_gcc_video_axi0_clk",
+			.ops = &clk_branch2_ops,
+		},
+	},
+};
+
+static struct clk_branch nw_gcc_video_axi0c_clk = {
+	.halt_reg = 0x1a01c,
+	.halt_check = BRANCH_HALT_SKIP,
+	.hwcg_reg = 0x1a01c,
+	.hwcg_bit = 1,
+	.clkr = {
+		.enable_reg = 0x1a01c,
+		.enable_mask = BIT(0),
+		.hw.init = &(const struct clk_init_data) {
+			.name = "nw_gcc_video_axi0c_clk",
+			.ops = &clk_branch2_ops,
+		},
+	},
+};
+
 static struct gdsc nw_gcc_ufs_0_mem_phy_gdsc = {
 	.gdscr = 0x3b000,
 	.en_rest_wait_val = 0x2,
@@ -846,6 +876,8 @@ static struct clk_regmap *nw_gcc_seca_clocks[] = {
 	[NW_GCC_GPU_GPLL0_DIV_CLK_SRC] = &nw_gcc_gpu_gpll0_div_clk_src.clkr,
 	[NW_GCC_GPU_PLL0_MAIN_DIV_CLK_SRC] = &nw_gcc_gpu_pll0_main_div_clk_src.clkr,
 	[NW_GCC_GPU_SMMU_VOTE_CLK] = &nw_gcc_gpu_smmu_vote_clk.clkr,
+	[NW_GCC_VIDEO_AXI0_CLK] = &nw_gcc_video_axi0_clk.clkr,
+	[NW_GCC_VIDEO_AXI0C_CLK] = &nw_gcc_video_axi0c_clk.clkr,
 };
 
 static struct gdsc *nw_gcc_seca_gdscs[] = {
@@ -858,6 +890,9 @@ static struct gdsc *nw_gcc_seca_gdscs[] = {
 static const struct qcom_reset_map nw_gcc_seca_resets[] = {
 	[NW_GCC_UFS_0_PHY_BCR] = { 0x52000 },
 	[NW_GCC_UFS_1_PHY_BCR] = { 0x3d000 },
+	[NW_GCC_VIDEO_BCR] = { 0x1a000 },
+	[NW_GCC_VIDEO_AXI0_CLK_ARES] = { 0x1a008, 2 },
+	[NW_GCC_VIDEO_AXI0C_CLK_ARES] = { 0x1a01c, 2 },
 };
 
 static const struct regmap_config nw_gcc_seca_regmap_config = {
@@ -879,6 +914,8 @@ static void clk_seca_regs_configure(struct device *dev, struct regmap *regmap)
 
 static const u32 nw_gcc_seca_critical_cbcrs[] = {
 	0x23004, /* NW_GCC_GPU_CFG_AHB_CLK */
+	0x1a004, /* NW_GCC_VIDEO_AHB_CLK */
+	0x1a030, /* NW_GCC_VIDEO_XO_CLK */
 };
 
 static const struct qcom_cc_driver_data nw_gcc_seca_driver_data = {
