@@ -4,6 +4,8 @@
  *
  */
 
+#include <dt-bindings/clock/qcom,glymur-gpucc.h>
+#include <dt-bindings/clock/qcom,kaanapali-gxclkctl.h>
 #include <dt-bindings/clock/qcom,nord-negcc.h>
 #include <dt-bindings/clock/qcom,nord-tcsrcc.h>
 #include <dt-bindings/clock/qcom,rpmh.h>
@@ -1129,6 +1131,36 @@
 			reg = <0x0 0x02000000 0x0 0xb2d080>;
 			qcom,bcm-voters = <&apps_bcm_voter>;
 			#interconnect-cells = <2>;
+		};
+
+		gxclkctl: clock-controller@3d64000 {
+			compatible = "qcom,seca-gxclkctl",
+				     "qcom,kaanapali-gxclkctl";
+			reg = <0x0 0x03d64000 0x0 0x6000>;
+
+			power-domains = <&rpmhpd RPMHPD_GFX>,
+					<&rpmhpd RPMHPD_GMXC>,
+					<&gpucc GPU_CC_CX_GDSC>;
+
+			#power-domain-cells = <1>;
+		};
+
+		gpucc: clock-controller@3d90000 {
+			compatible = "qcom,seca-gpucc";
+			reg = <0x0 0x03d90000 0x0 0x9800>;
+
+			clocks = <&rpmhcc RPMH_CXO_CLK>,
+				 <&nwgcc NW_GCC_GPU_GPLL0_CLK_SRC>,
+				 <&nwgcc NW_GCC_GPU_GPLL0_DIV_CLK_SRC>;
+
+			power-domains = <&rpmhpd RPMHPD_MX>,
+					<&rpmhpd RPMHPD_CX>;
+			required-opps = <&rpmhpd_opp_low_svs>,
+					<&rpmhpd_opp_low_svs>;
+
+			#clock-cells = <1>;
+			#reset-cells = <1>;
+			#power-domain-cells = <1>;
 		};
 
 		remoteproc_adsp: remoteproc@4c00000 {
