@@ -73,10 +73,16 @@ static struct sg_table *qda_gem_get_sg_table(struct drm_gem_object *gem_obj)
 	return sgt;
 }
 
+static const struct vm_operations_struct qda_gem_vm_ops = {
+	.open = drm_gem_vm_open,
+	.close = drm_gem_vm_close,
+};
+
 const struct drm_gem_object_funcs qda_gem_object_funcs = {
 	.free = qda_gem_free_object,
 	.get_sg_table = qda_gem_get_sg_table,
 	.mmap = qda_gem_mmap_obj,
+	.vm_ops = &qda_gem_vm_ops,
 };
 
 /**
