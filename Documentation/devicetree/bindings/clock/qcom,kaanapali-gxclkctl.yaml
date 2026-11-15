@@ -29,6 +29,7 @@ properties:
           - enum:
               - qcom,hawi-gxclkctl
               - qcom,maili-gxclkctl
+              - qcom,seca-gxclkctl
           - const: qcom,kaanapali-gxclkctl
 
   power-domains:
