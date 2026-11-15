@@ -113,6 +113,8 @@ struct qda_dev {
 	struct device *dev;
 	/** @cb_devs: Compute context-bank (CB) child devices */
 	struct list_head cb_devs;
+	/** @cb_owner: Entry in the list of devices banks are added back to */
+	struct list_head cb_owner;
 	/** @iommu_mgr: Registry of this device's context banks */
 	struct qda_memory_manager *iommu_mgr;
 	/** @import_lock: Serialises PRIME imports, protects @importing_session */

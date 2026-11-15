@@ -40,6 +40,7 @@ int qda_dma_alloc(struct qda_iommu_device *iommu_dev,
 	gem_obj->dma_addr = dma_addr +
 			    qda_soc_sid_offset(iommu_dev->qdev->soc_data, iommu_dev->sid);
 	gem_obj->iommu_dev = iommu_dev;
+	qda_memory_manager_get_device(iommu_dev);
 
 	return 0;
 }
@@ -50,12 +51,15 @@ int qda_dma_alloc(struct qda_iommu_device *iommu_dev,
  */
 void qda_dma_free(struct qda_gem_obj *gem_obj)
 {
-	dma_free_coherent(gem_obj->iommu_dev->dev, gem_obj->size,
+	struct qda_iommu_device *iommu_dev = gem_obj->iommu_dev;
+
+	dma_free_coherent(iommu_dev->dev, gem_obj->size,
 			  gem_obj->virt, qda_gem_dma_addr(gem_obj));
 
 	gem_obj->virt = NULL;
 	gem_obj->dma_addr = 0;
 	gem_obj->iommu_dev = NULL;
+	qda_memory_manager_put_device(iommu_dev);
 }
 
 /**

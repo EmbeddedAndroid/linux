@@ -70,6 +70,7 @@ struct drm_gem_object *qda_gem_prime_import_sg_table(struct drm_device *drm_dev,
 	qda_gem_obj->iommu_dev = iommu_dev;
 	qda_gem_obj->dma_addr = sg_dma_address(sgt->sgl) +
 				qda_soc_sid_offset(qdev->soc_data, iommu_dev->sid);
+	qda_memory_manager_get_device(iommu_dev);
 
 	return &qda_gem_obj->base;
 }

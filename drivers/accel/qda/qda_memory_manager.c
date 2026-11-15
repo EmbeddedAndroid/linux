@@ -4,6 +4,7 @@
 #include <linux/slab.h>
 #include <linux/spinlock.h>
 #include <drm/drm_print.h>
+#include "qda_cb.h"
 #include "qda_drv.h"
 #include "qda_gem.h"
 #include "qda_memory_dma.h"
@@ -11,7 +12,25 @@
 
 static void iommu_device_free(struct kref *ref)
 {
-	kfree(container_of(ref, struct qda_iommu_device, ref));
+	qda_cb_release(container_of(ref, struct qda_iommu_device, ref));
+}
+
+/**
+ * qda_memory_manager_get_device() - Keep a context bank alive
+ * @iommu_dev: Context bank a buffer is being mapped into
+ */
+void qda_memory_manager_get_device(struct qda_iommu_device *iommu_dev)
+{
+	kref_get(&iommu_dev->ref);
+}
+
+/**
+ * qda_memory_manager_put_device() - Drop a reference to a context bank
+ * @iommu_dev: Context bank taken with qda_memory_manager_get_device()
+ */
+void qda_memory_manager_put_device(struct qda_iommu_device *iommu_dev)
+{
+	kref_put(&iommu_dev->ref, iommu_device_free);
 }
 
 static struct qda_iommu_device *assign_available_device(struct qda_memory_manager *mem_mgr,
@@ -85,7 +104,7 @@ void qda_memory_manager_release_device(struct qda_iommu_device *iommu_dev)
 	scoped_guard(spinlock_irqsave, &iommu_dev->lock)
 		iommu_dev->assigned_session = NULL;
 
-	kref_put(&iommu_dev->ref, iommu_device_free);
+	qda_memory_manager_put_device(iommu_dev);
 }
 
 /**
@@ -156,7 +175,8 @@ int qda_memory_manager_register_device(struct qda_memory_manager *mem_mgr,
  * @iommu_dev: Context bank to unregister
  *
  * Takes the registry's reference away. The object itself stays alive until
- * any session still holding it is released.
+ * any session still holding it is released and any buffer mapped into it is
+ * freed.
  */
 void qda_memory_manager_unregister_device(struct qda_memory_manager *mem_mgr,
 					  struct qda_iommu_device *iommu_dev)
@@ -172,7 +192,7 @@ void qda_memory_manager_unregister_device(struct qda_memory_manager *mem_mgr,
 		}
 	}
 
-	kref_put(&iommu_dev->ref, iommu_device_free);
+	qda_memory_manager_put_device(iommu_dev);
 }
 
 /**

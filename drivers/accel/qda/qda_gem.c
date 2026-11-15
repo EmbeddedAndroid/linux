@@ -17,10 +17,12 @@ static void qda_gem_free_object(struct drm_gem_object *gem_obj)
 	 * An imported buffer only holds a mapping of memory the exporter owns,
 	 * so hand the mapping back rather than freeing anything.
 	 */
-	if (drm_gem_is_imported(gem_obj))
+	if (drm_gem_is_imported(gem_obj)) {
 		drm_prime_gem_destroy(gem_obj, qda_gem_obj->sgt);
-	else if (qda_gem_obj->virt)
+		qda_memory_manager_put_device(qda_gem_obj->iommu_dev);
+	} else if (qda_gem_obj->virt) {
 		qda_memory_manager_free(qda_gem_obj);
+	}
 
 	drm_gem_object_release(gem_obj);
 	kfree(qda_gem_obj);

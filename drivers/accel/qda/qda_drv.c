@@ -158,6 +158,7 @@ struct qda_dev *qda_alloc_device(struct device *dev)
 		return ERR_CAST(qdev);
 
 	INIT_LIST_HEAD(&qdev->cb_devs);
+	INIT_LIST_HEAD(&qdev->cb_owner);
 	mutex_init(&qdev->import_lock);
 	mutex_init(&qdev->attr_lock);
 	xa_init_flags(&qdev->ctx_xa, XA_FLAGS_ALLOC1);

@@ -11,6 +11,7 @@
 #include <linux/mutex.h>
 #include <linux/spinlock.h>
 #include <linux/types.h>
+#include <linux/workqueue.h>
 
 struct qda_dev;
 struct qda_gem_obj;
@@ -23,9 +24,10 @@ struct qda_session;
  * most one session at a time, which is what keeps the buffers of one session
  * out of the address space of another.
  *
- * The object outlives its registration: a session keeps a reference through
- * @ref, so the context bank can be unregistered while a session still holds
- * it.
+ * The object outlives its registration: a session holding the bank and every
+ * buffer mapped into it keep a reference through @ref, so the bank can be
+ * unregistered while either is still around. The device itself is destroyed
+ * only once the last reference is gone, since freeing a buffer needs it.
  */
 struct qda_iommu_device {
 	/** @dev: The context bank device to allocate from */
@@ -40,6 +42,10 @@ struct qda_iommu_device {
 	struct kref ref;
 	/** @lock: Protects @assigned_session */
 	spinlock_t lock;
+	/** @np: Context bank node @dev was created for */
+	struct device_node *np;
+	/** @release_work: Destroys @dev once the last reference is gone */
+	struct work_struct release_work;
 };
 
 /**
@@ -68,6 +74,8 @@ void qda_memory_manager_unregister_device(struct qda_memory_manager *mem_mgr,
 int qda_memory_manager_assign_device(struct qda_memory_manager *mem_mgr,
 				     struct qda_session *session);
 void qda_memory_manager_release_device(struct qda_iommu_device *iommu_dev);
+void qda_memory_manager_get_device(struct qda_iommu_device *iommu_dev);
+void qda_memory_manager_put_device(struct qda_iommu_device *iommu_dev);
 
 int qda_memory_manager_alloc(struct qda_memory_manager *mem_mgr,
 			     struct qda_gem_obj *gem_obj,

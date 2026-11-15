@@ -319,4 +319,25 @@ static struct rpmsg_driver qda_rpmsg_driver = {
 	},
 };
 
-module_rpmsg_driver(qda_rpmsg_driver);
+static int __init qda_init(void)
+{
+	int ret;
+
+	ret = qda_cb_init();
+	if (ret)
+		return ret;
+
+	ret = register_rpmsg_driver(&qda_rpmsg_driver);
+	if (ret)
+		qda_cb_exit();
+
+	return ret;
+}
+module_init(qda_init);
+
+static void __exit qda_exit(void)
+{
+	unregister_rpmsg_driver(&qda_rpmsg_driver);
+	qda_cb_exit();
+}
+module_exit(qda_exit);
