@@ -19,6 +19,7 @@ obj-$(CONFIG_BLOCK)			+= biomerge.o
 obj-$(CONFIG_XEN_BALLOON)		+= xen-balloon.o
 obj-$(CONFIG_XEN_DEV_EVTCHN)		+= xen-evtchn.o
 obj-$(CONFIG_XEN_GNTDEV)		+= xen-gntdev.o
+obj-$(CONFIG_XEN_STATIC_SHM)		+= xen-static-shm.o
 obj-$(CONFIG_XEN_GRANT_DEV_ALLOC)	+= xen-gntalloc.o
 obj-$(CONFIG_XENFS)			+= xenfs/
 obj-$(CONFIG_XEN_SYS_HYPERVISOR)	+= sys-hypervisor.o
