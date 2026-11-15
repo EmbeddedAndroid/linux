@@ -361,7 +361,8 @@ tee_ioctl_shm_register_fd(struct tee_context *ctx,
 
 static int param_from_user_memref(struct tee_context *ctx,
 				  struct tee_param_memref *memref,
-				  struct tee_ioctl_param *ip)
+				  struct tee_ioctl_param *ip,
+				  struct tee_shm **dmabuf_ref)
 {
 	struct tee_shm *shm;
 	size_t offs = 0;
@@ -409,11 +410,20 @@ static int param_from_user_memref(struct tee_context *ctx,
 				 * this shm will be used in the parameter
 				 * list instead of the shm we got with
 				 * tee_shm_get_from_id() above.
+				 *
+				 * With dmabuf_ref the reference to the
+				 * dma-buf shm is kept there until the call
+				 * returns: it holds the dma-buf, and the
+				 * dma-buf holds the memory the parent
+				 * describes.
 				 */
 				parent_shm = ref->parent_shm;
 				offs = ref->offset;
 				refcount_inc(&parent_shm->refcount);
-				tee_shm_put(shm);
+				if (dmabuf_ref)
+					*dmabuf_ref = shm;
+				else
+					tee_shm_put(shm);
 				shm = parent_shm;
 			}
 		}
@@ -432,7 +442,7 @@ static int param_from_user_memref(struct tee_context *ctx,
 }
 
 static int params_from_user(struct tee_context *ctx, struct tee_param *params,
-			    size_t num_params,
+			    struct tee_shm **dmabuf_refs, size_t num_params,
 			    struct tee_ioctl_param __user *uparams)
 {
 	size_t n;
@@ -480,7 +490,8 @@ static int params_from_user(struct tee_context *ctx, struct tee_param *params,
 		case TEE_IOCTL_PARAM_ATTR_TYPE_MEMREF_OUTPUT:
 		case TEE_IOCTL_PARAM_ATTR_TYPE_MEMREF_INOUT:
 			rc = param_from_user_memref(ctx, &params[n].u.memref,
-						    &ip);
+						    &ip, dmabuf_refs ?
+						    dmabuf_refs + n : NULL);
 			if (rc)
 				return rc;
 			break;
@@ -532,17 +543,19 @@ static int params_to_user(struct tee_ioctl_param __user *uparams,
 	return 0;
 }
 
-static void free_params(struct tee_param *params, size_t num_params)
+static void free_params(struct tee_param *params,
+			struct tee_shm **dmabuf_refs, size_t num_params)
 {
 	size_t n;
 
-	if (!params)
-		return;
-
-	for (n = 0; n < num_params; n++)
+	for (n = 0; params && n < num_params; n++) {
 		if (tee_param_is_memref(params + n) && params[n].u.memref.shm)
 			tee_shm_put(params[n].u.memref.shm);
+		if (dmabuf_refs && dmabuf_refs[n])
+			tee_shm_put(dmabuf_refs[n]);
+	}
 
+	kfree(dmabuf_refs);
 	kfree(params);
 }
 
@@ -554,6 +567,7 @@ static int tee_ioctl_open_session(struct tee_context *ctx,
 	struct tee_ioctl_open_session_arg __user *uarg;
 	struct tee_ioctl_open_session_arg arg;
 	struct tee_ioctl_param __user *uparams = NULL;
+	struct tee_shm **dmabuf_refs = NULL;
 	struct tee_param *params = NULL;
 	bool have_session = false;
 
@@ -576,10 +590,14 @@ static int tee_ioctl_open_session(struct tee_context *ctx,
 
 	if (arg.num_params) {
 		params = kzalloc_objs(struct tee_param, arg.num_params);
-		if (!params)
-			return -ENOMEM;
+		dmabuf_refs = kzalloc_objs(struct tee_shm *, arg.num_params);
+		if (!params || !dmabuf_refs) {
+			rc = -ENOMEM;
+			goto out;
+		}
 		uparams = uarg->params;
-		rc = params_from_user(ctx, params, arg.num_params, uparams);
+		rc = params_from_user(ctx, params, dmabuf_refs, arg.num_params,
+				      uparams);
 		if (rc)
 			goto out;
 	}
@@ -610,7 +628,7 @@ out:
 	 */
 	if (rc && have_session && ctx->teedev->desc->ops->close_session)
 		ctx->teedev->desc->ops->close_session(ctx, arg.session);
-	free_params(params, arg.num_params);
+	free_params(params, dmabuf_refs, arg.num_params);
 	return rc;
 }
 
@@ -622,6 +640,7 @@ static int tee_ioctl_invoke(struct tee_context *ctx,
 	struct tee_ioctl_invoke_arg __user *uarg;
 	struct tee_ioctl_invoke_arg arg;
 	struct tee_ioctl_param __user *uparams = NULL;
+	struct tee_shm **dmabuf_refs = NULL;
 	struct tee_param *params = NULL;
 
 	if (!ctx->teedev->desc->ops->invoke_func)
@@ -643,10 +662,14 @@ static int tee_ioctl_invoke(struct tee_context *ctx,
 
 	if (arg.num_params) {
 		params = kzalloc_objs(struct tee_param, arg.num_params);
-		if (!params)
-			return -ENOMEM;
+		dmabuf_refs = kzalloc_objs(struct tee_shm *, arg.num_params);
+		if (!params || !dmabuf_refs) {
+			rc = -ENOMEM;
+			goto out;
+		}
 		uparams = uarg->params;
-		rc = params_from_user(ctx, params, arg.num_params, uparams);
+		rc = params_from_user(ctx, params, dmabuf_refs, arg.num_params,
+				      uparams);
 		if (rc)
 			goto out;
 	}
@@ -662,7 +685,7 @@ static int tee_ioctl_invoke(struct tee_context *ctx,
 	}
 	rc = params_to_user(uparams, arg.num_params, params);
 out:
-	free_params(params, arg.num_params);
+	free_params(params, dmabuf_refs, arg.num_params);
 	return rc;
 }
 
@@ -674,6 +697,7 @@ static int tee_ioctl_object_invoke(struct tee_context *ctx,
 	struct tee_ioctl_object_invoke_arg __user *uarg;
 	struct tee_ioctl_object_invoke_arg arg;
 	struct tee_ioctl_param __user *uparams = NULL;
+	struct tee_shm **dmabuf_refs = NULL;
 	struct tee_param *params = NULL;
 
 	if (!ctx->teedev->desc->ops->object_invoke_func)
@@ -695,10 +719,14 @@ static int tee_ioctl_object_invoke(struct tee_context *ctx,
 
 	if (arg.num_params) {
 		params = kzalloc_objs(struct tee_param, arg.num_params);
-		if (!params)
-			return -ENOMEM;
+		dmabuf_refs = kzalloc_objs(struct tee_shm *, arg.num_params);
+		if (!params || !dmabuf_refs) {
+			rc = -ENOMEM;
+			goto out;
+		}
 		uparams = uarg->params;
-		rc = params_from_user(ctx, params, arg.num_params, uparams);
+		rc = params_from_user(ctx, params, dmabuf_refs, arg.num_params,
+				      uparams);
 		if (rc)
 			goto out;
 	}
@@ -713,7 +741,7 @@ static int tee_ioctl_object_invoke(struct tee_context *ctx,
 	}
 	rc = params_to_user(uparams, arg.num_params, params);
 out:
-	free_params(params, arg.num_params);
+	free_params(params, dmabuf_refs, arg.num_params);
 	return rc;
 }
 
@@ -835,9 +863,9 @@ static int tee_ioctl_supp_recv(struct tee_context *ctx,
 	if (!params)
 		return -ENOMEM;
 
-	rc = params_from_user(ctx, params, num_params, uarg->params);
+	rc = params_from_user(ctx, params, NULL, num_params, uarg->params);
 	if (rc) {
-		free_params(params, num_params);
+		free_params(params, NULL, num_params);
 		return rc;
 	}
 
