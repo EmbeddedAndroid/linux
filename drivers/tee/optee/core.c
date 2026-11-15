@@ -195,6 +195,8 @@ void optee_release_supp(struct tee_context *ctx)
 
 void optee_remove_common(struct optee *optee)
 {
+	/* Release the DMA heaps while OP-TEE can still be called */
+	tee_device_put_all_dma_heaps(optee->teedev);
 	blocking_notifier_chain_unregister(&optee_rpmb_intf_added,
 					   &optee->rpmb_intf);
 	cancel_work_sync(&optee->rpmb_scan_bus_work);

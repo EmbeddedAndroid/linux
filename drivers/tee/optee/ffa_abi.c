@@ -771,7 +771,6 @@ static int optee_ffa_reclaim_protmem(struct optee *optee,
 	int rc;
 
 	optee_shm_rem_ffa_handle(optee, global_handle);
-	protmem->sec_world_id = 0;
 
 	rc = msg_ops->sync_send_receive(ffa_dev, &data);
 	if (rc)
@@ -780,6 +779,8 @@ static int optee_ffa_reclaim_protmem(struct optee *optee,
 	rc = mem_ops->memory_reclaim(global_handle, 0);
 	if (rc)
 		pr_err("mem_reclaim: 0x%llx %d", global_handle, rc);
+	else
+		protmem->sec_world_id = 0;
 
 	return rc;
 }
@@ -1185,6 +1186,7 @@ static int optee_ffa_probe(struct ffa_device *ffa_dev)
 	return 0;
 
 err_unregister_devices:
+	tee_device_put_all_dma_heaps(optee->teedev);
 	optee_unregister_devices();
 	if (optee->ffa.bottom_half_value != U32_MAX)
 		notif_ops->notify_relinquish(ffa_dev,

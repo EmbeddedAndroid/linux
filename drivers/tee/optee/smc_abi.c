@@ -1928,6 +1928,7 @@ static int optee_probe(struct platform_device *pdev)
 	return 0;
 
 err_disable_shm_cache:
+	tee_device_put_all_dma_heaps(optee->teedev);
 	if (!optee->rpc_param_count)
 		optee_disable_shm_cache(optee);
 	optee_smc_notif_uninit_irq(optee);
