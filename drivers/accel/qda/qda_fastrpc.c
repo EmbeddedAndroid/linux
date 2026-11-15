@@ -624,8 +624,13 @@ int qda_fastrpc_invoke_pack(struct qda_fastrpc_invoke_ctx *ctx, struct qda_msg *
 	/* Ensure the payload is visible to the DSP before the doorbell */
 	dma_wmb();
 
-	/* The session has no process yet to identify while one is being created */
-	if (ctx->handle == QDA_FASTRPC_INIT_HANDLE)
+	/*
+	 * The session has no process yet to identify while one is being
+	 * created, and a capability query may come before there is one: the
+	 * DSP answers both only for session 0, as drivers/misc/fastrpc.c sends
+	 * every request it makes on its own behalf.
+	 */
+	if (ctx->handle == QDA_FASTRPC_INIT_HANDLE || ctx->type == QDA_FASTRPC_TYPE_GET_DSP_INFO)
 		msg->fastrpc.remote_session_id = 0;
 	else
 		msg->fastrpc.remote_session_id = ctx->session->remote_session_id;
