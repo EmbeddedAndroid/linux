@@ -46,6 +46,8 @@
 #define NW_GCC_GPU_GPLL0_DIV_CLK_SRC				36
 #define NW_GCC_GPU_PLL0_MAIN_DIV_CLK_SRC			37
 #define NW_GCC_GPU_SMMU_VOTE_CLK				38
+#define NW_GCC_VIDEO_AXI0_CLK					39
+#define NW_GCC_VIDEO_AXI0C_CLK					40
 
 /* NW_GCC power domains */
 #define NW_GCC_UFS_0_MEM_PHY_GDSC				0
@@ -56,5 +58,8 @@
 /* NW_GCC resets */
 #define NW_GCC_UFS_0_PHY_BCR					0
 #define NW_GCC_UFS_1_PHY_BCR					1
+#define NW_GCC_VIDEO_BCR					2
+#define NW_GCC_VIDEO_AXI0_CLK_ARES				3
+#define NW_GCC_VIDEO_AXI0C_CLK_ARES				4
 
 #endif
