@@ -27,19 +27,23 @@ description: |
 
 properties:
   compatible:
-    enum:
-      - qcom,glymur-videocc
-      - qcom,hawi-videocc
-      - qcom,kaanapali-videocc
-      - qcom,maili-videocc
-      - qcom,nord-videocc
-      - qcom,sm8450-videocc
-      - qcom,sm8475-videocc
-      - qcom,sm8550-videocc
-      - qcom,sm8650-videocc
-      - qcom,sm8750-videocc
-      - qcom,x1e80100-videocc
-      - qcom,x1p42100-videocc
+    oneOf:
+      - enum:
+          - qcom,glymur-videocc
+          - qcom,hawi-videocc
+          - qcom,kaanapali-videocc
+          - qcom,maili-videocc
+          - qcom,nord-videocc
+          - qcom,sm8450-videocc
+          - qcom,sm8475-videocc
+          - qcom,sm8550-videocc
+          - qcom,sm8650-videocc
+          - qcom,sm8750-videocc
+          - qcom,x1e80100-videocc
+          - qcom,x1p42100-videocc
+      - items:
+          - const: qcom,seca-videocc
+          - const: qcom,nord-videocc
 
   clocks:
     minItems: 2
