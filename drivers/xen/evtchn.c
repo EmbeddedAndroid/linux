@@ -432,6 +432,8 @@ static void evtchn_unbind_from_user(struct per_user_data *u,
 	del_evtchn(u, evtchn);
 }
 
+static DEFINE_MUTEX(static_bind_mutex);
+
 static long evtchn_ioctl(struct file *file,
 			 unsigned int cmd, unsigned long arg)
 {
@@ -555,7 +557,16 @@ static long evtchn_ioctl(struct file *file,
 		if (evtchn)
 			break;
 
-		rc = evtchn_bind_to_user(u, bind.port, true);
+		/*
+		 * Anyone may bind a static port, but its IRQ is not
+		 * refcounted for a second binder: the first one's unbind
+		 * would tear it down under the second.
+		 */
+		mutex_lock(&static_bind_mutex);
+		rc = -EBUSY;
+		if ((int)irq_from_evtchn(bind.port) < 0)
+			rc = evtchn_bind_to_user(u, bind.port, true);
+		mutex_unlock(&static_bind_mutex);
 		break;
 	}
 
