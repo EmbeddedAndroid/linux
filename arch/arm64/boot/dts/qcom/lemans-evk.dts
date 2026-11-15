@@ -990,6 +990,8 @@
 };
 
 &tlmm {
+	gpio-reserved-ranges = <86 4>; /* SPI (TPM) */
+
 	ethernet0_default: ethernet0-default-state {
 		ethernet0_mdc: ethernet0-mdc-pins {
 			pins = "gpio8";
