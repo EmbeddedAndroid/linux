@@ -40,6 +40,7 @@ properties:
       - qcom,nord-gpu2cc
       - qcom,nord-gpucc
       - qcom,sar2130p-gpucc
+      - qcom,seca-gpucc
       - qcom,sm4450-gpucc
       - qcom,sm8450-gpucc
       - qcom,sm8475-gpucc
