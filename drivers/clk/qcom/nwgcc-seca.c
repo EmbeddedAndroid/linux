@@ -15,6 +15,7 @@
 #include "clk-branch.h"
 #include "clk-rcg.h"
 #include "clk-regmap.h"
+#include "clk-regmap-divider.h"
 #include "clk-regmap-phy-mux.h"
 #include "common.h"
 #include "gdsc.h"
@@ -51,6 +52,28 @@ static struct clk_alpha_pll nw_gcc_gpll0 = {
 			.num_parents = 1,
 			.ops = &clk_alpha_pll_fixed_lucid_ole_ops,
 		},
+	},
+};
+
+static const struct clk_div_table post_div_table_nw_gcc_gpll0_out_even[] = {
+	{ 0x1, 2 },
+	{ }
+};
+
+static struct clk_alpha_pll_postdiv nw_gcc_gpll0_out_even = {
+	.offset = 0x0,
+	.post_div_shift = 10,
+	.post_div_table = post_div_table_nw_gcc_gpll0_out_even,
+	.num_post_div = ARRAY_SIZE(post_div_table_nw_gcc_gpll0_out_even),
+	.width = 4,
+	.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_LUCID_OLE],
+	.clkr.hw.init = &(const struct clk_init_data) {
+		.name = "nw_gcc_gpll0_out_even",
+		.parent_hws = (const struct clk_hw*[]) {
+			&nw_gcc_gpll0.clkr.hw,
+		},
+		.num_parents = 1,
+		.ops = &clk_alpha_pll_postdiv_lucid_ole_ops,
 	},
 };
 
@@ -329,6 +352,21 @@ static struct clk_rcg2 nw_gcc_ufs_1_phy_unipro_core_clk_src = {
 	},
 };
 
+static struct clk_regmap_div nw_gcc_gpu_pll0_main_div_clk_src = {
+	.reg = 0x23010,
+	.shift = 0,
+	.width = 4,
+	.clkr.hw.init = &(const struct clk_init_data) {
+		.name = "nw_gcc_gpu_pll0_main_div_clk_src",
+		.parent_hws = (const struct clk_hw*[]) {
+			&nw_gcc_gpll0_out_even.clkr.hw,
+		},
+		.num_parents = 1,
+		.flags = CLK_SET_RATE_PARENT,
+		.ops = &clk_regmap_div_ro_ops,
+	},
+};
+
 static struct clk_branch nw_gcc_aggre_noc_ufs_0_phy_axi_clk = {
 	.halt_reg = 0x520f8,
 	.halt_check = BRANCH_HALT_VOTED,
@@ -364,6 +402,59 @@ static struct clk_branch nw_gcc_aggre_noc_ufs_1_phy_axi_clk = {
 			},
 			.num_parents = 1,
 			.flags = CLK_SET_RATE_PARENT,
+			.ops = &clk_branch2_ops,
+		},
+	},
+};
+
+static struct clk_branch nw_gcc_gpu_gpll0_clk_src = {
+	.halt_reg = 0x23018,
+	.halt_check = BRANCH_HALT_VOTED,
+	.hwcg_reg = 0x23018,
+	.hwcg_bit = 1,
+	.clkr = {
+		.enable_reg = 0x76000,
+		.enable_mask = BIT(4),
+		.hw.init = &(const struct clk_init_data) {
+			.name = "nw_gcc_gpu_gpll0_clk_src",
+			.parent_hws = (const struct clk_hw*[]) {
+				&nw_gcc_gpll0.clkr.hw,
+			},
+			.num_parents = 1,
+			.flags = CLK_SET_RATE_PARENT,
+			.ops = &clk_branch2_ops,
+		},
+	},
+};
+
+static struct clk_branch nw_gcc_gpu_gpll0_div_clk_src = {
+	.halt_reg = 0x23020,
+	.halt_check = BRANCH_HALT_VOTED,
+	.hwcg_reg = 0x23020,
+	.hwcg_bit = 1,
+	.clkr = {
+		.enable_reg = 0x76000,
+		.enable_mask = BIT(5),
+		.hw.init = &(const struct clk_init_data) {
+			.name = "nw_gcc_gpu_gpll0_div_clk_src",
+			.parent_hws = (const struct clk_hw*[]) {
+				&nw_gcc_gpu_pll0_main_div_clk_src.clkr.hw,
+			},
+			.num_parents = 1,
+			.flags = CLK_SET_RATE_PARENT,
+			.ops = &clk_branch2_ops,
+		},
+	},
+};
+
+static struct clk_branch nw_gcc_gpu_smmu_vote_clk = {
+	.halt_reg = 0x86038,
+	.halt_check = BRANCH_HALT_VOTED,
+	.clkr = {
+		.enable_reg = 0x86038,
+		.enable_mask = BIT(0),
+		.hw.init = &(const struct clk_init_data) {
+			.name = "nw_gcc_gpu_smmu_vote_clk",
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -750,6 +841,11 @@ static struct clk_regmap *nw_gcc_seca_clocks[] = {
 	[NW_GCC_UFS_1_PHY_TX_SYMBOL_0_CLK_SRC] = &nw_gcc_ufs_1_phy_tx_symbol_0_clk_src.clkr,
 	[NW_GCC_UFS_1_PHY_UNIPRO_CORE_CLK] = &nw_gcc_ufs_1_phy_unipro_core_clk.clkr,
 	[NW_GCC_UFS_1_PHY_UNIPRO_CORE_CLK_SRC] = &nw_gcc_ufs_1_phy_unipro_core_clk_src.clkr,
+	[NW_GCC_GPLL0_OUT_EVEN] = &nw_gcc_gpll0_out_even.clkr,
+	[NW_GCC_GPU_GPLL0_CLK_SRC] = &nw_gcc_gpu_gpll0_clk_src.clkr,
+	[NW_GCC_GPU_GPLL0_DIV_CLK_SRC] = &nw_gcc_gpu_gpll0_div_clk_src.clkr,
+	[NW_GCC_GPU_PLL0_MAIN_DIV_CLK_SRC] = &nw_gcc_gpu_pll0_main_div_clk_src.clkr,
+	[NW_GCC_GPU_SMMU_VOTE_CLK] = &nw_gcc_gpu_smmu_vote_clk.clkr,
 };
 
 static struct gdsc *nw_gcc_seca_gdscs[] = {
@@ -781,7 +877,13 @@ static void clk_seca_regs_configure(struct device *dev, struct regmap *regmap)
 	qcom_branch_set_force_mem_core(regmap, nw_gcc_ufs_1_phy_axi_clk, true);
 }
 
+static const u32 nw_gcc_seca_critical_cbcrs[] = {
+	0x23004, /* NW_GCC_GPU_CFG_AHB_CLK */
+};
+
 static const struct qcom_cc_driver_data nw_gcc_seca_driver_data = {
+	.clk_cbcrs = nw_gcc_seca_critical_cbcrs,
+	.num_clk_cbcrs = ARRAY_SIZE(nw_gcc_seca_critical_cbcrs),
 	.clk_regs_configure = clk_seca_regs_configure,
 };
 
