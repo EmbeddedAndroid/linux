@@ -2,6 +2,7 @@
 // Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 #include <linux/dma-mapping.h>
 #include <linux/of.h>
+#include <linux/of_device.h>
 #include <linux/of_platform.h>
 #include <linux/slab.h>
 #include <drm/drm_print.h>
@@ -66,6 +67,17 @@ static int qda_create_cb_device(struct qda_dev *qdev, struct device_node *cb_nod
 	if (!pdev) {
 		drm_err(&qdev->drm_dev, "Failed to create CB device for %pOFn\n", cb_node);
 		return -ENODEV;
+	}
+
+	/*
+	 * No driver binds to the bank, so the only DMA configuration it got
+	 * ran while the IOMMU core probed it, before it had a domain.
+	 */
+	ret = of_dma_configure(&pdev->dev, cb_node, true);
+	if (ret) {
+		drm_err(&qdev->drm_dev, "DMA configuration failed for %pOFn: %d\n",
+			cb_node, ret);
+		goto err_destroy;
 	}
 
 	dma_bits = qda_soc_dma_addr_bits(qdev);
