@@ -86,6 +86,14 @@ struct qda_session {
 	int msg_buf_pool_count;
 	/** @msg_buf_pool_lock: Protects @msg_buf_pool and @msg_buf_pool_count */
 	struct mutex msg_buf_pool_lock;
+	/**
+	 * @maps: Buffers mapped into the DSP process (struct qda_session_map),
+	 * each holding a reference on its buffer until the DSP unmaps it or
+	 * the session is released, after its process.
+	 */
+	struct list_head maps;
+	/** @maps_lock: Protects @maps */
+	struct mutex maps_lock;
 	/** @ref: Dropped by the owner of the session and by every invocation */
 	struct kref ref;
 };

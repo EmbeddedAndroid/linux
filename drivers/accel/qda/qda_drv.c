@@ -41,6 +41,8 @@ struct qda_session *qda_session_alloc(struct qda_dev *qdev)
 	session->remote_session_id = atomic_inc_return(&qdev->session_id_seq);
 	INIT_LIST_HEAD(&session->msg_buf_pool);
 	mutex_init(&session->msg_buf_pool_lock);
+	INIT_LIST_HEAD(&session->maps);
+	mutex_init(&session->maps_lock);
 	kref_init(&session->ref);
 
 	return session;
@@ -72,6 +74,7 @@ static void qda_session_release(struct kref *ref)
 	struct qda_session *session = container_of(ref, struct qda_session, ref);
 
 	qda_session_msg_buf_pool_destroy(session);
+	qda_session_maps_destroy(session);
 
 	if (session->init_mem_gem_obj)
 		drm_gem_object_put(&session->init_mem_gem_obj->base);
@@ -79,6 +82,7 @@ static void qda_session_release(struct kref *ref)
 	if (session->assigned_iommu_dev)
 		qda_memory_manager_release_device(session->assigned_iommu_dev);
 
+	mutex_destroy(&session->maps_lock);
 	mutex_destroy(&session->msg_buf_pool_lock);
 	kfree(session);
 }

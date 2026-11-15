@@ -132,9 +132,10 @@ The driver exposes the following ioctls, defined in
     ``QDA_REQUEST_MEM_UNMAP``). An unmap must use the same request the
     mapping was made with.
 
-    A mapping does not keep the buffer alive. Its GEM handle has to stay
-    open for as long as the DSP uses the mapping, and must only be closed
-    after the mapping has been removed.
+    A mapping keeps its buffer alive until it is removed or the file is
+    closed, after the DSP process the file created is released, so closing
+    the GEM handle of a mapped buffer does not take the buffer away from the
+    DSP.
 
 ``DRM_IOCTL_QDA_REMOTE_INVOKE``
     Call a method on the DSP. This is the main execution primitive.

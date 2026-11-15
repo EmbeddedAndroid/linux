@@ -127,6 +127,9 @@ static int qda_fastrpc_invoke(u32 type, void *data, struct qda_session *session)
 	} else if (type == QDA_FASTRPC_RMID_INIT_ATTACH ||
 		   type == QDA_FASTRPC_RMID_INIT_CREATE_STATIC) {
 		WRITE_ONCE(session->pd, ctx->pd);
+	} else if (type == QDA_FASTRPC_RMID_INIT_MUNMAP ||
+		   type == QDA_FASTRPC_RMID_INIT_MEM_UNMAP) {
+		qda_session_maps_forget(session, type == QDA_FASTRPC_RMID_INIT_MEM_UNMAP, data);
 	}
 
 out_put:

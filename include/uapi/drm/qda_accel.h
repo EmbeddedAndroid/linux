@@ -209,9 +209,8 @@ struct drm_qda_mem_map {
  * Removes a mapping made with DRM_IOCTL_QDA_REMOTE_MMAP, named by the address
  * that call returned in drm_qda_mem_map.vaddrout. The request must match the
  * one the mapping was made with: QDA_REQUEST_MUNMAP uses @vaddrout and @size,
- * QDA_REQUEST_MEM_UNMAP uses @dsp_handle, @vaddr and @size. The buffer is not
- * affected, so its handle must stay open for as long as the DSP uses the
- * mapping.
+ * QDA_REQUEST_MEM_UNMAP uses @dsp_handle, @vaddr and @size. The mapping held
+ * the buffer; removing it releases that hold.
  */
 struct drm_qda_mem_unmap {
 	__u32 request;
