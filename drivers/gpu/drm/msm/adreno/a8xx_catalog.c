@@ -1749,6 +1749,41 @@ static const struct adreno_info a8xx_gpus[] = {
 			{ 284, 3 },
 		),
 	}, {
+		.chip_ids = ADRENO_CHIP_IDS(0x44060300),
+		.family = ADRENO_8XX_GEN2,
+		.fw = {
+			[ADRENO_FW_SQE] = "gen81500_sqe.fw",
+			[ADRENO_FW_GMU] = "gen81500_gmu.bin",
+			[ADRENO_FW_AQE] = "gen81500_aqe.fw",
+		},
+		.gmem = 15 * SZ_1M + SZ_512K + SZ_256K,
+		.inactive_period = DRM_MSM_INACTIVE_PERIOD,
+		.quirks = ADRENO_QUIRK_HAS_CACHED_COHERENT |
+			  ADRENO_QUIRK_HAS_HW_APRIV,
+		.funcs = &a8xx_gpu_funcs,
+		.zapfw = "gen81500_zap.mbn",
+		.a6xx = &(const struct a6xx_info) {
+			.protect = &x285_protect,
+			.nonctxt_reglist = x285_nonctxt_regs,
+			.pwrup_reglist = &a840_pwrup_reglist,
+			.dyn_pwrup_reglist = &x285_dyn_pwrup_reglist,
+			.ifpc_reglist = &a840_ifpc_reglist,
+			.gbif_cx = a840_gbif,
+			.max_slices = 3,
+			.gmu_chipid = 0x80f0000,
+			.bcms = (const struct a6xx_bcm[]) {
+				{ .name = "SH0", .buswidth = 16 },
+				{ .name = "MC0", .buswidth = 4 },
+				{
+					.name = "ACV",
+					.fixed = true,
+					.perfmode = BIT(2),
+					.perfmode_bw = 16500000,
+				},
+				{ /* sentinel */ },
+			},
+		},
+	}, {
 		.chip_ids = ADRENO_CHIP_IDS(0x44041400),
 		.family = ADRENO_8XX_GEN2,
 		.fw = {
