@@ -306,6 +306,17 @@ config CLK_NORD_VIDEOCC
 	  Say Y if you want to support video devices and functionality such as
 	  video encode/decode.
 
+config CLK_SECA_GPUCC
+	tristate "SecaAU Graphics Clock Controller"
+	depends on ARM64 || COMPILE_TEST
+	select CLK_SECA_NWGCC
+	select QCOM_GDSC
+	default m if ARCH_QCOM
+	help
+	  Support for the graphics clock controller on SecaAU devices.
+	  Say Y if you want to support graphics controller devices and
+	  functionality such as 3D graphics.
+
 config CLK_SECA_NWGCC
 	tristate "SecaAU North West Global Clock Controller"
 	depends on ARM64 || COMPILE_TEST
