@@ -350,6 +350,7 @@ static struct rpmhpd *seca_rpmhpds[] = {
 	[RPMHPD_CX_AO] = &cx_ao,
 	[RPMHPD_EBI] = &ebi,
 	[RPMHPD_GFX] = &gfx,
+	[RPMHPD_GMXC] = &gmxc,
 	[RPMHPD_MMCX] = &mmcx,
 	[RPMHPD_MMCX_AO] = &mmcx_ao,
 	[RPMHPD_MX] = &mx,
