@@ -960,7 +960,7 @@ static int qcom_pas_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	}
 
-	rproc->has_iommu = of_property_present(pdev->dev.of_node, "iommus");
+	rproc->has_iommu = device_iommu_mapped(&pdev->dev);
 	rproc->auto_boot = desc->auto_boot;
 	rproc_coredump_set_elf_info(rproc, ELFCLASS32, EM_NONE);
 
