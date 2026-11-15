@@ -70,7 +70,7 @@ properties:
 
   resets:
     minItems: 1
-    maxItems: 3
+    maxItems: 4
 
   reset-names:
     minItems: 1
@@ -78,6 +78,7 @@ properties:
       - const: bus
       - const: xo
       - const: core
+      - const: vcodec0_core
 
   iommus:
     maxItems: 2
@@ -172,6 +173,23 @@ allOf:
           maxItems: 1
         reset-names:
           maxItems: 1
+  - if:
+      properties:
+        compatible:
+          enum:
+            - qcom,eliza-iris
+    then:
+      properties:
+        resets:
+          minItems: 4
+        reset-names:
+          minItems: 4
+    else:
+      properties:
+        resets:
+          maxItems: 3
+        reset-names:
+          maxItems: 3
   - if:
       properties:
         compatible:
