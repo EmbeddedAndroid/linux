@@ -6,6 +6,7 @@
 
 #include <linux/errno.h>
 #include <linux/genalloc.h>
+#include <linux/list.h>
 #include <linux/slab.h>
 #include <linux/string.h>
 #include <linux/tee_core.h>
@@ -22,14 +23,59 @@ struct optee_protmem_dyn_pool {
 	refcount_t refcount;
 	u32 use_case;
 	struct tee_shm *protmem;
+	/* tee_shms whose reclaim failed, retried in pool_op_dyn_destroy_pool */
+	struct list_head kept;
 	/* Protects when initializing and tearing down this struct */
 	struct mutex mutex;
+};
+
+struct optee_protmem_kept {
+	struct list_head link;
+	struct tee_shm *shm;
 };
 
 static struct optee_protmem_dyn_pool *
 to_protmem_dyn_pool(struct tee_protmem_pool *pool)
 {
 	return container_of(pool, struct optee_protmem_dyn_pool, pool);
+}
+
+/*
+ * Leaks the pages of a tee_shm the secure world still owns, but drops its
+ * references on the context and the TEE device so that the device can be
+ * unregistered. Nothing may use the tee_shm afterwards.
+ */
+static void forget_protmem(struct tee_shm *shm)
+{
+	struct tee_device *teedev = shm->ctx->teedev;
+
+	teedev_ctx_put(shm->ctx);
+	tee_device_put(teedev);
+}
+
+/*
+ * After a failed reclaim the secure world may still own the memory: keep
+ * the tee_shm, and with it the pages, allocated instead of returning them
+ * to the DMA allocator.
+ */
+static int reclaim_dyn_protmem(struct optee_protmem_dyn_pool *rp)
+{
+	struct optee_protmem_kept *k;
+	int rc = rp->optee->ops->reclaim_protmem(rp->optee, rp->protmem);
+
+	if (rc) {
+		pr_warn("reclaim failed (%d), leaking %zu bytes at %pa\n",
+			rc, rp->protmem->size, &rp->protmem->paddr);
+		k = kmalloc_obj(*k);
+		if (k) {
+			k->shm = rp->protmem;
+			list_add_tail(&k->link, &rp->kept);
+		} else {
+			forget_protmem(rp->protmem);
+		}
+		rp->protmem = NULL;
+	}
+	return rc;
 }
 
 static int init_dyn_protmem(struct optee_protmem_dyn_pool *rp)
@@ -75,7 +121,8 @@ err_free_pool:
 	gen_pool_destroy(rp->gen_pool);
 	rp->gen_pool = NULL;
 err_reclaim:
-	rp->optee->ops->reclaim_protmem(rp->optee, rp->protmem);
+	if (reclaim_dyn_protmem(rp))
+		return rc;
 err_put_shm:
 	tee_shm_put(rp->protmem);
 err_null_protmem:
@@ -111,7 +158,8 @@ static void release_dyn_protmem(struct optee_protmem_dyn_pool *rp)
 	gen_pool_destroy(rp->gen_pool);
 	rp->gen_pool = NULL;
 
-	rp->optee->ops->reclaim_protmem(rp->optee, rp->protmem);
+	if (reclaim_dyn_protmem(rp))
+		return;
 	rp->protmem->flags &= ~TEE_SHM_DYNAMIC;
 
 	WARN(refcount_read(&rp->protmem->refcount) != 1, "Unexpected refcount");
@@ -192,7 +240,26 @@ static int protmem_pool_op_dyn_update_shm(struct tee_protmem_pool *pool,
 static void pool_op_dyn_destroy_pool(struct tee_protmem_pool *pool)
 {
 	struct optee_protmem_dyn_pool *rp = to_protmem_dyn_pool(pool);
+	struct optee_protmem_kept *k, *tmp;
+	int rc;
 
+	/*
+	 * The last protected buffer is gone, so the secure world may give
+	 * these back; the released heap also keeps out alloc and free.
+	 */
+	list_for_each_entry_safe(k, tmp, &rp->kept, link) {
+		rc = rp->optee->ops->reclaim_protmem(rp->optee, k->shm);
+		if (rc) {
+			pr_warn("reclaim retry failed (%d), leaking %zu bytes at %pa\n",
+				rc, k->shm->size, &k->shm->paddr);
+			forget_protmem(k->shm);
+		} else {
+			k->shm->flags &= ~TEE_SHM_DYNAMIC;
+			tee_shm_put(k->shm);
+		}
+		list_del(&k->link);
+		kfree(k);
+	}
 	mutex_destroy(&rp->mutex);
 	kfree(rp);
 }
@@ -323,6 +390,7 @@ struct tee_protmem_pool *optee_protmem_alloc_dyn_pool(struct optee *optee,
 	rp->pool.ops = &protmem_pool_ops_dyn;
 	rp->optee = optee;
 	rp->page_count = min_size / PAGE_SIZE;
+	INIT_LIST_HEAD(&rp->kept);
 	mutex_init(&rp->mutex);
 
 	return &rp->pool;
