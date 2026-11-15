@@ -58,6 +58,12 @@
 	status = "okay";
 };
 
+&iris {
+	firmware-name = "qcom/seca/vpu36_4v.mbn";
+
+	status = "okay";
+};
+
 &qupv3_2 {
 	firmware-name = "qcom/seca/qupv3fw.elf";
 };
