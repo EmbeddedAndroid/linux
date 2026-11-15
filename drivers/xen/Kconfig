@@ -162,6 +162,17 @@ config XEN_GRANT_DEV_ALLOC
 	  to other domains. This can be used to implement frontend drivers
 	  or as part of an inter-domain shared memory channel.
 
+config XEN_STATIC_SHM
+	bool "Character devices for Xen static shared memory"
+	depends on XEN && OF
+	select DMA_SHARED_BUFFER
+	help
+	  Static shared memory regions that Xen describes in this domain's
+	  device tree become /dev/xen-shm/<id>: mmap() maps a region as
+	  normal memory and an ioctl exports a slice of it as a DMA-BUF,
+	  so a device can import memory another domain shares with this
+	  one.
+
 config XEN_GRANT_DMA_ALLOC
 	bool "Allow allocating DMA capable buffers with grant reference module"
 	depends on XEN && HAS_DMA
