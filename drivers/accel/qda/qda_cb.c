@@ -69,7 +69,7 @@ static int qda_create_cb_device(struct qda_dev *qdev, struct device_node *cb_nod
 	}
 
 	dma_bits = qda_soc_dma_addr_bits(qdev);
-	ret = dma_set_mask(&pdev->dev, DMA_BIT_MASK(dma_bits));
+	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(dma_bits));
 	if (ret) {
 		drm_err(&qdev->drm_dev, "%u-bit DMA enable failed for %pOFn: %d\n",
 			dma_bits, cb_node, ret);
