@@ -54,6 +54,18 @@
 	};
 };
 
+&gmu {
+	status = "okay";
+};
+
+&gpu {
+	status = "okay";
+};
+
+&gpu_zap_shader {
+	firmware-name = "qcom/seca/gen81500_zap.mbn";
+};
+
 &i2c18 {
 	status = "okay";
 };
