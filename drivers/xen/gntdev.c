@@ -669,7 +669,7 @@ static long gntdev_ioctl_map_grant_ref(struct gntdev_priv *priv,
 
 	mutex_lock(&priv->lock);
 	gntdev_add_map(priv, map);
-	op.index = map->index << PAGE_SHIFT;
+	op.index = (u64)map->index << PAGE_SHIFT;
 
 	if (copy_to_user(u, &op, sizeof(op)) != 0) {
 		list_del(&map->next);
@@ -726,7 +726,7 @@ static long gntdev_ioctl_get_offset_for_vaddr(struct gntdev_priv *priv,
 	if (!map)
 		goto out_unlock;
 
-	op.offset = map->index << PAGE_SHIFT;
+	op.offset = (u64)map->index << PAGE_SHIFT;
 	op.count = map->count;
 	rv = 0;
 
@@ -770,8 +770,8 @@ static long gntdev_ioctl_notify(struct gntdev_priv *priv, void __user *u)
 	mutex_lock(&priv->lock);
 
 	list_for_each_entry(map, &priv->maps, next) {
-		uint64_t begin = map->index << PAGE_SHIFT;
-		uint64_t end = (map->index + map->count) << PAGE_SHIFT;
+		uint64_t begin = (u64)map->index << PAGE_SHIFT;
+		uint64_t end = (u64)(map->index + map->count) << PAGE_SHIFT;
 		if (op.index >= begin && op.index < end)
 			goto found;
 	}
@@ -789,7 +789,7 @@ static long gntdev_ioctl_notify(struct gntdev_priv *priv, void __user *u)
 	out_event = map->notify.event;
 
 	map->notify.flags = op.action;
-	map->notify.addr = op.index - (map->index << PAGE_SHIFT);
+	map->notify.addr = op.index - ((u64)map->index << PAGE_SHIFT);
 	map->notify.event = op.event_channel_port;
 
 	rc = 0;
