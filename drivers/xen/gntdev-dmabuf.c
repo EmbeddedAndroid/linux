@@ -736,7 +736,7 @@ long gntdev_ioctl_dmabuf_exp_from_refs(struct gntdev_priv *priv,
 	if (unlikely(gntdev_test_page_count(op.count)))
 		return -EINVAL;
 
-	refs = kcalloc(op.count, sizeof(*refs), GFP_KERNEL);
+	refs = kvcalloc(op.count, sizeof(*refs), GFP_KERNEL);
 	if (!refs)
 		return -ENOMEM;
 
@@ -754,7 +754,7 @@ long gntdev_ioctl_dmabuf_exp_from_refs(struct gntdev_priv *priv,
 		ret = -EFAULT;
 
 out:
-	kfree(refs);
+	kvfree(refs);
 	return ret;
 }
 
