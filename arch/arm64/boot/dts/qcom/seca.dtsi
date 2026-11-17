@@ -1095,6 +1095,20 @@
 			#interconnect-cells = <2>;
 		};
 
+		usb_0_hsphy: phy@88ea000 {
+			compatible = "qcom,seca-snps-eusb2-phy",
+				     "qcom,sm8550-snps-eusb2-phy";
+			reg = <0x0 0x088ea000 0x0 0x154>;
+			#phy-cells = <0>;
+
+			clocks = <&tcsrcc TCSR_USB2_0_CLKREF_EN>;
+			clock-names = "ref";
+
+			resets = <&negcc NE_GCC_QUSB2PHY_PRIM_BCR>;
+
+			status = "disabled";
+		};
+
 		negcc: clock-controller@8900000 {
 			compatible = "qcom,seca-negcc";
 			reg = <0x0 0x08900000 0x0 0xf4200>;
@@ -1134,6 +1148,65 @@
 			interrupt-controller;
 			#interrupt-cells = <3>;
 			#mbox-cells = <2>;
+		};
+
+		usb_0: usb@a600000 {
+			compatible = "qcom,seca-dwc3",
+				     "qcom,snps-dwc3";
+			reg = <0x0 0x0a600000 0x0 0xfc100>;
+
+			interrupts-extended = <&intc GIC_SPI 133 IRQ_TYPE_LEVEL_HIGH>,
+					      <&intc GIC_SPI 130 IRQ_TYPE_LEVEL_HIGH>,
+					      <&intc GIC_SPI 131 IRQ_TYPE_LEVEL_HIGH>,
+					      <&pdc 14 IRQ_TYPE_EDGE_BOTH>,
+					      <&pdc 15 IRQ_TYPE_EDGE_BOTH>,
+					      <&pdc 17 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "dwc_usb3",
+					  "pwr_event",
+					  "hs_phy_irq",
+					  "dp_hs_phy_irq",
+					  "dm_hs_phy_irq",
+					  "ss_phy_irq";
+
+			clocks = <&negcc NE_GCC_CNOC_USB3_PRIM_AXI_CLK>,
+				 <&negcc NE_GCC_USB31_PRIM_MASTER_CLK>,
+				 <&negcc NE_GCC_AGGRE_NOC_USB3_PRIM_AXI_CLK>,
+				 <&negcc NE_GCC_USB31_PRIM_SLEEP_CLK>,
+				 <&negcc NE_GCC_USB31_PRIM_MOCK_UTMI_CLK>,
+				 <&tcsrcc TCSR_USB3_0_CLKREF_EN>;
+			clock-names = "cfg_noc",
+				      "core",
+				      "iface",
+				      "sleep",
+				      "mock_utmi",
+				      "xo";
+
+			assigned-clocks = <&negcc NE_GCC_USB31_PRIM_MOCK_UTMI_CLK>,
+					  <&negcc NE_GCC_USB31_PRIM_MASTER_CLK>;
+			assigned-clock-rates = <19200000>, <200000000>;
+
+			interconnects = <&aggre1_noc MASTER_USB3_0 QCOM_ICC_TAG_ALWAYS
+					 &mc_virt SLAVE_EBI1 QCOM_ICC_TAG_ALWAYS>,
+					<&hscnoc MASTER_APPSS_PROC QCOM_ICC_TAG_ACTIVE_ONLY
+					 &cnoc_cfg SLAVE_USB3_0 QCOM_ICC_TAG_ACTIVE_ONLY>;
+			interconnect-names = "usb-ddr",
+					     "apps-usb";
+
+			power-domains = <&negcc NE_GCC_USB31_PRIM_GDSC>;
+
+			resets = <&negcc NE_GCC_USB31_PRIM_BCR>;
+
+			phys = <&usb_0_hsphy>;
+			phy-names = "usb2-phy";
+
+			iommus = <&apps_smmu_0 0x1360 0x0>;
+			dma-coherent;
+
+			snps,dis_u2_susphy_quirk;
+			snps,dis_enblslpm_quirk;
+			snps,usb2-lpm-disable;
+
+			status = "disabled";
 		};
 
 		pdc: interrupt-controller@b220000 {
