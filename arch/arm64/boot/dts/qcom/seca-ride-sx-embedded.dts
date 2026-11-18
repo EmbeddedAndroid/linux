@@ -112,6 +112,20 @@
 	status = "okay";
 };
 
+&remoteproc_cdsp0 {
+	firmware-name = "qcom/seca/cdsp.mbn",
+			"qcom/seca/cdsp_dtb.mbn";
+
+	status = "okay";
+};
+
+&remoteproc_cdsp1 {
+	firmware-name = "qcom/seca/cdsp1.mbn",
+			"qcom/seca/cdsp1_dtb.mbn";
+
+	status = "okay";
+};
+
 &spi16 {
 	status = "okay";
 };
