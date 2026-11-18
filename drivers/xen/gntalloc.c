@@ -162,7 +162,7 @@ static int add_grefs(struct ioctl_gntalloc_alloc_gref *op,
 
 undo:
 	mutex_lock(&gref_mutex);
-	gref_size -= (op->count - i);
+	gref_size -= op->count - list_count_nodes(&queue_file);
 
 	list_for_each_entry_safe(gref, next, &queue_file, next_file) {
 		list_del(&gref->next_file);
