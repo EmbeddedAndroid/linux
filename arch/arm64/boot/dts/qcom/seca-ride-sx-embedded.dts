@@ -85,6 +85,13 @@
 	};
 };
 
+&remoteproc_adsp {
+	firmware-name = "qcom/seca/adsp.mbn",
+			"qcom/seca/adsp_dtb.mbn";
+
+	status = "okay";
+};
+
 &tcsrcc {
 	vdda-qref-1p2-supply = <&vreg_qref_1p2>;
 	vdda-qref0-0p9-supply = <&vreg_qref_0p9>;
