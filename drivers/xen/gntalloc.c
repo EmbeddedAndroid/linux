@@ -192,6 +192,8 @@ static void __del_gref(struct gntalloc_gref *gref)
 			gnttab_end_foreign_access(gref->gref_id, gref->page);
 		else
 			gnttab_free_grant_reference(gref->gref_id);
+	} else if (gref->page) {
+		__free_page(gref->page);
 	}
 
 	gref_size--;
