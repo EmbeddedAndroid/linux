@@ -1243,9 +1243,18 @@ void gnttab_foreach_grant(struct page **pages,
 	}
 }
 
-int gnttab_map_refs(struct gnttab_map_grant_ref *map_ops,
-		    struct gnttab_map_grant_ref *kmap_ops,
-		    struct page **pages, unsigned int count)
+/**
+ * gnttab_map_refs_gfp - map grant references, like gnttab_map_refs
+ * @map_ops: the map operations
+ * @kmap_ops: kernel map operations (PV only), or NULL
+ * @pages: the pages the grants are mapped into
+ * @count: number of operations
+ * @gfp: allocation flags for the per-page p2m bookkeeping on Arm;
+ *       gnttab_map_refs passes GFP_NOWAIT for callers that may not sleep
+ */
+int gnttab_map_refs_gfp(struct gnttab_map_grant_ref *map_ops,
+			struct gnttab_map_grant_ref *kmap_ops,
+			struct page **pages, unsigned int count, gfp_t gfp)
 {
 	int i, ret;
 
@@ -1284,7 +1293,15 @@ int gnttab_map_refs(struct gnttab_map_grant_ref *map_ops,
 		}
 	}
 
-	return set_foreign_p2m_mapping(map_ops, kmap_ops, pages, count);
+	return set_foreign_p2m_mapping(map_ops, kmap_ops, pages, count, gfp);
+}
+EXPORT_SYMBOL_GPL(gnttab_map_refs_gfp);
+
+int gnttab_map_refs(struct gnttab_map_grant_ref *map_ops,
+		    struct gnttab_map_grant_ref *kmap_ops,
+		    struct page **pages, unsigned int count)
+{
+	return gnttab_map_refs_gfp(map_ops, kmap_ops, pages, count, GFP_NOWAIT);
 }
 EXPORT_SYMBOL_GPL(gnttab_map_refs);
 

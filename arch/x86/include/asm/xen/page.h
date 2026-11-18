@@ -64,7 +64,8 @@ extern unsigned long __init set_phys_range_identity(unsigned long pfn_s,
 #ifdef CONFIG_XEN_PV
 extern int set_foreign_p2m_mapping(struct gnttab_map_grant_ref *map_ops,
 				   struct gnttab_map_grant_ref *kmap_ops,
-				   struct page **pages, unsigned int count);
+				   struct page **pages, unsigned int count,
+				   gfp_t gfp);
 extern int clear_foreign_p2m_mapping(struct gnttab_unmap_grant_ref *unmap_ops,
 				     struct gnttab_unmap_grant_ref *kunmap_ops,
 				     struct page **pages, unsigned int count);
@@ -72,7 +73,7 @@ extern int clear_foreign_p2m_mapping(struct gnttab_unmap_grant_ref *unmap_ops,
 static inline int
 set_foreign_p2m_mapping(struct gnttab_map_grant_ref *map_ops,
 			struct gnttab_map_grant_ref *kmap_ops,
-			struct page **pages, unsigned int count)
+			struct page **pages, unsigned int count, gfp_t gfp)
 {
 	return 0;
 }

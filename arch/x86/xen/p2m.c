@@ -681,7 +681,8 @@ bool set_phys_to_machine(unsigned long pfn, unsigned long mfn)
 
 int set_foreign_p2m_mapping(struct gnttab_map_grant_ref *map_ops,
 			    struct gnttab_map_grant_ref *kmap_ops,
-			    struct page **pages, unsigned int count)
+			    struct page **pages, unsigned int count,
+			    gfp_t gfp)
 {
 	int i, ret = 0;
 	pte_t *pte;

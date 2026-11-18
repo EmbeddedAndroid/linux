@@ -90,7 +90,8 @@ EXPORT_SYMBOL_GPL(__pfn_to_mfn);
 
 int set_foreign_p2m_mapping(struct gnttab_map_grant_ref *map_ops,
 			    struct gnttab_map_grant_ref *kmap_ops,
-			    struct page **pages, unsigned int count)
+			    struct page **pages, unsigned int count,
+			    gfp_t gfp)
 {
 	int i;
 
@@ -100,8 +101,8 @@ int set_foreign_p2m_mapping(struct gnttab_map_grant_ref *map_ops,
 
 		if (map_ops[i].status)
 			continue;
-		if (likely(set_phys_to_machine(map_ops[i].host_addr >> XEN_PAGE_SHIFT,
-				    map_ops[i].dev_bus_addr >> XEN_PAGE_SHIFT)))
+		if (likely(__set_phys_to_machine_multi(map_ops[i].host_addr >> XEN_PAGE_SHIFT,
+				    map_ops[i].dev_bus_addr >> XEN_PAGE_SHIFT, 1, gfp)))
 			continue;
 
 		/*
@@ -148,7 +149,7 @@ int clear_foreign_p2m_mapping(struct gnttab_unmap_grant_ref *unmap_ops,
 }
 
 bool __set_phys_to_machine_multi(unsigned long pfn,
-		unsigned long mfn, unsigned long nr_pages)
+		unsigned long mfn, unsigned long nr_pages, gfp_t gfp)
 {
 	int rc;
 	unsigned long irqflags;
@@ -176,7 +177,7 @@ bool __set_phys_to_machine_multi(unsigned long pfn,
 		return true;
 	}
 
-	p2m_entry = kzalloc_obj(*p2m_entry, GFP_NOWAIT);
+	p2m_entry = kzalloc_obj(*p2m_entry, gfp);
 	if (!p2m_entry)
 		return false;
 
@@ -198,7 +199,7 @@ EXPORT_SYMBOL_GPL(__set_phys_to_machine_multi);
 
 bool __set_phys_to_machine(unsigned long pfn, unsigned long mfn)
 {
-	return __set_phys_to_machine_multi(pfn, mfn, 1);
+	return __set_phys_to_machine_multi(pfn, mfn, 1, GFP_NOWAIT);
 }
 EXPORT_SYMBOL_GPL(__set_phys_to_machine);
 

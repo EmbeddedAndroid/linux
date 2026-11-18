@@ -94,7 +94,8 @@ static inline xmaddr_t arbitrary_virt_to_machine(void *vaddr)
 
 extern int set_foreign_p2m_mapping(struct gnttab_map_grant_ref *map_ops,
 				   struct gnttab_map_grant_ref *kmap_ops,
-				   struct page **pages, unsigned int count);
+				   struct page **pages, unsigned int count,
+				   gfp_t gfp);
 
 extern int clear_foreign_p2m_mapping(struct gnttab_unmap_grant_ref *unmap_ops,
 				     struct gnttab_unmap_grant_ref *kunmap_ops,
@@ -102,7 +103,7 @@ extern int clear_foreign_p2m_mapping(struct gnttab_unmap_grant_ref *unmap_ops,
 
 bool __set_phys_to_machine(unsigned long pfn, unsigned long mfn);
 bool __set_phys_to_machine_multi(unsigned long pfn, unsigned long mfn,
-		unsigned long nr_pages);
+		unsigned long nr_pages, gfp_t gfp);
 
 static inline bool set_phys_to_machine(unsigned long pfn, unsigned long mfn)
 {
