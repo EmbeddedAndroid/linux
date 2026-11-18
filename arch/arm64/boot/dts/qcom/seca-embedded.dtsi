@@ -28,6 +28,24 @@
 	};
 };
 
+&i2c18 {
+	clocks = <&negcc NE_GCC_QUPV3_WRAP2_S4_CLK>;
+	clock-names = "se";
+
+	interconnects = <&clk_virt MASTER_QUP_CORE_2 QCOM_ICC_TAG_ALWAYS
+			 &clk_virt SLAVE_QUP_CORE_2 QCOM_ICC_TAG_ALWAYS>,
+			<&hscnoc MASTER_APPSS_PROC QCOM_ICC_TAG_ACTIVE_ONLY
+			 &cnoc_cfg SLAVE_QUP_2 QCOM_ICC_TAG_ACTIVE_ONLY>,
+			<&aggre1_noc MASTER_QUP_2 QCOM_ICC_TAG_ALWAYS
+			 &mc_virt SLAVE_EBI1 QCOM_ICC_TAG_ALWAYS>;
+	interconnect-names = "qup-core",
+			     "qup-config",
+			     "qup-memory";
+
+	pinctrl-0 = <&qup_i2c18_default>;
+	pinctrl-names = "default";
+};
+
 &qupv3_2 {
 	clocks = <&negcc NE_GCC_QUPV3_WRAP2_M_AHB_CLK>,
 		 <&negcc NE_GCC_QUPV3_WRAP2_S_AHB_CLK>;
@@ -37,6 +55,8 @@
 	interconnects = <&clk_virt MASTER_QUP_CORE_2 QCOM_ICC_TAG_ALWAYS
 			 &clk_virt SLAVE_QUP_CORE_2 QCOM_ICC_TAG_ALWAYS>;
 	interconnect-names = "qup-core";
+
+	iommus = <&apps_smmu_0 0x12a0 0x0>;
 };
 
 &remoteproc_adsp {
@@ -367,7 +387,39 @@
 	};
 };
 
+&spi16 {
+	clocks = <&negcc NE_GCC_QUPV3_WRAP2_S2_CLK>;
+	clock-names = "se";
+
+	interconnects = <&clk_virt MASTER_QUP_CORE_2 QCOM_ICC_TAG_ALWAYS
+			 &clk_virt SLAVE_QUP_CORE_2 QCOM_ICC_TAG_ALWAYS>,
+			<&hscnoc MASTER_APPSS_PROC QCOM_ICC_TAG_ACTIVE_ONLY
+			 &cnoc_cfg SLAVE_QUP_2 QCOM_ICC_TAG_ACTIVE_ONLY>,
+			<&aggre1_noc MASTER_QUP_2 QCOM_ICC_TAG_ALWAYS
+			 &mc_virt SLAVE_EBI1 QCOM_ICC_TAG_ALWAYS>;
+	interconnect-names = "qup-core",
+			     "qup-config",
+			     "qup-memory";
+
+	pinctrl-0 = <&qup_spi16_default>;
+	pinctrl-names = "default";
+};
+
 &tlmm {
+	qup_i2c18_default: qup-i2c18-default-state {
+		pins = "gpio154", "gpio155";
+		function = "qup2_se4";
+		drive-strength = <2>;
+		bias-pull-up;
+	};
+
+	qup_spi16_default: qup-spi16-default-state {
+		pins = "gpio145", "gpio146", "gpio147", "gpio148";
+		function = "qup2_se2";
+		drive-strength = <6>;
+		bias-disable;
+	};
+
 	qup_uart15_default: qup-uart15-default-state {
 		pins = "gpio143", "gpio144";
 		function = "qup2_se1";
