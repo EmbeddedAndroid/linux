@@ -277,6 +277,12 @@ static const struct qcom_pdm_domain_data adsp_root_pd = {
 	.services = { NULL },
 };
 
+static const struct qcom_pdm_domain_data adsp1_audio_pd = {
+	.domain = "msm/adsp1/audio_pd",
+	.instance_id = 123,
+	.services = { NULL },
+};
+
 static const struct qcom_pdm_domain_data adsp1_root_pd = {
 	.domain = "msm/adsp1/root_pd",
 	.instance_id = 123,
@@ -559,6 +565,15 @@ static const struct qcom_pdm_domain_data *sdm845_domains[] = {
 	NULL,
 };
 
+static const struct qcom_pdm_domain_data *seca_domains[] = {
+	&adsp_audio_pd,
+	&adsp_root_pd,
+	&adsp1_audio_pd,
+	&adsp1_root_pd,
+	&cdsp_root_pd,
+	NULL,
+};
+
 static const struct qcom_pdm_domain_data *shikra_domains[] = {
 	&cdsp_root_pd,
 	&mpss_root_pd,
@@ -679,6 +694,7 @@ static const struct of_device_id qcom_pdm_domains[] __maybe_unused = {
 	{ .compatible = "qcom,sdm660", .data = sdm660_domains, },
 	{ .compatible = "qcom,sdm670", .data = sdm670_domains, },
 	{ .compatible = "qcom,sdm845", .data = sdm845_domains, },
+	{ .compatible = "qcom,seca", .data = seca_domains, },
 	{ .compatible = "qcom,shikra", .data = shikra_domains, },
 	{ .compatible = "qcom,sm4250", .data = sm6115_domains, },
 	{ .compatible = "qcom,sm6115", .data = sm6115_domains, },
