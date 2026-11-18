@@ -753,6 +753,27 @@
 		};
 	};
 
+	smp2p-adsp1 {
+		compatible = "qcom,smp2p";
+		interrupts-extended = <&ipcc IPCC_MPROC_ADSP1 IPCC_MPROC_SIGNAL_SMP2P
+					     IRQ_TYPE_EDGE_RISING>;
+		mboxes = <&ipcc IPCC_MPROC_ADSP1 IPCC_MPROC_SIGNAL_SMP2P>;
+		qcom,smem = <617>, <616>;
+		qcom,local-pid = <0>;
+		qcom,remote-pid = <66>;
+
+		smp2p_adsp1_out: master-kernel {
+			qcom,entry-name = "master-kernel";
+			#qcom,smem-state-cells = <1>;
+		};
+
+		smp2p_adsp1_in: slave-kernel {
+			qcom,entry-name = "slave-kernel";
+			interrupt-controller;
+			#interrupt-cells = <2>;
+		};
+	};
+
 	smp2p-cdsp0 {
 		compatible = "qcom,smp2p";
 		interrupts-extended = <&ipcc IPCC_MPROC_NSP0 IPCC_MPROC_SIGNAL_SMP2P
@@ -951,6 +972,44 @@
 						dma-coherent;
 					};
 				};
+			};
+		};
+
+		remoteproc_adsp1: remoteproc@6000000 {
+			compatible = "qcom,seca-adsp1-pas",
+				     "qcom,nord-adsp1-pas";
+			reg = <0x0 0x06000000 0x0 0x10000>;
+
+			interrupts-extended = <&intc GIC_SPI 155 IRQ_TYPE_EDGE_RISING>,
+					      <&smp2p_adsp1_in 0 IRQ_TYPE_EDGE_RISING>,
+					      <&smp2p_adsp1_in 1 IRQ_TYPE_EDGE_RISING>,
+					      <&smp2p_adsp1_in 2 IRQ_TYPE_EDGE_RISING>,
+					      <&smp2p_adsp1_in 3 IRQ_TYPE_EDGE_RISING>,
+					      <&smp2p_adsp1_in 7 IRQ_TYPE_EDGE_RISING>;
+			interrupt-names = "wdog",
+					  "fatal",
+					  "ready",
+					  "handover",
+					  "stop-ack",
+					  "shutdown-ack";
+
+			memory-region = <&hpass_dsp1_mem>,
+					<&hpass_dsp1_dtb_mem>;
+
+			qcom,qmp = <&aoss_qmp>;
+
+			qcom,smem-states = <&smp2p_adsp1_out 0>;
+			qcom,smem-state-names = "stop";
+
+			status = "disabled";
+
+			glink-edge {
+				interrupts-extended = <&ipcc IPCC_MPROC_ADSP1
+							     IPCC_MPROC_SIGNAL_GLINK_QMP
+							     IRQ_TYPE_EDGE_RISING>;
+				mboxes = <&ipcc IPCC_MPROC_ADSP1 IPCC_MPROC_SIGNAL_GLINK_QMP>;
+				qcom,remote-pid = <66>;
+				label = "adsp1";
 			};
 		};
 
