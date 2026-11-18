@@ -7,19 +7,129 @@
 #include <dt-bindings/clock/qcom,rpmh.h>
 #include <dt-bindings/clock/qcom,seca-negcc.h>
 #include <dt-bindings/clock/qcom,seca-nwgcc.h>
+#include <dt-bindings/interconnect/qcom,icc.h>
+#include <dt-bindings/interconnect/qcom,seca-rpmh.h>
 #include <dt-bindings/power/qcom,rpmhpd.h>
 #include <dt-bindings/soc/qcom,rpmh-rsc.h>
 
 #include "seca.dtsi"
+
+/ {
+	clk_virt: interconnect-0 {
+		compatible = "qcom,seca-clk-virt";
+		qcom,bcm-voters = <&apps_bcm_voter>;
+		#interconnect-cells = <2>;
+	};
+
+	mc_virt: interconnect-1 {
+		compatible = "qcom,seca-mc-virt";
+		qcom,bcm-voters = <&apps_bcm_voter>;
+		#interconnect-cells = <2>;
+	};
+};
 
 &qupv3_2 {
 	clocks = <&negcc NE_GCC_QUPV3_WRAP2_M_AHB_CLK>,
 		 <&negcc NE_GCC_QUPV3_WRAP2_S_AHB_CLK>;
 	clock-names = "m-ahb",
 		      "s-ahb";
+
+	interconnects = <&clk_virt MASTER_QUP_CORE_2 QCOM_ICC_TAG_ALWAYS
+			 &clk_virt SLAVE_QUP_CORE_2 QCOM_ICC_TAG_ALWAYS>;
+	interconnect-names = "qup-core";
 };
 
 &soc {
+	cnoc_main: interconnect@1500000 {
+		compatible = "qcom,seca-cnoc-main";
+		reg = <0x0 0x01500000 0x0 0x1d200>;
+		qcom,bcm-voters = <&apps_bcm_voter>;
+		#interconnect-cells = <2>;
+	};
+
+	cnoc_cfg: interconnect@1600000 {
+		compatible = "qcom,seca-cnoc-cfg";
+		reg = <0x0 0x01600000 0x0 0xb200>;
+		qcom,bcm-voters = <&apps_bcm_voter>;
+		#interconnect-cells = <2>;
+	};
+
+	system_noc: interconnect@1680000 {
+		compatible = "qcom,seca-system-noc";
+		reg = <0x0 0x01680000 0x0 0x1b080>;
+		qcom,bcm-voters = <&apps_bcm_voter>;
+		#interconnect-cells = <2>;
+	};
+
+	aggre2_noc_tile: interconnect@16c0000 {
+		compatible = "qcom,seca-aggre2-noc-tile";
+		reg = <0x0 0x016c0000 0x0 0x1b400>;
+		qcom,bcm-voters = <&apps_bcm_voter>;
+		#interconnect-cells = <2>;
+	};
+
+	aggre1_noc: interconnect@16e0000 {
+		compatible = "qcom,seca-aggre1-noc";
+		reg = <0x0 0x016e0000 0x0 0x1d400>;
+		qcom,bcm-voters = <&apps_bcm_voter>;
+		#interconnect-cells = <2>;
+		clocks = <&negcc NE_GCC_AGGRE_NOC_USB2_AXI_CLK>,
+			 <&negcc NE_GCC_AGGRE_NOC_USB3_PRIM_AXI_CLK>,
+			 <&negcc NE_GCC_AGGRE_NOC_USB3_SEC_AXI_CLK>;
+	};
+
+	aggre2_noc: interconnect@1700000 {
+		compatible = "qcom,seca-aggre2-noc";
+		reg = <0x0 0x01700000 0x0 0x1b400>;
+		qcom,bcm-voters = <&apps_bcm_voter>;
+		#interconnect-cells = <2>;
+		clocks = <&rpmhcc RPMH_IPA_CLK>;
+	};
+
+	aggre1_noc_tile: interconnect@1720000 {
+		compatible = "qcom,seca-aggre1-noc-tile";
+		reg = <0x0 0x01720000 0x0 0x23400>;
+		qcom,bcm-voters = <&apps_bcm_voter>;
+		#interconnect-cells = <2>;
+		clocks = <&nwgcc NW_GCC_AGGRE_NOC_UFS_0_PHY_AXI_CLK>,
+			 <&nwgcc NW_GCC_AGGRE_NOC_UFS_1_PHY_AXI_CLK>;
+	};
+
+	mmss_noc_sf: interconnect@1780000 {
+		compatible = "qcom,seca-mmss-noc-sf";
+		reg = <0x0 0x01780000 0x0 0x40000>;
+		qcom,bcm-voters = <&apps_bcm_voter>;
+		#interconnect-cells = <2>;
+	};
+
+	mmss_noc_hf: interconnect@17c0000 {
+		compatible = "qcom,seca-mmss-noc-hf";
+		reg = <0x0 0x017c0000 0x0 0x2e400>;
+		qcom,bcm-voters = <&apps_bcm_voter>;
+		#interconnect-cells = <2>;
+	};
+
+	pcie_cfg: interconnect@1ba0000 {
+		compatible = "qcom,seca-pcie-cfg";
+		reg = <0x0 0x01ba0000 0x0 0x7200>;
+		qcom,bcm-voters = <&apps_bcm_voter>;
+		#interconnect-cells = <2>;
+	};
+
+	pcie_data_outbound: interconnect@1bc0000 {
+		compatible = "qcom,seca-pcie-data-outbound";
+		reg = <0x0 0x01bc0000 0x0 0x17000>;
+		qcom,bcm-voters = <&apps_bcm_voter>;
+		#interconnect-cells = <2>;
+	};
+
+	pcie_data_inbound: interconnect@1c00000 {
+		compatible = "qcom,seca-pcie-data-inbound";
+		reg = <0x0 0x01c00000 0x0 0x50080>;
+		qcom,bcm-voters = <&apps_bcm_voter>;
+		#interconnect-cells = <2>;
+	};
+
 	ufs_mem_phy: phy@1d40000 {
 		compatible = "qcom,seca-qmp-ufs-phy",
 			     "qcom,sm8650-qmp-ufs-phy";
@@ -41,6 +151,20 @@
 		#phy-cells = <0>;
 
 		status = "disabled";
+	};
+
+	hscnoc: interconnect@2000000 {
+		compatible = "qcom,seca-hscnoc";
+		reg = <0x0 0x02000000 0x0 0xb2d080>;
+		qcom,bcm-voters = <&apps_bcm_voter>;
+		#interconnect-cells = <2>;
+	};
+
+	hpass_ag_noc: interconnect@5fc0000 {
+		compatible = "qcom,seca-hpass-ag-noc";
+		reg = <0x0 0x05fc0000 0x0 0x37080>;
+		qcom,bcm-voters = <&apps_bcm_voter>;
+		#interconnect-cells = <2>;
 	};
 
 	negcc: clock-controller@8900000 {
@@ -164,6 +288,20 @@
 			};
 		};
 	};
+
+	nsp_data_noc_0: interconnect@1f200000 {
+		compatible = "qcom,seca-nsp-data-noc-0";
+		reg = <0x0 0x1f200000 0x0 0x2a200>;
+		qcom,bcm-voters = <&apps_bcm_voter>;
+		#interconnect-cells = <2>;
+	};
+
+	nsp_data_noc_1: interconnect@1f600000 {
+		compatible = "qcom,seca-nsp-data-noc-1";
+		reg = <0x0 0x1f600000 0x0 0x2a200>;
+		qcom,bcm-voters = <&apps_bcm_voter>;
+		#interconnect-cells = <2>;
+	};
 };
 
 &tlmm {
@@ -178,6 +316,13 @@
 &uart15 {
 	clocks = <&negcc NE_GCC_QUPV3_WRAP2_S1_CLK>;
 	clock-names = "se";
+
+	interconnects = <&clk_virt MASTER_QUP_CORE_2 QCOM_ICC_TAG_ALWAYS
+			 &clk_virt SLAVE_QUP_CORE_2 QCOM_ICC_TAG_ALWAYS>,
+			<&hscnoc MASTER_APPSS_PROC QCOM_ICC_TAG_ACTIVE_ONLY
+			 &cnoc_cfg SLAVE_QUP_2 QCOM_ICC_TAG_ACTIVE_ONLY>;
+	interconnect-names = "qup-core",
+			     "qup-config";
 
 	pinctrl-0 = <&qup_uart15_default>;
 	pinctrl-names = "default";
@@ -200,6 +345,13 @@
 		      "tx_lane0_sync_clk",
 		      "rx_lane0_sync_clk",
 		      "rx_lane1_sync_clk";
+
+	interconnects = <&aggre1_noc_tile MASTER_UFS_MEM QCOM_ICC_TAG_ALWAYS
+			 &mc_virt SLAVE_EBI1 QCOM_ICC_TAG_ALWAYS>,
+			<&hscnoc MASTER_APPSS_PROC QCOM_ICC_TAG_ACTIVE_ONLY
+			 &cnoc_cfg SLAVE_UFS_MEM_CFG QCOM_ICC_TAG_ACTIVE_ONLY>;
+	interconnect-names = "ufs-ddr",
+			     "cpu-ufs";
 
 	resets = <&nwgcc NW_GCC_UFS_0_PHY_BCR>;
 	reset-names = "rst";
