@@ -105,6 +105,13 @@
 	status = "okay";
 };
 
+&remoteproc_adsp1 {
+	firmware-name = "qcom/seca/adsp1.mbn",
+			"qcom/seca/adsp1_dtb.mbn";
+
+	status = "okay";
+};
+
 &spi16 {
 	status = "okay";
 };
