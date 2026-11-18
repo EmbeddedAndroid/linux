@@ -368,8 +368,8 @@ int gntdev_map_grant_pages(struct gntdev_grant_map *map)
 	}
 
 	pr_debug("map %d+%d\n", map->index, map->count);
-	err = gnttab_map_refs(map->map_ops, map->kmap_ops, map->pages,
-			map->count);
+	err = gnttab_map_refs_gfp(map->map_ops, map->kmap_ops, map->pages,
+				  map->count, GFP_KERNEL);
 
 	for (i = 0; i < map->count; i++) {
 		if (map->map_ops[i].status == GNTST_okay) {
