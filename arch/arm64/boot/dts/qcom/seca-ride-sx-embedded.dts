@@ -90,10 +90,22 @@
 	};
 };
 
+&i2c18 {
+	status = "okay";
+};
+
+&qupv3_2 {
+	firmware-name = "qcom/seca/qupv3fw.elf";
+};
+
 &remoteproc_adsp {
 	firmware-name = "qcom/seca/adsp.mbn",
 			"qcom/seca/adsp_dtb.mbn";
 
+	status = "okay";
+};
+
+&spi16 {
 	status = "okay";
 };
 
