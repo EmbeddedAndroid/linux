@@ -1057,6 +1057,7 @@ properties:
 
       - items:
           - enum:
+              - qcom,seca-ride-sx
               - qcom,seca-ride-sx-embedded
           - const: qcom,seca
 
