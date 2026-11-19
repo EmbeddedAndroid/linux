@@ -109,7 +109,7 @@ static inline u8 vfe_gen4_rdi_wm(struct vfe_device *vfe, u8 rdi)
 /* VFE-gen4 Bus Register Base Addresses */
 #define BUS_REG_BASE_1190	(0x800)
 #define BUS_REG_BASE		(IS_VFE_1190(vfe) ? BUS_REG_BASE_1190 : \
-						    BUS_REG_BASE_1080)
+						    vfe_gen4_bus_reg_base(vfe))
 
 #define BUS_REG_OFFSET_1080(n)		(0x500 + (n) * 0x100)
 #define BUS_REG_OFFSET_1190(n)		(0x1000 + (n) * 0x200)
