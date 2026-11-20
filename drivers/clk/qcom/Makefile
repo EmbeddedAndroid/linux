@@ -59,6 +59,7 @@ obj-$(CONFIG_CLK_NORD_VIDEOCC) += videocc-glymur.o
 obj-$(CONFIG_CLK_SECA_NEGCC) += negcc-seca.o
 obj-$(CONFIG_CLK_SECA_NWGCC) += nwgcc-seca.o
 obj-$(CONFIG_CLK_SECA_TCSRCC) += tcsrcc-seca.o
+obj-$(CONFIG_CLK_SECA_VIDEOCC) += videocc-seca.o
 obj-$(CONFIG_CLK_SHIKRA_AUDIOCORECC) += audiocorecc-shikra.o
 obj-$(CONFIG_CLK_SHIKRA_GCC) += gcc-shikra.o
 obj-$(CONFIG_CLK_X1E80100_CAMCC) += camcc-x1e80100.o
