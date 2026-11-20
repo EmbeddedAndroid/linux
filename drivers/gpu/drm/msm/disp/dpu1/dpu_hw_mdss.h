@@ -228,6 +228,7 @@ enum dpu_intf {
 	INTF_8,
 	INTF_9,
 	INTF_10,
+	INTF_11,
 	INTF_MAX
 };
 
