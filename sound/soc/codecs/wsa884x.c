@@ -2136,7 +2136,8 @@ static int wsa884x_probe(struct sdw_slave *pdev,
 
 static int wsa884x_runtime_suspend(struct device *dev)
 {
-	struct regmap *regmap = dev_get_regmap(dev, NULL);
+	struct wsa884x_priv *wsa884x = dev_get_drvdata(dev);
+	struct regmap *regmap = wsa884x->regmap;
 
 	regcache_cache_only(regmap, true);
 	regcache_mark_dirty(regmap);
@@ -2146,7 +2147,8 @@ static int wsa884x_runtime_suspend(struct device *dev)
 
 static int wsa884x_runtime_resume(struct device *dev)
 {
-	struct regmap *regmap = dev_get_regmap(dev, NULL);
+	struct wsa884x_priv *wsa884x = dev_get_drvdata(dev);
+	struct regmap *regmap = wsa884x->regmap;
 	int ret;
 
 	regcache_cache_only(regmap, false);
