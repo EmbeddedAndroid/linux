@@ -877,6 +877,13 @@ static int q6apm_dai_compr_open(struct snd_soc_component *component,
 	else
 		prtd->phys = prtd->dma_buffer.addr | (pdata->sid << 32);
 
+	ret = q6apm_map_memory_fixed_region(dev, graph_id, prtd->phys, size);
+	if (ret) {
+		dev_err(dev, "Failed to map the compress buffer: %d\n", ret);
+		snd_dma_free_pages(&prtd->dma_buffer);
+		goto err_close_graph;
+	}
+
 	snd_compr_set_runtime_buffer(stream, &prtd->dma_buffer);
 	spin_lock_init(&prtd->lock);
 
