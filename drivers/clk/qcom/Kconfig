@@ -360,6 +360,17 @@ config CLK_SECA_TCSRCC
 	  eUSB2 PHYs and votes the QREF supplies of each path.
 	  Say Y or M if you want to use any of these PHYs.
 
+config CLK_SECA_VIDEOCC
+	tristate "SecaAU Video Clock Controller"
+	depends on ARM64 || COMPILE_TEST
+	select CLK_SECA_NWGCC
+	default m if ARCH_QCOM
+	help
+	  Support for the video clock controller on SecaAU devices.
+	  It provides the clocks, resets and GDSCs of the video codec core.
+	  Say Y or M if you want to support video devices and functionality
+	  such as video encode and decode.
+
 config CLK_SHIKRA_GCC
 	tristate "Shikra Global Clock Controller"
 	depends on ARM64 || COMPILE_TEST
