@@ -273,6 +273,20 @@ static int sdw_program_master_port_params(struct sdw_bus *bus,
 						  bus->params.next_bank);
 }
 
+/*
+ * A Peripheral that has not attached has no device number: its port
+ * registers would be accessed at device number 0, where any unattached
+ * device, or none, answers.
+ */
+static bool sdw_slave_rt_enumerated(struct sdw_slave_runtime *s_rt)
+{
+	if (completion_done(&s_rt->slave->enumeration_complete))
+		return true;
+
+	dev_dbg(&s_rt->slave->dev, "Not enumerated, skip its ports\n");
+	return false;
+}
+
 /**
  * sdw_program_port_params() - Programs transport parameters of Master(s)
  * and Slave(s)
@@ -288,6 +302,9 @@ static int sdw_program_port_params(struct sdw_master_runtime *m_rt)
 
 	/* Program transport & port parameters for Slave(s) */
 	list_for_each_entry(s_rt, &m_rt->slave_rt_list, m_rt_node) {
+		if (!sdw_slave_rt_enumerated(s_rt))
+			continue;
+
 		list_for_each_entry(p_rt, &s_rt->port_list, port_node) {
 			ret = sdw_program_slave_port_params(bus, s_rt, p_rt);
 			if (ret < 0)
@@ -396,6 +413,9 @@ static int sdw_enable_disable_ports(struct sdw_master_runtime *m_rt, bool en)
 
 	/* Enable/Disable Slave port(s) */
 	list_for_each_entry(s_rt, &m_rt->slave_rt_list, m_rt_node) {
+		if (!sdw_slave_rt_enumerated(s_rt))
+			continue;
+
 		list_for_each_entry(s_port, &s_rt->port_list, port_node) {
 			ret = sdw_enable_disable_slave_ports(m_rt->bus, s_rt,
 							     s_port, en);
@@ -591,6 +611,9 @@ static int sdw_prep_deprep_ports(struct sdw_master_runtime *m_rt, bool prep)
 
 	/* Prepare/De-prepare Slave port(s) */
 	list_for_each_entry(s_rt, &m_rt->slave_rt_list, m_rt_node) {
+		if (!sdw_slave_rt_enumerated(s_rt))
+			continue;
+
 		list_for_each_entry(p_rt, &s_rt->port_list, port_node) {
 			ret = sdw_prep_deprep_slave_ports(m_rt->bus, s_rt,
 							  p_rt, prep);
