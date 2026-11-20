@@ -394,7 +394,16 @@ static int hdmi_eliza_pll_prepare(struct clk_hw *hw)
 static int hdmi_eliza_pll_determine_rate(struct clk_hw *hw,
 					struct clk_rate_request *req)
 {
-	req->rate = clamp_t(unsigned long, req->rate, HDMI_PLL_MIN_FREQ, HDMI_PLL_MAX_FREQ);
+	struct hdmi_pll_eliza *pll = hw_clk_to_pll(hw);
+
+	/*
+	 * The PHY programs the MPLL for the TMDS rate before SRAM init, so the
+	 * only rate the pixel clock source may use is the programmed one.
+	 */
+	if (pll->programmed)
+		req->rate = pll->rate;
+	else
+		req->rate = clamp_t(unsigned long, req->rate, HDMI_PLL_MIN_FREQ, HDMI_PLL_MAX_FREQ);
 
 	return 0;
 }
