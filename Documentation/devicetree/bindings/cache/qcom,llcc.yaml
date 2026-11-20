@@ -40,6 +40,7 @@ properties:
           - qcom,sc8280xp-llcc
           - qcom,sdm670-llcc
           - qcom,sdm845-llcc
+          - qcom,seca-llcc
           - qcom,shikra-llcc
           - qcom,sm6350-llcc
           - qcom,sm7150-llcc
@@ -274,6 +275,7 @@ allOf:
         compatible:
           contains:
             enum:
+              - qcom,seca-llcc
               - qcom,x1e80100-llcc
     then:
       properties:
