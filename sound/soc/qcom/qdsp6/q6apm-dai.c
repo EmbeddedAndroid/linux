@@ -81,6 +81,7 @@ struct q6apm_dai_rtd {
 	phys_addr_t pos_phys;
 	unsigned int pcm_size;
 	unsigned int push_pull_size;
+	unsigned int push_pull_periods;
 	unsigned int pcm_count;
 	unsigned int periods;
 	uint64_t bytes_sent;
@@ -371,7 +372,8 @@ static int q6apm_dai_prepare(struct snd_soc_component *component,
 	prtd->last_pos_index = 0;
 	prtd->pcm_count = snd_pcm_lib_period_bytes(substream);
 	if (q6apm_is_graph_in_push_pull_mode(prtd->graph)) {
-		if (prtd->pcm_size != prtd->push_pull_size) {
+		if (prtd->pcm_size != prtd->push_pull_size ||
+		    prtd->periods != prtd->push_pull_periods) {
 			ret = q6apm_push_pull_config(prtd->graph, prtd->phys, prtd->pos_phys,
 						     prtd->pcm_size);
 			if (ret < 0) {
@@ -387,6 +389,7 @@ static int q6apm_dai_prepare(struct snd_soc_component *component,
 				return ret;
 			}
 			prtd->push_pull_size = prtd->pcm_size;
+			prtd->push_pull_periods = prtd->periods;
 		}
 	} else {
 		ret = q6apm_alloc_fragments(prtd->graph, substream->stream, prtd->phys,
