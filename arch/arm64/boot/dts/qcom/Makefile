@@ -22,6 +22,10 @@ eliza-cqs-evk-emmc-el2-dtbs	:= eliza-cqs-evk-emmc.dtb eliza-el2.dtbo
 
 dtb-$(CONFIG_ARCH_QCOM)	+= eliza-cqs-evk-emmc-el2.dtb
 
+eliza-cqs-evk-emmc-el2-imx577-camera-dtbs	:= eliza-cqs-evk-emmc.dtb eliza-el2.dtbo eliza-cqs-evk-imx577-camera.dtbo
+
+dtb-$(CONFIG_ARCH_QCOM)	+= eliza-cqs-evk-emmc-el2-imx577-camera.dtb
+
 eliza-cqs-evk-emmc-imx577-camera-dtbs	:= eliza-cqs-evk-emmc.dtb eliza-cqs-evk-imx577-camera.dtbo
 
 dtb-$(CONFIG_ARCH_QCOM)	+= eliza-cqs-evk-emmc-imx577-camera.dtb
