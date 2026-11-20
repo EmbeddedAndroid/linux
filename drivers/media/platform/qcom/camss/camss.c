@@ -6818,9 +6818,11 @@ static void camss_detect_legacy_phy(struct camss *camss)
 	struct device_node *remote;
 	struct device_node *ep;
 
+	bool has_ops = camss->res->csiphy_num &&
+		       camss->res->csiphy_res[0].csiphy.hw_ops;
+
 	/* Without CAMSS CSIPHY ops, only standalone PHY devices are possible */
-	camss->legacy_phy = camss->res->csiphy_num &&
-			    camss->res->csiphy_res[0].csiphy.hw_ops;
+	camss->legacy_phy = has_ops;
 
 	/* Find first remote-endpoint and determine if its a PHY */
 	for_each_endpoint_of_node(camss->dev->of_node, ep) {
@@ -6828,7 +6830,7 @@ static void camss_detect_legacy_phy(struct camss *camss)
 		if (!remote)
 			continue;
 
-		camss->legacy_phy = !of_node_name_eq(remote, "phy");
+		camss->legacy_phy = has_ops && !of_node_name_eq(remote, "phy");
 		of_node_put(remote);
 		of_node_put(ep);
 		break;
