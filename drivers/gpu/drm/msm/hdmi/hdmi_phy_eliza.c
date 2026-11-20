@@ -52,9 +52,9 @@ struct hdmi_pll_eliza {
 	struct device *dev;
 	struct clk_hw clk_hw;
 	unsigned long rate;
+	bool programmed;
 	struct hdmi_eliza_phy_pll_reg_cfg cfg;
 };
-
 
 struct hdmi_pll_eliza_mpll {
 	unsigned long rate;
@@ -294,6 +294,36 @@ static int hdmi_eliza_pll_calculator(struct hdmi_pll_eliza *pll,
 	return 0;
 }
 
+static void hdmi_eliza_pll_set(struct hdmi_phy *phy, u32 reg, u32 val)
+{
+	hdmi_phy_write(phy, reg, hdmi_phy_read(phy, reg) | val);
+}
+
+static void hdmi_eliza_pll_write_cfg(struct hdmi_phy *phy,
+				     const struct hdmi_eliza_phy_pll_reg_cfg *cfg)
+{
+	hdmi_eliza_pll_set(phy, REG_HDMI_ELIZA_PHY_MISC_CONTROL_2, cfg->rxvcosel << 4);
+	hdmi_eliza_pll_set(phy, REG_HDMI_ELIZA_PHY_MISC_CONTROL_1, 0x11 << 2);
+	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_MISC_CONTROL_0, 0x5);
+
+	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_10, cfg->cp_int_holder & 0xff);
+	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_12, cfg->cp_prop_holder & 0xff);
+	hdmi_eliza_pll_set(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_0, BIT(0));
+	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_2, cfg->multiplier & 0xff);
+	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_3, (cfg->multiplier >> 8) & 0xff);
+	hdmi_eliza_pll_set(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_0, BIT(2));
+	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_6, cfg->quotient & 0xff);
+	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_7, (cfg->quotient >> 8) & 0xff);
+	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_8, cfg->remainder & 0xff);
+	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_9, (cfg->remainder >> 8) & 0xff);
+	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_4, cfg->denominator & 0xff);
+	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_5, (cfg->denominator >> 8) & 0xff);
+	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_1, cfg->tx_clk_div & 0x7);
+	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_14, 0x82);
+	hdmi_phy_update_bits(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_0, BIT(6), 0);
+	hdmi_eliza_pll_set(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_0, (cfg->vco_freq & 0x3) << 3);
+}
+
 static int hdmi_eliza_pll_configure_pll(struct hdmi_pll_eliza *pll,
 					unsigned long rate,
 					unsigned long parent_rate)
@@ -302,7 +332,6 @@ static int hdmi_eliza_pll_configure_pll(struct hdmi_pll_eliza *pll,
 	const struct hdmi_eliza_phy_pll_reg_cfg *cfg;
 	struct hdmi_eliza_phy_pll_reg_cfg cfg_calc = {};
 	int ret;
-	u32 val;
 
 	cfg = hdmi_pll_eliza_mpll_lut_decoder(rate);
 	if (!cfg) {
@@ -316,42 +345,11 @@ static int hdmi_eliza_pll_configure_pll(struct hdmi_pll_eliza *pll,
 		cfg = &cfg_calc;
 	}
 
-	hdmi_phy_update_bits(phy, REG_HDMI_ELIZA_PHY_CLOCK_PATTERN_CONFIG_0, BIT(0), cfg->clk_pat);
+	if (pll->rate == rate && pll->programmed)
+		return 0;
 
-	hdmi_phy_update_bits(phy, REG_HDMI_ELIZA_PHY_MISC_CONTROL_2, GENMASK(6, 4), cfg->rxvcosel << 4);
-	hdmi_phy_update_bits(phy, REG_HDMI_ELIZA_PHY_MISC_CONTROL_1, GENMASK(7, 2), 0x11 << 2);
-
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_MISC_CONTROL_0, 0);
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_10,
-		       cfg->cp_int_holder & 0xff);
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_12,
-		       cfg->cp_prop_holder & 0xff);
-
-	hdmi_phy_update_bits(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_0, BIT(0), BIT(0));
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_2,
-		       cfg->multiplier & 0xff);
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_3,
-		       (cfg->multiplier >> 8) & 0xff);
-
-	hdmi_phy_update_bits(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_0, BIT(2), BIT(2));
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_6, cfg->quotient & 0xff);
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_7,
-		       (cfg->quotient >> 8) & 0xff);
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_8, cfg->remainder & 0xff);
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_9,
-		       (cfg->remainder >> 8) & 0xff);
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_4, cfg->denominator & 0xff);
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_5,
-		       (cfg->denominator >> 8) & 0xff);
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_1,
-		       cfg->tx_clk_div & 0x7);
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_14, 0x82);
-
-	val = hdmi_phy_read(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_0);
-	val &= ~BIT(6);
-	val &= ~(0x3 << 3);
-	val |= (cfg->vco_freq & 0x3) << 3;
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_0, val);
+	hdmi_eliza_pll_write_cfg(phy, cfg);
+	pll->programmed = true;
 
 	/*
 	 * Ensure that vco configuration gets flushed to hardware before
@@ -378,7 +376,7 @@ static int hdmi_eliza_pll_prepare(struct clk_hw *hw)
 	struct hdmi_pll_eliza *pll = hw_clk_to_pll(hw);
 	struct hdmi_phy *phy = pll_get_phy(pll);
 
-	hdmi_phy_update_bits(phy, REG_HDMI_ELIZA_PHY_CLOCK_PATTERN_CONFIG_0, BIT(1), BIT(1));
+	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_CLOCK_PATTERN_CONFIG_0, BIT(1));
 
 	/*
 	 * This Synopsys PLL does not have a PLL lock-like register, thus there
@@ -388,7 +386,7 @@ static int hdmi_eliza_pll_prepare(struct clk_hw *hw)
 	 * thus obviously the professional solution is to delay.
 	 * 8 ms was figured out during tests, not based on any datasheet.
 	 */
-	mdelay(8);
+	msleep(8);
 
 	return 0;
 }
@@ -498,213 +496,165 @@ static const char * const hdmi_phy_eliza_clk_names[] = {
 	"xo",
 };
 
-static void hdmi_eliza_phy_txn_write(struct hdmi_phy *phy, u32 reg, u32 value)
+#define HDMI_ELIZA_PHY_TXN_STRIDE	(REG_HDMI_ELIZA_PHY_TX1_CONTROL_0 - REG_HDMI_ELIZA_PHY_TX0_CONTROL_0)
+
+/*
+ * The PHY register programming sequence requires 200 us between register
+ * writes; the CR (control register) bus behind CR_ACCESS_CMD is clocked
+ * from the reference clock and misses back-to-back accesses.
+ */
+static void hdmi_eliza_phy_conf(struct hdmi_phy *phy, u32 reg, u32 mask, u32 val)
 {
-	const int phy_txn_offset = REG_HDMI_ELIZA_PHY_TX1_CONTROL_0 - REG_HDMI_ELIZA_PHY_TX0_CONTROL_0;
+	hdmi_phy_update_bits(phy, reg, mask, val);
+	usleep_range(200, 500);
+}
+
+static void hdmi_eliza_phy_conf_write(struct hdmi_phy *phy, u32 reg, u32 val)
+{
+	hdmi_phy_write(phy, reg, val);
+	usleep_range(200, 500);
+}
+
+static void hdmi_eliza_phy_txn_conf(struct hdmi_phy *phy, u32 reg, u32 mask, u32 val)
+{
 	int i;
 
 	for (i = 0; i < HDMI_PHY_TXN_CONTROL; i++)
-		hdmi_phy_write(phy, reg + i * phy_txn_offset, value);
+		hdmi_eliza_phy_conf(phy, reg + i * HDMI_ELIZA_PHY_TXN_STRIDE, mask, val);
 }
 
-static void hdmi_eliza_phy_txn_update(struct hdmi_phy *phy, u32 reg, u32 mask, u32 value)
+static void hdmi_eliza_phy_txn_conf_write(struct hdmi_phy *phy, u32 reg, u32 val)
 {
-	const int phy_txn_offset = REG_HDMI_ELIZA_PHY_TX1_CONTROL_0 - REG_HDMI_ELIZA_PHY_TX0_CONTROL_0;
 	int i;
 
 	for (i = 0; i < HDMI_PHY_TXN_CONTROL; i++)
-		hdmi_phy_update_bits(phy, reg + i * phy_txn_offset, mask, value);
+		hdmi_eliza_phy_conf_write(phy, reg + i * HDMI_ELIZA_PHY_TXN_STRIDE, val);
 }
 
-static void hdmi_eliza_phy_configure(struct hdmi_phy *phy)
+static void hdmi_eliza_phy_cr_write(struct hdmi_phy *phy, u16 addr, u16 data)
 {
-	hdmi_eliza_phy_txn_update(phy, REG_HDMI_ELIZA_PHY_TX0_CONTROL_8, BIT(2), BIT(2));
-	hdmi_phy_update_bits(phy, REG_HDMI_ELIZA_PHY_TX_COMMON_CONTROL_0, BIT(0), BIT(0));
-
-	usleep_range(5, 5000);
-
-	hdmi_phy_update_bits(phy, REG_HDMI_ELIZA_PHY_REFCLK_CONTROL_0, BIT(0), BIT(0));
-	hdmi_phy_update_bits(phy, REG_HDMI_ELIZA_PHY_REFCLK_CONTROL_1, GENMASK(2, 0), 0x1);
-	/* Select MPLLB */
-	hdmi_phy_update_bits(phy, REG_HDMI_ELIZA_PHY_MISC_CONTROL_3, BIT(0), 0);
-
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_11, 0x18);
-	/*
-	 * MPLLB_CONTROL_12: missing in programming sequence, but present in
-	 * downstream
-	 */
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_12, 0x12);
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_13, 0x18);
-	hdmi_phy_update_bits(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_16, BIT(1), BIT(1));
-	/*
-	 * MISC_CONTROL_2: missing in programming sequence, but present in
-	 * downstream
-	 */
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_MISC_CONTROL_2, 0x4d);
+	hdmi_eliza_phy_conf_write(phy, REG_HDMI_ELIZA_PHY_CR_ADDRESS_LSB, addr & 0xff);
+	hdmi_eliza_phy_conf_write(phy, REG_HDMI_ELIZA_PHY_CR_ADDRESS_MSB, addr >> 8);
+	hdmi_eliza_phy_conf_write(phy, REG_HDMI_ELIZA_PHY_CR_WRDATA_LSB, data & 0xff);
+	hdmi_eliza_phy_conf_write(phy, REG_HDMI_ELIZA_PHY_CR_WRDATA_MSB, data >> 8);
+	hdmi_eliza_phy_conf_write(phy, REG_HDMI_ELIZA_PHY_CR_ACCESS_CMD, 0x3);
+	ndelay(400);
+	hdmi_eliza_phy_conf_write(phy, REG_HDMI_ELIZA_PHY_CR_ACCESS_CMD, 0);
 }
 
-static void hdmi_eliza_phy_tx_lane_config(struct hdmi_phy *phy,
-					  unsigned long pixclock)
-{
-	const unsigned int bpp = 24;
-
-	/* Set BIT(3) for MPLLB and clear BIT(0) */
-	hdmi_eliza_phy_txn_update(phy, REG_HDMI_ELIZA_PHY_TX0_CONTROL_8, BIT(0) | BIT(3), BIT(3));
-	hdmi_eliza_phy_txn_update(phy, REG_HDMI_ELIZA_PHY_TX0_CONTROL_9, BIT(0) | BIT(1) | BIT(2), 0);
-	hdmi_eliza_phy_txn_update(phy, REG_HDMI_ELIZA_PHY_TX0_CONTROL_10, BIT(4) | BIT(5), BIT(4) | BIT(5));
-
-	hdmi_eliza_phy_txn_write(phy, REG_HDMI_ELIZA_PHY_TX0_CONTROL_7, 0);
-	hdmi_eliza_phy_txn_write(phy, REG_HDMI_ELIZA_PHY_TX0_CONTROL_6, 0);
-	hdmi_eliza_phy_txn_write(phy, REG_HDMI_ELIZA_PHY_TX0_CONTROL_5, 0x3e);
-
-	hdmi_eliza_phy_txn_update(phy, REG_HDMI_ELIZA_PHY_TX0_CONTROL_10, BIT(3), 0);
-
-	if (pixclock * bpp >= HDMI_PHY_MAX_BIT_RATE)
-		hdmi_phy_update_bits(phy, REG_HDMI_ELIZA_PHY_TX_COMMON_CONTROL_0, BIT(2), 0);
-	else
-		hdmi_phy_update_bits(phy, REG_HDMI_ELIZA_PHY_TX_COMMON_CONTROL_0, BIT(2), BIT(2));
-
-	hdmi_eliza_phy_txn_update(phy, REG_HDMI_ELIZA_PHY_TX0_CONTROL_9, BIT(3) | BIT(4), BIT(3) | BIT(4));
-}
-
-static void hdmi_eliza_phy_disable_hstx_reset(struct hdmi_phy *phy)
-{
-	hdmi_eliza_phy_txn_write(phy, REG_HDMI_ELIZA_PHY_TX0_CONTROL_0, 0);
-
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_RX1_CONFIG_15, 0);
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_RX2_CONFIG_15, 0);
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_REXT_CONTROL_2, 0);
-}
-
-static int hdmi_eliza_phy_ready_poll(struct hdmi_phy *phy, u32 reg, u32 mask, u32 val)
+static int hdmi_eliza_phy_poll_set(struct hdmi_phy *phy, u32 reg, u32 mask)
 {
 	u32 state;
-	const u32 sleep_us = 2000;
-	const u32 timeout_us = 3000000;
+	int ret;
 
-	if (readl_poll_timeout_atomic((phy->mmio + reg), state,
-				      ((state & mask) == val),
-				      sleep_us, timeout_us)) {
-		DRM_ERROR("poll timeout, reg: 0x%x status=0x%x", reg, state);
-
-		return -ETIMEDOUT;
-	}
-
-	return 0;
-}
-
-static int hdmi_eliza_phy_tx_ready_poll(struct hdmi_phy *phy)
-{
-	const int phy_txn_offset = REG_HDMI_ELIZA_PHY_TX1_CONTROL_0 - REG_HDMI_ELIZA_PHY_TX0_CONTROL_0;
-	int ret = 0;
-
-	/* Poll until TXn_ACK==0, downstream is wrong here */
-	for (int i = 0; i < HDMI_PHY_TXN_CONTROL; i++) {
-		ret |= hdmi_eliza_phy_ready_poll(phy,
-						 REG_HDMI_ELIZA_PHY_TX0_CONTROL_2 + i * phy_txn_offset,
-						 BIT(0), 0x0);
-		if (ret)
-			break;
-	}
+	ret = readl_poll_timeout(phy->mmio + reg, state, state & mask, 2000, 1000000);
+	if (ret)
+		DRM_DEV_ERROR(&phy->pdev->dev, "poll timeout, reg: 0x%x status: 0x%x\n",
+			      reg, state);
 
 	return ret;
 }
 
-static int hdmi_eliza_phy_sram_init(struct hdmi_phy *phy)
+static void hdmi_eliza_phy_lane_config(struct hdmi_phy *phy)
 {
-	int ret;
-
-	ret = hdmi_eliza_phy_ready_poll(phy, REG_HDMI_ELIZA_PHY_SRAM_CONTROL_1, BIT(0), BIT(0));
-	if (ret)
-		return ret;
-
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_CR_ADDRESS_LSB, 0x3);
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_CR_ADDRESS_MSB, 0xe0);
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_CR_WRDATA_LSB, 0x18);
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_CR_WRDATA_MSB, 0);
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_CR_ACCESS_CMD, 0x3);
-	ndelay(400);
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_CR_ACCESS_CMD, 0);
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_CR_ADDRESS_LSB, 0x5);
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_CR_ADDRESS_MSB, 0x90);
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_CR_WRDATA_LSB, 0xc);
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_CR_WRDATA_MSB, 0);
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_CR_ACCESS_CMD, 0x3);
-	ndelay(400);
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_CR_ACCESS_CMD, 0x0);
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_MISC_CONTROL_0, 0x7);
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_CR_ADDRESS_LSB, 0x1a);
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_CR_ADDRESS_MSB, 0xe0);
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_CR_WRDATA_LSB, 0xa0);
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_CR_WRDATA_MSB, 0);
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_CR_ACCESS_CMD, 0x3);
-	ndelay(400);
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_CR_ACCESS_CMD, 0);
-
-	hdmi_phy_update_bits(phy, REG_HDMI_ELIZA_PHY_SRAM_CONTROL_0,
-			     BIT(1), BIT(1));
-
-	return 0;
+	/* TX lanes clocked from MPLLB */
+	hdmi_eliza_phy_txn_conf(phy, REG_HDMI_ELIZA_PHY_TX0_CONTROL_8, BIT(3), BIT(3));
+	hdmi_eliza_phy_txn_conf(phy, REG_HDMI_ELIZA_PHY_TX0_CONTROL_8, BIT(0), 0);
+	hdmi_eliza_phy_txn_conf(phy, REG_HDMI_ELIZA_PHY_TX0_CONTROL_9, GENMASK(2, 0), 0);
+	hdmi_eliza_phy_txn_conf(phy, REG_HDMI_ELIZA_PHY_TX0_CONTROL_10, BIT(5) | BIT(4),
+				BIT(5) | BIT(4));
+	hdmi_eliza_phy_txn_conf_write(phy, REG_HDMI_ELIZA_PHY_TX0_CONTROL_7, 0);
+	hdmi_eliza_phy_txn_conf_write(phy, REG_HDMI_ELIZA_PHY_TX0_CONTROL_6, 0);
+	hdmi_eliza_phy_txn_conf_write(phy, REG_HDMI_ELIZA_PHY_TX0_CONTROL_5, 0x3e);
+	hdmi_eliza_phy_txn_conf(phy, REG_HDMI_ELIZA_PHY_TX0_CONTROL_10, BIT(3), 0);
+	hdmi_eliza_phy_conf(phy, REG_HDMI_ELIZA_PHY_TX_COMMON_CONTROL_0, BIT(2), BIT(2));
+	hdmi_eliza_phy_txn_conf(phy, REG_HDMI_ELIZA_PHY_TX0_CONTROL_9, BIT(4) | BIT(3),
+				BIT(4) | BIT(3));
 }
 
-static void hdmi_eliza_phy_init(struct hdmi_phy *phy,
-				   unsigned long pixclock)
+static void hdmi_eliza_phy_init(struct hdmi_phy *phy, unsigned long pixclock)
 {
+	struct hdmi_pll_eliza *pll = phy->pll;
+	u32 ack[HDMI_PHY_TXN_CONTROL];
+	int i, ret;
 
-	/* pa_iso_disable() */
-	hdmi_phy_update_bits(phy, REG_HDMI_ELIZA_PHY_MISC_CONTROL_3,
-			     BIT(1) | BIT(2) | BIT(3), 0);
+	/* Power up: drop PA isolation, release PHY reset, hold the TX lanes */
+	hdmi_eliza_phy_conf(phy, REG_HDMI_ELIZA_PHY_MISC_CONTROL_3, GENMASK(3, 1), 0);
+	hdmi_eliza_phy_conf_write(phy, REG_HDMI_ELIZA_PHY_RESET_CONTROL_0, 0);
+	hdmi_eliza_phy_txn_conf(phy, REG_HDMI_ELIZA_PHY_TX0_CONTROL_9, BIT(5), BIT(5));
 
-	/* sw_reset() */
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_RESET_CONTROL_0, 0x1);
+	hdmi_eliza_phy_txn_conf(phy, REG_HDMI_ELIZA_PHY_TX0_CONTROL_8, BIT(2), BIT(2));
+	hdmi_eliza_phy_conf(phy, REG_HDMI_ELIZA_PHY_TX_COMMON_CONTROL_0, BIT(0), BIT(0));
+	usleep_range(5, 5000);
+	hdmi_eliza_phy_conf(phy, REG_HDMI_ELIZA_PHY_REFCLK_CONTROL_0, BIT(0), BIT(0));
+	/* Select MPLLB */
+	hdmi_eliza_phy_conf(phy, REG_HDMI_ELIZA_PHY_MISC_CONTROL_3, BIT(0), 0);
+	hdmi_eliza_phy_conf_write(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_11, 0x18);
+	hdmi_eliza_phy_conf_write(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_12, 0x12);
+	hdmi_eliza_phy_conf_write(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_13, 0x18);
+	hdmi_eliza_phy_conf(phy, REG_HDMI_ELIZA_PHY_MPLLB_CONTROL_16, BIT(1), BIT(1));
+	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_MISC_CONTROL_2, 0x4d);
 
-	/* assert_tx_lane_reset() */
-	hdmi_eliza_phy_txn_update(phy, REG_HDMI_ELIZA_PHY_TX0_CONTROL_9, BIT(5), BIT(5));
+	hdmi_eliza_phy_lane_config(phy);
 
-	/* phy_init_config() */
-	hdmi_eliza_phy_configure(phy);
-
-	hdmi_eliza_phy_tx_lane_config(phy, pixclock);
-
-	hdmi_eliza_pll_configure_pll(phy->pll, 396000000, 19200000);
-
-	/* sram_mode() (with SRAM init) */
-	hdmi_phy_update_bits(phy, REG_HDMI_ELIZA_PHY_SRAM_CONTROL_0,
-			     BIT(0) | BIT(1), 0);
-	/* qcsram_init() */
 	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_QCSRAM_CONFIG_3, BIT(0));
 	usleep_range(5, 5000);
 	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_QCSRAM_CONFIG_3, 0);
 
-	/* deassert_tx_lane_reset() */
-	hdmi_eliza_phy_txn_update(phy, REG_HDMI_ELIZA_PHY_TX0_CONTROL_9, BIT(5), 0);
+	hdmi_eliza_phy_txn_conf(phy, REG_HDMI_ELIZA_PHY_TX0_CONTROL_9, BIT(5), 0);
 
-	hdmi_eliza_phy_disable_hstx_reset(phy);
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_RESET_CONTROL_0, 0);
-
-	if (hdmi_eliza_phy_sram_init(phy))
+	/* The MPLL must be programmed for the final rate before SRAM init */
+	pll->programmed = false;
+	ret = hdmi_eliza_pll_configure_pll(pll, pixclock, REF_CLK_HZ);
+	if (ret)
 		return;
 
-	if (hdmi_eliza_phy_tx_ready_poll(phy))
+	/* Release HSTX reset */
+	hdmi_eliza_phy_txn_conf_write(phy, REG_HDMI_ELIZA_PHY_TX0_CONTROL_9, 0x18);
+	hdmi_eliza_phy_txn_conf_write(phy, REG_HDMI_ELIZA_PHY_TX0_CONTROL_0, 0);
+	hdmi_eliza_phy_conf_write(phy, REG_HDMI_ELIZA_PHY_RX1_CONFIG_15, 0);
+	hdmi_eliza_phy_conf_write(phy, REG_HDMI_ELIZA_PHY_RX2_CONFIG_15, 0);
+	hdmi_eliza_phy_conf_write(phy, REG_HDMI_ELIZA_PHY_REXT_CONTROL_2, 0);
+	hdmi_eliza_phy_conf_write(phy, REG_HDMI_ELIZA_PHY_RESET_CONTROL_0, 0);
+
+	/* SRAM init done, then the CR overrides, then SRAM external load done */
+	ret = hdmi_eliza_phy_poll_set(phy, REG_HDMI_ELIZA_PHY_SRAM_CONTROL_1, BIT(0));
+	if (ret)
 		return;
-};
+
+	hdmi_eliza_phy_cr_write(phy, 0xe003, 0x18);
+	hdmi_eliza_phy_cr_write(phy, 0x9005, 0x0c);
+	hdmi_eliza_phy_conf_write(phy, REG_HDMI_ELIZA_PHY_MISC_CONTROL_0, 0x7);
+	hdmi_eliza_phy_cr_write(phy, 0xe01a, 0xa0);
+	hdmi_eliza_phy_conf_write(phy, REG_HDMI_ELIZA_PHY_SRAM_CONTROL_0, BIT(1));
+
+	for (i = 0; i < HDMI_PHY_TXN_CONTROL; i++) {
+		ret = hdmi_eliza_phy_poll_set(phy, REG_HDMI_ELIZA_PHY_TX0_CONTROL_2 +
+					      i * HDMI_ELIZA_PHY_TXN_STRIDE, BIT(0));
+		ack[i] = hdmi_phy_read(phy, REG_HDMI_ELIZA_PHY_TX0_CONTROL_2 +
+				       i * HDMI_ELIZA_PHY_TXN_STRIDE);
+		if (ret)
+			break;
+	}
+
+	DRM_DEV_INFO(&phy->pdev->dev,
+		     "phy init %lu Hz: sram 0x%x tx ack 0x%x 0x%x 0x%x 0x%x\n", pixclock,
+		     hdmi_phy_read(phy, REG_HDMI_ELIZA_PHY_SRAM_CONTROL_1),
+		     ack[0], i > 0 ? ack[1] : 0, i > 1 ? ack[2] : 0, i > 2 ? ack[3] : 0);
+}
 
 static void hdmi_eliza_phy_powerup(struct hdmi_phy *phy,
 				   unsigned long pixclock)
 {
-	hdmi_phy_update_bits(phy, REG_HDMI_ELIZA_PHY_TX_COMMON_CONTROL_0, BIT(1), BIT(1));
+	hdmi_eliza_phy_conf(phy, REG_HDMI_ELIZA_PHY_TX_COMMON_CONTROL_0, BIT(1), BIT(1));
 }
 
 static void hdmi_eliza_phy_deinit(struct hdmi_phy *phy)
 {
-	/* sw_reset() */
-	hdmi_phy_write(phy, REG_HDMI_ELIZA_PHY_RESET_CONTROL_0, 1);
-	hdmi_eliza_phy_txn_write(phy, REG_HDMI_ELIZA_PHY_TX0_CONTROL_0, 1);
-	/* assert_tx_lane_reset() */
-	hdmi_eliza_phy_txn_update(phy, REG_HDMI_ELIZA_PHY_TX0_CONTROL_9, BIT(5), BIT(5));
-	/* pa_iso_enable() */
-	hdmi_phy_update_bits(phy, REG_HDMI_ELIZA_PHY_MISC_CONTROL_3,
-			     BIT(1) | BIT(2) | BIT(3), BIT(1) | BIT(2) | BIT(3));
+	hdmi_eliza_phy_conf_write(phy, REG_HDMI_ELIZA_PHY_RESET_CONTROL_0, 1);
+	hdmi_eliza_phy_txn_conf(phy, REG_HDMI_ELIZA_PHY_TX0_CONTROL_9, BIT(5), BIT(5));
+	hdmi_eliza_phy_conf(phy, REG_HDMI_ELIZA_PHY_MISC_CONTROL_3, GENMASK(3, 1), GENMASK(3, 1));
+	((struct hdmi_pll_eliza *)phy->pll)->programmed = false;
 }
 
 static void hdmi_eliza_phy_powerdown(struct hdmi_phy *phy)
