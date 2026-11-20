@@ -525,10 +525,18 @@ static int q6apm_dai_open(struct snd_soc_component *component,
 		goto err;
 	}
 
-	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		runtime->hw = q6apm_dai_hardware_playback;
-	else if (substream->stream == SNDRV_PCM_STREAM_CAPTURE)
+	} else if (substream->stream == SNDRV_PCM_STREAM_CAPTURE) {
 		runtime->hw = q6apm_dai_hardware_capture;
+		/*
+		 * The capture floor is for the read shared memory endpoint; a
+		 * push mode endpoint writes the ring buffer itself, so only the
+		 * 480 frame period step limits it.
+		 */
+		if (q6apm_is_graph_in_push_pull_mode(prtd->graph))
+			runtime->hw.period_bytes_min = PLAYBACK_MIN_PERIOD_SIZE;
+	}
 
 	/* Ensure that buffer size is a multiple of period size */
 	ret = snd_pcm_hw_constraint_integer(runtime, SNDRV_PCM_HW_PARAM_PERIODS);
