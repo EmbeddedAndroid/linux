@@ -843,15 +843,15 @@ static void _dpu_crtc_get_pcc_coeff(struct drm_crtc_state *state,
 		return;
 
 	cfg->r.r = CONVERT_S3_15(ctm->matrix[0]);
-	cfg->g.r = CONVERT_S3_15(ctm->matrix[1]);
-	cfg->b.r = CONVERT_S3_15(ctm->matrix[2]);
+	cfg->r.g = CONVERT_S3_15(ctm->matrix[1]);
+	cfg->r.b = CONVERT_S3_15(ctm->matrix[2]);
 
-	cfg->r.g = CONVERT_S3_15(ctm->matrix[3]);
+	cfg->g.r = CONVERT_S3_15(ctm->matrix[3]);
 	cfg->g.g = CONVERT_S3_15(ctm->matrix[4]);
-	cfg->b.g = CONVERT_S3_15(ctm->matrix[5]);
+	cfg->g.b = CONVERT_S3_15(ctm->matrix[5]);
 
-	cfg->r.b = CONVERT_S3_15(ctm->matrix[6]);
-	cfg->g.b = CONVERT_S3_15(ctm->matrix[7]);
+	cfg->b.r = CONVERT_S3_15(ctm->matrix[6]);
+	cfg->b.g = CONVERT_S3_15(ctm->matrix[7]);
 	cfg->b.b = CONVERT_S3_15(ctm->matrix[8]);
 }
 
