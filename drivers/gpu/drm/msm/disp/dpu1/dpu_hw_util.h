@@ -9,6 +9,7 @@
 
 #include <linux/io.h>
 #include <linux/slab.h>
+#include <drm/drm_color_mgmt.h>
 #include "dpu_hw_mdss.h"
 #include "dpu_hw_catalog.h"
 
@@ -28,9 +29,10 @@
 #define CALCULATE_WD_LOAD_VALUE(fps) \
 	((uint32_t)((MS_TICKS_IN_SEC * XO_CLK_RATE)/(MDP_TICK_COUNT * fps)))
 
-extern const struct dpu_csc_cfg dpu_csc_YUV2RGB_601L;
-extern const struct dpu_csc_cfg dpu_csc10_YUV2RGB_601L;
 extern const struct dpu_csc_cfg dpu_csc10_rgb2yuv_601l;
+
+void dpu_csc_yuv2rgb(struct dpu_csc_cfg *cfg, enum drm_color_encoding encoding,
+		     enum drm_color_range range, bool csc10);
 
 /*
  * This is the common struct maintained by each sub block

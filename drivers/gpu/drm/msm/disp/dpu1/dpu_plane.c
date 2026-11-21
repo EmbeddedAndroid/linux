@@ -514,22 +514,6 @@ static void _dpu_plane_setup_pixel_ext(struct dpu_hw_scaler3_cfg *scale_cfg,
 	}
 }
 
-static const struct dpu_csc_cfg *_dpu_plane_get_csc(struct dpu_sw_pipe *pipe,
-						    const struct msm_format *fmt)
-{
-	const struct dpu_csc_cfg *csc_ptr;
-
-	if (!MSM_FORMAT_IS_YUV(fmt))
-		return NULL;
-
-	if (BIT(DPU_SSPP_CSC_10BIT) & pipe->sspp->cap->features)
-		csc_ptr = &dpu_csc10_YUV2RGB_601L;
-	else
-		csc_ptr = &dpu_csc_YUV2RGB_601L;
-
-	return csc_ptr;
-}
-
 static void _dpu_plane_setup_scaler(struct dpu_sw_pipe *pipe,
 		const struct msm_format *fmt, bool color_fill,
 		struct dpu_sw_pipe_cfg *pipe_cfg)
@@ -1397,24 +1381,20 @@ int dpu_assign_plane_resources(struct dpu_global_state *global_state,
 
 static void dpu_plane_flush_csc(struct dpu_plane *pdpu, struct dpu_sw_pipe *pipe)
 {
-	const struct msm_format *format =
-		msm_framebuffer_format(pdpu->base.state->fb);
-	const struct dpu_csc_cfg *csc_ptr;
+	const struct drm_plane_state *state = pdpu->base.state;
+	struct dpu_csc_cfg csc;
 
-	if (!pipe->sspp || !pipe->sspp->ops.setup_csc)
+	if (!pipe->sspp || !pipe->sspp->ops.setup_csc ||
+	    !MSM_FORMAT_IS_YUV(msm_framebuffer_format(state->fb)))
 		return;
 
-	csc_ptr = _dpu_plane_get_csc(pipe, format);
-	if (!csc_ptr)
-		return;
+	dpu_csc_yuv2rgb(&csc, state->color_encoding, state->color_range,
+			test_bit(DPU_SSPP_CSC_10BIT, &pipe->sspp->cap->features));
 
 	DPU_DEBUG_PLANE(pdpu, "using 0x%X 0x%X 0x%X...\n",
-			csc_ptr->csc_mv[0],
-			csc_ptr->csc_mv[1],
-			csc_ptr->csc_mv[2]);
+			csc.csc_mv[0], csc.csc_mv[1], csc.csc_mv[2]);
 
-	pipe->sspp->ops.setup_csc(pipe->sspp, csc_ptr);
-
+	pipe->sspp->ops.setup_csc(pipe->sspp, &csc);
 }
 
 /**
@@ -1840,6 +1820,7 @@ static struct drm_plane *dpu_plane_init_common(struct drm_device *dev,
 	struct msm_drm_private *priv = dev->dev_private;
 	struct dpu_kms *kms = to_dpu_kms(priv->kms);
 	uint32_t supported_rotations;
+	unsigned int i;
 	int ret;
 
 	pdpu = drmm_universal_plane_alloc(dev, struct dpu_plane, base,
@@ -1875,6 +1856,22 @@ static struct drm_plane *dpu_plane_init_common(struct drm_device *dev,
 
 	drm_plane_create_rotation_property(plane,
 		    DRM_MODE_ROTATE_0, supported_rotations);
+
+	for (i = 0; i < num_formats; i++) {
+		if (drm_format_info(format_list[i])->is_yuv) {
+			ret = drm_plane_create_color_properties(plane,
+								BIT(DRM_COLOR_YCBCR_BT601) |
+								BIT(DRM_COLOR_YCBCR_BT709) |
+								BIT(DRM_COLOR_YCBCR_BT2020),
+								BIT(DRM_COLOR_YCBCR_LIMITED_RANGE) |
+								BIT(DRM_COLOR_YCBCR_FULL_RANGE),
+								DRM_COLOR_YCBCR_BT601,
+								DRM_COLOR_YCBCR_LIMITED_RANGE);
+			if (ret)
+				DPU_ERROR("failed to install color properties, rc = %d\n", ret);
+			break;
+		}
+	}
 
 	drm_plane_enable_fb_damage_clips(plane);
 
