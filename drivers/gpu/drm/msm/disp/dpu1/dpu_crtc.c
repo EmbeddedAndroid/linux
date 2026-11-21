@@ -14,6 +14,7 @@
 
 #include <drm/drm_atomic.h>
 #include <drm/drm_blend.h>
+#include <drm/drm_color_mgmt.h>
 #include <drm/drm_crtc.h>
 #include <drm/drm_flip_work.h>
 #include <drm/drm_framebuffer.h>
@@ -42,7 +43,7 @@
 #define DPU_CRTC_FRAME_DONE_TIMEOUT_MS	60
 
 #define	CONVERT_S3_15(val) \
-	(((((u64)val) & ~BIT_ULL(63)) >> 17) & GENMASK_ULL(17, 0))
+	(drm_color_ctm_s31_32_to_qm_n((val), 3, 15) & GENMASK_ULL(17, 0))
 
 static struct dpu_kms *_dpu_crtc_get_kms(struct drm_crtc *crtc)
 {
