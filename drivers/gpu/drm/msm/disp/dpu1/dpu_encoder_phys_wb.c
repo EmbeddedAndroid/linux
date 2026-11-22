@@ -561,14 +561,17 @@ static void dpu_encoder_phys_wb_prepare_wb_job(struct dpu_encoder_phys *phys_enc
 {
 	const struct msm_format *format;
 	struct dpu_hw_wb_cfg *wb_cfg;
+	unsigned long lock_flags;
 	int ret;
 	struct dpu_encoder_phys_wb *wb_enc = to_dpu_encoder_phys_wb(phys_enc);
 
 	if (!job->fb)
 		return;
 
+	spin_lock_irqsave(phys_enc->enc_spinlock, lock_flags);
 	wb_enc->wb_job = job;
 	wb_enc->wb_conn = job->connector;
+	spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
 
 	wb_cfg = &wb_enc->wb_cfg;
 
@@ -611,13 +614,23 @@ static void dpu_encoder_phys_wb_cleanup_wb_job(struct dpu_encoder_phys *phys_enc
 		struct drm_writeback_job *job)
 {
 	struct dpu_encoder_phys_wb *wb_enc = to_dpu_encoder_phys_wb(phys_enc);
+	unsigned long lock_flags;
 
 	if (!job->fb)
 		return;
 
 	msm_framebuffer_cleanup(job->fb, false);
-	wb_enc->wb_job = NULL;
-	wb_enc->wb_conn = NULL;
+
+	/*
+	 * A completed job is cleaned up from a worker, which can run after the
+	 * next job has been prepared: only drop the pointers if they are ours.
+	 */
+	spin_lock_irqsave(phys_enc->enc_spinlock, lock_flags);
+	if (wb_enc->wb_job == job) {
+		wb_enc->wb_job = NULL;
+		wb_enc->wb_conn = NULL;
+	}
+	spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
 }
 
 static bool dpu_encoder_phys_wb_is_valid_for_commit(struct dpu_encoder_phys *phys_enc)
