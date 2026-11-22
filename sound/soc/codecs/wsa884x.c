@@ -2151,6 +2151,10 @@ static int wsa884x_runtime_resume(struct device *dev)
 	struct regmap *regmap = wsa884x->regmap;
 	int ret;
 
+	/* Not attached yet: wsa884x_update_status syncs the cache on attach */
+	if (!wsa884x->hw_init)
+		return 0;
+
 	regcache_cache_only(regmap, false);
 	ret = regcache_sync(regmap);
 	if (ret) {
