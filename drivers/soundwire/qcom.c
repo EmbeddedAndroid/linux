@@ -826,6 +826,10 @@ static int qcom_swrm_enumerate(struct sdw_bus *bus)
 				((u64)buf1[0] << 40);
 		}
 
+		/* An all-zero ID comes from a read nobody answered */
+		if (!addr)
+			continue;
+
 		sdw_extract_slave_id(bus, addr, &id);
 		found = false;
 		ctrl->clock_stop_not_supported = false;
