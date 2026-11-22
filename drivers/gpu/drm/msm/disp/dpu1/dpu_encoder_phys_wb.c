@@ -550,8 +550,17 @@ static void dpu_encoder_phys_wb_disable(struct dpu_encoder_phys *phys_enc)
 	 * WB support is added to those targets will need to add
 	 * the legacy teardown sequence as well.
 	 */
-	if (phys_enc->dpu_kms->catalog->mdss_ver->core_major_ver >= 5)
+	if (phys_enc->dpu_kms->catalog->mdss_ver->core_major_ver >= 5) {
 		dpu_encoder_helper_phys_cleanup(phys_enc);
+
+		/*
+		 * Without CWB this CTL drives only the WB: its final start
+		 * kicks a frame that never completes with the WB unbound, and
+		 * the CTL stays busy until MDSS loses power. Abort that frame.
+		 */
+		if (!dpu_encoder_helper_get_cwb_mask(phys_enc))
+			phys_enc->hw_ctl->ops.reset(phys_enc->hw_ctl);
+	}
 
 	phys_enc->enable_state = DPU_ENC_DISABLED;
 }
