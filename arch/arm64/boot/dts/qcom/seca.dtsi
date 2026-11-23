@@ -763,6 +763,10 @@
 				compatible = "qcom,geni-i2c";
 				reg = <0x0 0x00880000 0x0 0x4000>;
 				interrupts = <GIC_SPI 373 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -770,6 +774,10 @@
 				compatible = "qcom,geni-spi";
 				reg = <0x0 0x00880000 0x0 0x4000>;
 				interrupts = <GIC_SPI 373 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -791,6 +799,10 @@
 				compatible = "qcom,geni-i2c";
 				reg = <0x0 0x00888000 0x0 0x4000>;
 				interrupts = <GIC_SPI 584 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -798,6 +810,10 @@
 				compatible = "qcom,geni-spi";
 				reg = <0x0 0x00888000 0x0 0x4000>;
 				interrupts = <GIC_SPI 584 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -812,6 +828,10 @@
 				compatible = "qcom,geni-i2c";
 				reg = <0x0 0x0088c000 0x0 0x4000>;
 				interrupts = <GIC_SPI 585 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -819,6 +839,10 @@
 				compatible = "qcom,geni-spi";
 				reg = <0x0 0x0088c000 0x0 0x4000>;
 				interrupts = <GIC_SPI 585 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -833,6 +857,10 @@
 				compatible = "qcom,geni-i2c";
 				reg = <0x0 0x00890000 0x0 0x4000>;
 				interrupts = <GIC_SPI 586 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -840,6 +868,10 @@
 				compatible = "qcom,geni-spi";
 				reg = <0x0 0x00890000 0x0 0x4000>;
 				interrupts = <GIC_SPI 586 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -854,6 +886,10 @@
 				compatible = "qcom,geni-i2c";
 				reg = <0x0 0x00894000 0x0 0x4000>;
 				interrupts = <GIC_SPI 587 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -861,6 +897,10 @@
 				compatible = "qcom,geni-spi";
 				reg = <0x0 0x00894000 0x0 0x4000>;
 				interrupts = <GIC_SPI 587 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -875,6 +915,10 @@
 				compatible = "qcom,geni-i2c";
 				reg = <0x0 0x00898000 0x0 0x4000>;
 				interrupts = <GIC_SPI 461 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -882,6 +926,10 @@
 				compatible = "qcom,geni-spi";
 				reg = <0x0 0x00898000 0x0 0x4000>;
 				interrupts = <GIC_SPI 461 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -906,6 +954,10 @@
 				compatible = "qcom,geni-i2c";
 				reg = <0x0 0x00980000 0x0 0x4000>;
 				interrupts = <GIC_SPI 314 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -913,6 +965,10 @@
 				compatible = "qcom,geni-spi";
 				reg = <0x0 0x00980000 0x0 0x4000>;
 				interrupts = <GIC_SPI 314 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -927,6 +983,10 @@
 				compatible = "qcom,geni-i2c";
 				reg = <0x0 0x00984000 0x0 0x4000>;
 				interrupts = <GIC_SPI 513 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -934,6 +994,10 @@
 				compatible = "qcom,geni-spi";
 				reg = <0x0 0x00984000 0x0 0x4000>;
 				interrupts = <GIC_SPI 513 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -948,6 +1012,10 @@
 				compatible = "qcom,geni-i2c";
 				reg = <0x0 0x00988000 0x0 0x4000>;
 				interrupts = <GIC_SPI 514 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -955,6 +1023,10 @@
 				compatible = "qcom,geni-spi";
 				reg = <0x0 0x00988000 0x0 0x4000>;
 				interrupts = <GIC_SPI 514 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -969,6 +1041,10 @@
 				compatible = "qcom,geni-i2c";
 				reg = <0x0 0x0098c000 0x0 0x4000>;
 				interrupts = <GIC_SPI 515 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -976,6 +1052,10 @@
 				compatible = "qcom,geni-spi";
 				reg = <0x0 0x0098c000 0x0 0x4000>;
 				interrupts = <GIC_SPI 515 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -990,6 +1070,10 @@
 				compatible = "qcom,geni-i2c";
 				reg = <0x0 0x00990000 0x0 0x4000>;
 				interrupts = <GIC_SPI 516 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -997,6 +1081,10 @@
 				compatible = "qcom,geni-spi";
 				reg = <0x0 0x00990000 0x0 0x4000>;
 				interrupts = <GIC_SPI 516 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -1011,6 +1099,10 @@
 				compatible = "qcom,geni-i2c";
 				reg = <0x0 0x00994000 0x0 0x4000>;
 				interrupts = <GIC_SPI 517 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -1018,6 +1110,10 @@
 				compatible = "qcom,geni-spi";
 				reg = <0x0 0x00994000 0x0 0x4000>;
 				interrupts = <GIC_SPI 517 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -1042,6 +1138,10 @@
 				compatible = "qcom,geni-i2c";
 				reg = <0x0 0x00a80000 0x0 0x4000>;
 				interrupts = <GIC_SPI 353 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -1049,6 +1149,10 @@
 				compatible = "qcom,geni-spi";
 				reg = <0x0 0x00a80000 0x0 0x4000>;
 				interrupts = <GIC_SPI 353 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -1063,6 +1167,10 @@
 				compatible = "qcom,geni-i2c";
 				reg = <0x0 0x00a84000 0x0 0x4000>;
 				interrupts = <GIC_SPI 354 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -1070,6 +1178,10 @@
 				compatible = "qcom,geni-spi";
 				reg = <0x0 0x00a84000 0x0 0x4000>;
 				interrupts = <GIC_SPI 354 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -1084,6 +1196,10 @@
 				compatible = "qcom,geni-i2c";
 				reg = <0x0 0x00a88000 0x0 0x4000>;
 				interrupts = <GIC_SPI 355 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -1098,6 +1214,10 @@
 				compatible = "qcom,geni-i2c";
 				reg = <0x0 0x00a8c000 0x0 0x4000>;
 				interrupts = <GIC_SPI 356 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -1112,6 +1232,10 @@
 				compatible = "qcom,geni-i2c";
 				reg = <0x0 0x00a90000 0x0 0x4000>;
 				interrupts = <GIC_SPI 357 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -1119,6 +1243,10 @@
 				compatible = "qcom,geni-spi";
 				reg = <0x0 0x00a90000 0x0 0x4000>;
 				interrupts = <GIC_SPI 357 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -1133,6 +1261,10 @@
 				compatible = "qcom,geni-i2c";
 				reg = <0x0 0x00a94000 0x0 0x4000>;
 				interrupts = <GIC_SPI 358 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -1140,6 +1272,10 @@
 				compatible = "qcom,geni-spi";
 				reg = <0x0 0x00a94000 0x0 0x4000>;
 				interrupts = <GIC_SPI 358 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -1154,6 +1290,10 @@
 				compatible = "qcom,geni-i2c";
 				reg = <0x0 0x00a98000 0x0 0x4000>;
 				interrupts = <GIC_SPI 363 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -1161,6 +1301,10 @@
 				compatible = "qcom,geni-spi";
 				reg = <0x0 0x00a98000 0x0 0x4000>;
 				interrupts = <GIC_SPI 363 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -1186,6 +1330,10 @@
 				compatible = "qcom,geni-i2c";
 				reg = <0x0 0x00c80000 0x0 0x4000>;
 				interrupts = <GIC_SPI 312 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
@@ -1193,6 +1341,10 @@
 				compatible = "qcom,geni-spi";
 				reg = <0x0 0x00c80000 0x0 0x4000>;
 				interrupts = <GIC_SPI 312 IRQ_TYPE_LEVEL_HIGH>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				status = "disabled";
 			};
 
