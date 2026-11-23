@@ -57,6 +57,8 @@
 	interconnect-names = "qup-core";
 
 	iommus = <&apps_smmu_0 0x12a0 0x0>;
+	/* SE DMA coherency is not proven with Linux owning the SMMU */
+	/delete-property/ dma-coherent;
 };
 
 &remoteproc_adsp {
