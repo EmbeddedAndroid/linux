@@ -3020,6 +3020,24 @@ static int ufs_qcom_probe(struct platform_device *pdev)
 	else
 		vops = &ufs_hba_qcom_vops;
 
+	/*
+	 * The driver core attaches a single power domain only. A domain left
+	 * unattached is powered off by genpd sync_state, and the firmware then
+	 * pulls resources the link still uses.
+	 */
+	if (vops == &ufs_hba_qcom_sa8255p_vops && !dev->pm_domain &&
+	    of_count_phandle_with_args(dev->of_node, "power-domains",
+				       "#power-domain-cells") > 1) {
+		const struct dev_pm_domain_attach_data pd_data = {
+			.pd_flags = PD_FLAG_DEV_LINK_ON,
+		};
+		struct dev_pm_domain_list *pd_list;
+
+		err = devm_pm_domain_attach_list(dev, &pd_data, &pd_list);
+		if (err < 0)
+			return dev_err_probe(dev, err, "failed to attach power domains\n");
+	}
+
 	/* Perform generic probe */
 	err = ufshcd_pltfrm_init(pdev, vops);
 	if (err)
