@@ -357,6 +357,9 @@ struct ufs_qcom_host {
 
 	struct gpio_desc *device_reset;
 
+	/* Firmware power domains, when there is more than one */
+	struct dev_pm_domain_list *pd_list;
+
 	struct ufs_host_params host_params;
 	u32 phy_gear;
 

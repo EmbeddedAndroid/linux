@@ -1718,6 +1718,22 @@ static int ufs_qcom_fw_managed_init(struct ufs_hba *hba)
 	if (!host)
 		return -ENOMEM;
 
+	/*
+	 * The driver core attaches a single power domain only. A domain left
+	 * unattached is powered off by genpd sync_state, and the firmware then
+	 * pulls resources the link still uses.
+	 */
+	if (of_count_phandle_with_args(dev->of_node, "power-domains",
+				       "#power-domain-cells") > 1) {
+		const struct dev_pm_domain_attach_data pd_data = {
+			.pd_flags = PD_FLAG_DEV_LINK_ON,
+		};
+
+		err = devm_pm_domain_attach_list(dev, &pd_data, &host->pd_list);
+		if (err < 0)
+			return dev_err_probe(dev, err, "failed to attach power domains\n");
+	}
+
 	host->hba = hba;
 	ufshcd_set_variant(hba, host);
 
@@ -2297,8 +2313,9 @@ static int ufs_qcom_device_reset(struct ufs_hba *hba)
  */
 static int ufs_qcom_fw_managed_device_reset(struct ufs_hba *hba)
 {
+	struct ufs_qcom_host *host = ufshcd_get_variant(hba);
 	static bool is_boot = true;
-	int err;
+	int err, i;
 
 	/* Skip reset on cold boot; perform it on subsequent calls */
 	if (is_boot) {
@@ -2307,6 +2324,10 @@ static int ufs_qcom_fw_managed_device_reset(struct ufs_hba *hba)
 	}
 
 	pm_runtime_put_sync(hba->dev);
+	/* Domains on device links are only queued for idle by the put */
+	for (i = 0; host->pd_list && i < host->pd_list->num_pds; i++)
+		pm_runtime_suspend(host->pd_list->pd_devs[i]);
+
 	err = pm_runtime_resume_and_get(hba->dev);
 	if (err < 0) {
 		dev_err(hba->dev, "PM runtime resume failed: %d\n", err);
