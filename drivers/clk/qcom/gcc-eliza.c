@@ -2968,6 +2968,14 @@ static struct gdsc *gcc_eliza_gdscs[] = {
 
 static const struct qcom_reset_map gcc_eliza_resets[] = {
 	[GCC_CAMERA_BCR] = { 0x26000 },
+	[GCC_CAMERA_HF_AXI_SLP_STG_ARES] = { 0x26018, 4 },
+	[GCC_CAMERA_HF_AXI_SEL_SLP_STG_ARES] = { 0x26018, 5 },
+	[GCC_CAMERA_HF_CLK_EN_SLP_STG] = { 0x26018, 1 },
+	[GCC_CAMERA_HF_CLK_EN_SEL_SLP_STG] = { 0x26018, 2 },
+	[GCC_CAMERA_SF_AXI_SLP_STG_ARES] = { 0x26028, 4 },
+	[GCC_CAMERA_SF_AXI_SEL_SLP_STG_ARES] = { 0x26028, 5 },
+	[GCC_CAMERA_SF_CLK_EN_SLP_STG] = { 0x26028, 1 },
+	[GCC_CAMERA_SF_CLK_EN_SEL_SLP_STG] = { 0x26028, 2 },
 	[GCC_DISPLAY_BCR] = { 0x27000 },
 	[GCC_GPU_BCR] = { 0x71000 },
 	[GCC_PCIE_0_BCR] = { 0x6b000 },
