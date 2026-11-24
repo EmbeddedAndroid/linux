@@ -39,7 +39,17 @@ properties:
   dma-coherent: true
 
   power-domains:
-    maxItems: 1
+    minItems: 1
+    items:
+      - description: UFS host controller and PHY power domain
+      - description: Firmware power domain the high-speed link depends on
+          while the host is active
+
+  power-domain-names:
+    minItems: 1
+    items:
+      - const: power
+      - const: s2r
 
 required:
   - compatible
@@ -51,6 +61,25 @@ required:
 
 allOf:
   - $ref: ufs-common.yaml
+  - if:
+      properties:
+        compatible:
+          contains:
+            const: qcom,secaau-ufshc
+    then:
+      properties:
+        power-domains:
+          minItems: 2
+        power-domain-names:
+          minItems: 2
+      required:
+        - power-domain-names
+    else:
+      properties:
+        power-domains:
+          maxItems: 1
+        power-domain-names:
+          maxItems: 1
 
 unevaluatedProperties: false
 
