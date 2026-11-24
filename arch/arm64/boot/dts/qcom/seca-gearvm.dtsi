@@ -2858,5 +2858,8 @@
 &ufs_mem_hc {
 	compatible = "qcom,secaau-ufshc",
 		     "qcom,sa8255p-ufshc";
-	power-domains = <&scmi3_pd 0>;
+	power-domains = <&scmi3_pd 0>,
+			<&scmi3_pd 1>;
+	power-domain-names = "power",
+			     "s2r";
 };
