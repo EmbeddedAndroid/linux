@@ -666,6 +666,16 @@ x1p42100-microsoft-sp12in-el2-dtbs	:= x1p42100-microsoft-sp12in.dtb x1-el2.dtbo
 dtb-$(CONFIG_ARCH_QCOM)	+= x1p42100-microsoft-sp12in.dtb x1p42100-microsoft-sp12in-el2.dtb
 dtb-$(CONFIG_ARCH_QCOM)	+= x1-el2.dtbo
 
+eliza-cqs-evk-emmc-camx-dtbs	:= eliza-cqs-evk-emmc.dtb eliza-cqs-evk-camx.dtbo
+
+dtb-$(CONFIG_ARCH_QCOM)	+= eliza-cqs-evk-emmc-camx.dtb
+dtb-$(CONFIG_ARCH_QCOM)	+= eliza-cqs-evk-camx.dtbo
+
+eliza-cqs-evk-emmc-el2-camx-dtbs	:= eliza-cqs-evk-emmc.dtb eliza-el2.dtbo eliza-cqs-evk-camx.dtbo eliza-camx-el2.dtbo
+
+dtb-$(CONFIG_ARCH_QCOM)	+= eliza-cqs-evk-emmc-el2-camx.dtb
+dtb-$(CONFIG_ARCH_QCOM)	+= eliza-camx-el2.dtbo
+
 glymur-crd-camx-dtbs    := glymur-crd.dtb glymur-crd-camx.dtbo
 
 dtb-$(CONFIG_ARCH_QCOM)	+= glymur-crd-camx.dtb
