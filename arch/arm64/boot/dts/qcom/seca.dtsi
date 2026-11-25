@@ -237,7 +237,7 @@
 
 			domain_ss3: domain-sleep-0 {
 				compatible = "domain-idle-state";
-				arm,psci-suspend-param = <0x0200c353>;
+				arm,psci-suspend-param = <0x02000153>;
 				entry-latency-us = <2800>;
 				exit-latency-us = <4400>;
 				min-residency-us = <10150>;
