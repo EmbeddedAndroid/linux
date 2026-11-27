@@ -481,13 +481,12 @@
 	};
 
 	cam_csiphy_tpg15: qcom,tpg15@ad8c000 {
-		compatible = "qcom,cam-tpg104";
+		compatible = "qcom,cam-tpg-virtual";
 		reg-names = "tpg1", "cam_cpas_top";
 		reg = <0x0 0xad8c000 0x0 0x400>,
 		      <0x0 0xac04000 0x0 0x1000>;
 		cell-index = <15>;
 		phy-id = <1>;
-		hw-no-ops;
 		reg-cam-base = <0x18c000 0x04000>;
 		interrupt-names = "tpg1";
 		power-domains = <&camcc CAM_CC_TITAN_TOP_GDSC>;
