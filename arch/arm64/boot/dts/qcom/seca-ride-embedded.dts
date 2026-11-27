@@ -6,6 +6,7 @@
 /dts-v1/;
 
 #include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/linux-event-codes.h>
 
 #include "seca-embedded.dtsi"
 
@@ -50,6 +51,19 @@
 			clocks = <&rpmhcc RPMH_CXO_CLK_A>;
 			clock-mult = <1>;
 			clock-div = <2>;
+		};
+	};
+
+	gpio-keys {
+		compatible = "gpio-keys";
+
+		pinctrl-0 = <&key_vol_down_default>;
+		pinctrl-names = "default";
+
+		key-volume-down {
+			label = "Volume Down";
+			gpios = <&tlmm 136 GPIO_ACTIVE_HIGH>;
+			linux,code = <KEY_VOLUMEDOWN>;
 		};
 	};
 
@@ -149,6 +163,14 @@
 	vdda-qref0-0p9-supply = <&vreg_l1h_0p9>;
 	vdda-qref1-0p9-supply = <&vreg_l1h_0p9>;
 	vdda-qref2-0p9-supply = <&vreg_l1h_0p9>;
+};
+
+&tlmm {
+	key_vol_down_default: key-vol-down-default-state {
+		pins = "gpio136";
+		function = "gpio";
+		bias-pull-down;
+	};
 };
 
 &uart15 {
