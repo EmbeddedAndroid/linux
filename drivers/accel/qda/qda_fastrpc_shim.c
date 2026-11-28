@@ -547,7 +547,8 @@ static long qda_shim_invoke(struct qda_shim_file *sf, void __user *argp)
 		largs[i].length = uargs[i].length;
 		largs[i].fd = uargs[i].fd;
 
-		obj = shim_import_fd(sf->session, uargs[i].fd);
+		/* As in fastrpc.c, fd 0 marks an argument without a DMA-BUF */
+		obj = uargs[i].fd ? shim_import_fd(sf->session, uargs[i].fd) : NULL;
 		if (IS_ERR(obj)) {
 			err = PTR_ERR(obj);
 			goto err_put_objs;

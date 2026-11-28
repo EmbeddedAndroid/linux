@@ -355,6 +355,12 @@ struct qda_fastrpc_invoke_ctx {
 	 * the DSP accepted can always be recorded.
 	 */
 	struct qda_session_map *map;
+	/**
+	 * @inline_obj: Driver buffer holding the inline arguments of a legacy
+	 * invocation, or NULL. Each such argument's gem_objs[] entry holds its
+	 * own reference on it.
+	 */
+	struct qda_gem_obj *inline_obj;
 	/** @pages: Array of physical page descriptors inside the payload */
 	struct qda_phy_page *pages;
 	/** @poll_addr: Poll word at the end of the payload, written by the DSP */
