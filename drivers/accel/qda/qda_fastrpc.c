@@ -221,6 +221,34 @@ void qda_session_msg_buf_pool_destroy(struct qda_session *session)
 	session->msg_buf_pool_count = 0;
 }
 
+/*
+ * The DSP reaches a buffer it has mapped until it is unmapped, whatever user
+ * space does with its handle, so the session takes over the request's
+ * reference once the DSP has accepted the mapping: the DMA mapping must
+ * outlive every DSP access to it. Called on success, and from the context's
+ * release if the DSP accepted a mapping whose caller stopped waiting.
+ */
+static void qda_fastrpc_keep_map(struct qda_fastrpc_invoke_ctx *ctx)
+{
+	struct qda_fastrpc_map_rsp_msg *rsp;
+	int idx = ctx->type == QDA_FASTRPC_RMID_INIT_MMAP ? 2 : 3;
+
+	if (!ctx->map || !ctx->map_obj)
+		return;
+
+	/* The DSP wrote the response before it signalled completion */
+	dma_rmb();
+	rsp = (struct qda_fastrpc_map_rsp_msg *)
+	      ((u8 *)to_qda_gem_obj(ctx->gem_objs[idx])->virt + ctx->args[idx].offset);
+	ctx->map->obj = ctx->map_obj;
+	ctx->map->vaddr = rsp->vaddrout;
+	ctx->map_obj = NULL;
+
+	scoped_guard(mutex, &ctx->session->maps_lock)
+		list_add_tail(&ctx->map->node, &ctx->session->maps);
+	ctx->map = NULL;
+}
+
 /**
  * qda_fastrpc_context_free() - Release an invocation
  * @ref: Reference counter embedded in the invocation
@@ -240,6 +268,9 @@ void qda_fastrpc_context_free(struct kref *ref)
 
 	xa_erase(&ctx->qdev->ctx_xa, FIELD_GET(QDA_FASTRPC_CTXID_MASK, ctx->ctxid));
 
+	if (READ_ONCE(ctx->is_work_done) && !ctx->retval)
+		qda_fastrpc_keep_map(ctx);
+
 	if (ctx->gem_objs) {
 		for (i = 0; i < ctx->nscalars; ++i) {
 			if (ctx->gem_objs[i])
@@ -256,6 +287,8 @@ void qda_fastrpc_context_free(struct kref *ref)
 
 	if (ctx->map_obj)
 		drm_gem_object_put(ctx->map_obj);
+
+	kfree(ctx->map);
 
 	if (ctx->session)
 		qda_session_put(ctx->session);
@@ -713,6 +746,55 @@ void qda_fastrpc_return_result(struct qda_fastrpc_invoke_ctx *ctx, void *argp)
 	rsp = (struct qda_fastrpc_map_rsp_msg *)
 	      ((u8 *)to_qda_gem_obj(ctx->gem_objs[idx])->virt + ctx->args[idx].offset);
 	map_args->map.vaddrout = rsp->vaddrout;
+
+	qda_fastrpc_keep_map(ctx);
+}
+
+/**
+ * qda_session_maps_forget() - Drop the record of a mapping the DSP removed
+ * @session: Session the mapping belongs to
+ * @mem_unmap: true for an INIT_MEM_UNMAP request, matched by fd and address,
+ *             false for INIT_MUNMAP, matched by address and covering the
+ *             whole mapping (size 0 meaning all of it)
+ * @unmap: The request the DSP accepted
+ */
+void qda_session_maps_forget(struct qda_session *session, bool mem_unmap,
+			     const struct drm_qda_mem_unmap *unmap)
+{
+	struct qda_session_map *m, *found = NULL;
+
+	scoped_guard(mutex, &session->maps_lock) {
+		list_for_each_entry(m, &session->maps, node) {
+			if (mem_unmap ? m->fd == unmap->dsp_handle && m->vaddr == unmap->vaddr :
+					m->vaddr == unmap->vaddrout &&
+					(!unmap->size || unmap->size >= m->size)) {
+				found = m;
+				list_del(&m->node);
+				break;
+			}
+		}
+	}
+
+	if (!found)
+		return;
+
+	drm_gem_object_put(found->obj);
+	kfree(found);
+}
+
+/**
+ * qda_session_maps_destroy() - Release every mapping a session still holds
+ * @session: Session being released, whose DSP process is already gone
+ */
+void qda_session_maps_destroy(struct qda_session *session)
+{
+	struct qda_session_map *m, *tmp;
+
+	list_for_each_entry_safe(m, tmp, &session->maps, node) {
+		list_del(&m->node);
+		drm_gem_object_put(m->obj);
+		kfree(m);
+	}
 }
 
 /**
@@ -1120,8 +1202,14 @@ static int setup_mmap_pages(struct qda_fastrpc_invoke_ctx *ctx, struct qda_mem_m
 	if (margs->size > qda_gem_obj->size)
 		return -EINVAL;
 
+	ctx->map = kzalloc_obj(*ctx->map);
+	if (!ctx->map)
+		return -ENOMEM;
+
 	pages->addr = qda_gem_obj->dma_addr;
 	pages->size = margs->size ? margs->size : qda_gem_obj->size;
+	ctx->map->fd = margs->dsp_handle;
+	ctx->map->size = pages->size;
 
 	return 0;
 }

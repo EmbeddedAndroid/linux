@@ -349,6 +349,12 @@ struct qda_fastrpc_invoke_ctx {
 	struct qda_gem_obj *init_mem_gem_obj;
 	/** @map_obj: Buffer being mapped into the DSP, held until the request is done */
 	struct drm_gem_object *map_obj;
+	/**
+	 * @map: Record that keeps @map_obj for the session once the DSP has
+	 * mapped it; allocated before the request is sent, so that a mapping
+	 * the DSP accepted can always be recorded.
+	 */
+	struct qda_session_map *map;
 	/** @pages: Array of physical page descriptors inside the payload */
 	struct qda_phy_page *pages;
 	/** @poll_addr: Poll word at the end of the payload, written by the DSP */
@@ -406,6 +412,26 @@ struct qda_init_create_args {
 	 */
 	struct drm_gem_object *elf_obj;
 };
+
+/**
+ * struct qda_session_map - A buffer mapped into a session's DSP process
+ */
+struct qda_session_map {
+	/** @node: Entry in qda_session.maps */
+	struct list_head node;
+	/** @obj: The mapped buffer, referenced for as long as the DSP maps it */
+	struct drm_gem_object *obj;
+	/** @fd: DMA-BUF fd the mapping was requested with, the DSP's handle for it */
+	s32 fd;
+	/** @vaddr: DSP virtual address of the mapping */
+	u64 vaddr;
+	/** @size: Size of the mapping in bytes */
+	u64 size;
+};
+
+void qda_session_maps_forget(struct qda_session *session, bool mem_unmap,
+			     const struct drm_qda_mem_unmap *unmap);
+void qda_session_maps_destroy(struct qda_session *session);
 
 /**
  * struct qda_mem_map_args - Kernel-side arguments for mapping a buffer into the DSP
