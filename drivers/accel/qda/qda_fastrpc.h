@@ -87,6 +87,9 @@ struct qda_session;
 /* Largest ELF image a process may be created from */
 #define QDA_FASTRPC_INIT_FILELEN_MAX	(4 * 1024 * 1024)
 
+/* Smallest memory a new process is created in */
+#define QDA_FASTRPC_INIT_MEMLEN_MIN	(4 * 1024 * 1024)
+
 /* Longest static PD name, including the NUL */
 #define QDA_FASTRPC_INIT_NAMELEN_MAX	128
 

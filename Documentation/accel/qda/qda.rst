@@ -123,7 +123,10 @@ The driver exposes the following ioctls, defined in
 ``DRM_IOCTL_QDA_REMOTE_SESSION_CREATE``
     Create a user process on the DSP from an ELF image given as a GEM handle.
     Creating a signed process domain (``attrs`` without
-    ``QDA_INIT_ATTR_UNSIGNED_MODULE``) requires ``CAP_SYS_ADMIN``.
+    ``QDA_INIT_ATTR_UNSIGNED_MODULE``) requires ``CAP_SYS_ADMIN``. The
+    process is created in four times the image size (at least 4 MiB),
+    rounded up to 1 MiB, and the DSP uses what the image leaves of it as
+    the initial heap of the process.
 
 ``DRM_IOCTL_QDA_REMOTE_MMAP`` / ``DRM_IOCTL_QDA_REMOTE_MUNMAP``
     Create or remove a persistent mapping of a buffer in the DSP's address

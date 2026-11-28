@@ -1105,6 +1105,7 @@ static int qda_fastrpc_prepare_args_init_create(struct qda_fastrpc_invoke_ctx *c
 	struct qda_dev *qdev = ctx->qdev;
 	struct drm_gem_object *gem_obj;
 	struct qda_gem_obj *kernel_gem;
+	size_t memlen;
 	u8 *gv;
 	int err;
 
@@ -1120,9 +1121,13 @@ static int qda_fastrpc_prepare_args_init_create(struct qda_fastrpc_invoke_ctx *c
 	if (!(init->attrs & QDA_INIT_ATTR_UNSIGNED_MODULE) && !capable(CAP_SYS_ADMIN))
 		return -EPERM;
 
-	/* The DSP loads the image into this memory and keeps using it while the process runs */
-	gem_obj = qda_gem_create_object(&qdev->drm_dev, qdev->iommu_mgr,
-					QDA_FASTRPC_INIT_FILELEN_MAX, ctx->session);
+	/*
+	 * The DSP loads the image into this memory and uses the rest as the
+	 * initial heap of the process. Size it like misc fastrpc does.
+	 */
+	memlen = ALIGN(max_t(size_t, QDA_FASTRPC_INIT_MEMLEN_MIN, (size_t)init->filelen * 4),
+		       SZ_1M);
+	gem_obj = qda_gem_create_object(&qdev->drm_dev, qdev->iommu_mgr, memlen, ctx->session);
 	if (IS_ERR(gem_obj))
 		return PTR_ERR(gem_obj);
 
