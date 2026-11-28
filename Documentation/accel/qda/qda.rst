@@ -57,12 +57,13 @@ The QDA driver consists of the following blocks:
     the stream ID in a DSP address and the supported DMA address width.
 4.  **Context banks** (``qda_cb``): creates a platform device for each
     ``qcom,fastrpc-compute-cb`` child node of the DSP's device-tree node,
-    using ``of_platform_device_create()``. Registering the device is what
-    gives it its IOMMU domain, so no driver has to bind to it. They are
-    created before the accel device is registered. Every buffer holds a
-    reference on its context bank, so a bank outlives an unplug or a DSP
-    restart until its last buffer is freed, and a bank still in use when
-    the DSP comes back is only added to the new device once it is free.
+    using ``of_platform_device_create()``. No driver binds to it, so QDA
+    runs ``of_dma_configure()`` on it once it exists and the IOMMU core has
+    given it its domain. They are created before the accel device is
+    registered. Every buffer holds a reference on its context bank, so a
+    bank outlives an unplug or a DSP restart until its last buffer is
+    freed, and a bank still in use when the DSP comes back is only added
+    to the new device once it is free.
 5.  **Memory manager** (``qda_memory_manager``, ``qda_memory_dma``): tracks
     the context banks and allocates DMA-coherent memory from the one
     assigned to a session.
